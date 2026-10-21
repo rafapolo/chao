@@ -12,7 +12,8 @@ de sobra para cor e para os números da ficha (que mostram 3 algarismos). Com
 K = 2800 (0,04%) o bloco de produção passava de 21 MB em base64.
 
 Privacidade: célula da grade com menos de MIN_CELULA glebas (ou perdas) por
-produto × safra não entra — o teste testes/privacidade.test.ts confere.
+produto × safra não entra, e o mesmo corte vale para o agregado por município —
+o teste de privacidade em testes/mapa.test.ts confere os quatro.
 """
 import base64
 import gzip
@@ -157,6 +158,21 @@ p = codifica_geo(bm, "m_", malha["wkb"].to_list())
 print(f"    municípios: {p:,} vértices".replace(",", "."))
 masc_idx = masc.filter(pl.col("id_municipio").is_in(IDS)).with_columns(
     pl.col("id_municipio").replace_strict(IDX, return_dtype=pl.Int32).alias("m")).sort("m")
+# grupo comparável (AMC) de cada município. Os cinco instalados em 2013, depois
+# da AMC de 2010, vão para o grupo do município de origem.
+ORIGEM_2013 = {"1504752": "1506807",   # Mojuí dos Campos <- Santarém
+               "4212650": "4209409",   # Pescaria Brava <- Laguna
+               "4220000": "4207007",   # Balneário Rincão <- Içara
+               "4314548": "4302105",   # Pinto Bandeira <- Bento Gonçalves
+               "5006275": "5003256"}   # Paraíso das Águas <- Costa Rica
+amc = pl.read_parquet(D / "amc.parquet")
+amc_de = dict(zip(amc["id_municipio"].to_list(), amc["id_amc"].to_list()))
+for filho, pai in ORIGEM_2013.items():
+    amc_de.setdefault(filho, amc_de[pai])
+grupos = {g: i for i, g in enumerate(sorted(set(amc_de.values())))}
+sem = [m for m in IDS if m not in amc_de]
+assert not sem, f"municípios sem AMC: {sem}"
+bm.add("amc", [grupos[amc_de[m]] for m in IDS], "u16")
 bm.add("k_mun", masc_idx["m"], "u16")
 p = codifica_geo(bm, "k_", masc_idx["wkb"].to_list(), min_pts=4)
 print(f"    máscara: {p:,} vértices".replace(",", "."))
@@ -259,7 +275,9 @@ anos_mb = (int(mb["ano"].min()), int(mb["ano"].max()))
 # ---------- crédito ----------
 print("crédito")
 gc = pl.read_parquet(D / "glebas_celula.parquet").filter(pl.col("glebas") >= MIN_CELULA)
-gm = idx_mun(pl.read_parquet(D / "glebas_mun.parquet"))
+# o corte de privacidade vale também para o agregado por município: um morango
+# financiado sozinho num município identificaria a propriedade do mesmo jeito
+gm = idx_mun(pl.read_parquet(D / "glebas_mun.parquet")).filter(pl.col("glebas") >= MIN_CELULA)
 SICOR = (pl.concat([gc.select("produto", "glebas"), gm.select("produto", "glebas")])
          .group_by("produto").agg(pl.col("glebas").sum()).sort("glebas", descending=True)["produto"].to_list())
 SIDX = {p: i for i, p in enumerate(SICOR)}
@@ -279,7 +297,8 @@ EVENTOS = ["Seca", "Chuva excessiva", "Geada", "Granizo", "Temperatura", "Vento"
 EIDX = {e: i for i, e in enumerate(EVENTOS)}
 pc = pl.read_parquet(D / "proagro_celula.parquet").filter(pl.col("perdas") >= MIN_CELULA)
 pm = idx_mun(pl.read_parquet(D / "proagro_mun.parquet"))
-pm_ag = pm.group_by(["m", "evento", "safra"]).agg(pl.col("perdas").sum(), pl.col("area_ha").sum())
+pm_ag = (pm.group_by(["m", "evento", "safra"]).agg(pl.col("perdas").sum(), pl.col("area_ha").sum())
+         .filter(pl.col("perdas") >= MIN_CELULA))
 
 bc = Bloco()
 gc = gc.with_columns(pl.col("produto").replace_strict(SIDX, return_dtype=pl.Int32).alias("p")).sort(["p", "safra"])

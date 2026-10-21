@@ -42,7 +42,7 @@ python3 baixa_malha.py && python3 baixa_producao.py && python3 baixa_mapbiomas.p
 python3 monta_pagina.py      # parquet -> blocos binários -> ../index.html (+ testes/fixture.json)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
-bun test                                   # 21 testes, ~30 s; BRAGRO_MOTORES=chromium para um só
+bun test                                   # 24 testes (8 × 3 motores), ~30 s; BRAGRO_MOTORES=chromium para um só
 ```
 
 Dependências Python: `polars`, `numpy`, `shapely`. Cada `baixa_*.py` imprime a própria
@@ -64,7 +64,7 @@ Formato de cada bloco: `u32 tamanho | cabeçalho JSON | arrays`.
   anterior; o JS faz a soma acumulada.
 - Os valores ficam absolutos, porque em diferença o gzip piora (medido).
 
-O orçamento é de ~25 MB; a produção sozinha leva 15 MB.
+O orçamento da spec é ≤ 25 MB, e **a página passa um pouco: 25,7 MB** (2026-10-21). A produção sozinha leva 16 MB. Se precisar cortar, os candidatos são os itens menores de origem animal (casulos, lã, ovos de codorna).
 
 ## Armadilhas dos dados (medidas em 2026-10-21)
 
@@ -85,7 +85,23 @@ O orçamento é de ~25 MB; a produção sozinha leva 15 MB.
   2023/24: ~4 M ha em polígonos, contra 46 M ha na PAM). A área do polígono passa da área
   financiada.
 - **Privacidade:** célula da grade com menos de 5 glebas ou perdas não é embutida (cai ~35% da
-  área de glebas). Há teste que confere.
+  área de glebas). O mesmo corte vale para o agregado por município × produto × safra (glebas)
+  e município × evento × safra (perdas). Há teste que confere os quatro.
+- **Desmembramentos:** 1.624 municípios foram instalados depois de 1974. Antes de existir, o
+  filho não tem dado, e o pai traz o território inteiro da época, desenhado menor na malha
+  atual.
+  - Nos anos em que um grupo da AMC (`br_geobr_mapas.area_minima_comparavel_2010`, coluna
+    `id_municipio` = lista de membros) está incompleto, a página reparte o total do grupo
+    entre os membros pela área rural (`porAMC`).
+  - Os 5 municípios de 2013 vão para a AMC do município de origem (`ORIGEM_2013` em
+    `monta_pagina.py`).
+  - Vale para os modos Declarado e Satélite × declarado. O MapBiomas e o crédito já vêm na
+    malha atual.
+- **Transição do MapBiomas:** a área fica 2–11% acima da cobertura do mesmo ano (Sorriso), o
+  que sugere outra coleção. O modo Expansão herda esse viés; use-o para proporção de origens.
+- **Abaixo do município**, a página tem só a máscara do que não é rural e a grade de glebas,
+  que é amostra. O número do IBGE não é redistribuído sobre os pixels do satélite, porque isso
+  exige o raster de 30 m do MapBiomas, que ficou fora da v1.
 - **Área urbana:** a máscara usa o setor censitário urbano de 2010, que segue o perímetro
   legal da cidade. Por isso dá 105 mil km², mais que a mancha urbanizada.
 

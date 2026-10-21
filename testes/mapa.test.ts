@@ -85,17 +85,37 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
-    test("privacidade: nenhuma célula embutida tem menos de 5 glebas ou perdas", async () => {
+    test("privacidade: nenhuma célula ou município embutido tem menos de 5 glebas ou perdas", async () => {
       const x = await abre(nav, "");
       const minimos = await roda<number[]>(x.p, `
         const C = T.CRED.A;
         let g = Infinity, p = Infinity;
         for (const v of C.g_n) if (v < g) g = v;
+        for (const v of C.gm_n) if (v < g) g = v;
         for (const v of C.p_n) if (v < p) p = v;
+        for (const v of C.pm_n) if (v < p) p = v;
         return [g, p, T.M.min_celula];`);
       expect(minimos[0]).toBeGreaterThanOrEqual(5);
       expect(minimos[1]).toBeGreaterThanOrEqual(5);
       expect(minimos[2]).toBe(5);
+      await fecha(x);
+    }, LENTO);
+
+    test("território comparável: antes do desmembramento o total é repartido, sem mudar a soma", async () => {
+      const x = await abre(nav, "?c=soja&a=1985&m=area");
+      const r = await roda<any>(x.p, `
+        const NA = T.M.anos.prod[1] - T.M.ano0.prod + 1, a = 1985 - T.M.ano0.prod;
+        const s = T.serieItem(T.est.itens[0]);
+        let cru = 0; for (let m = 0; m < T.M.mun.id.length; m++) { const v = s.area[m * NA + a]; if (v > 0) cru += v; }
+        T.calcula(1985);
+        let mapa = 0; for (const v of T.VAL) if (v > 0) mapa += v;
+        const sorriso = T.M.mun.id.indexOf('5107925');
+        return { cru, mapa, sorrisoCru: s.area[sorriso * NA + a], sorrisoMapa: T.VAL[sorriso] };`);
+      // a soma nacional não muda (a repartição só move área dentro do grupo)
+      expect(Math.abs(r.mapa / r.cru - 1)).toBeLessThan(1e-4);
+      // Sorriso não existia em 1985: sem dado próprio, recebe a parte do território
+      expect(Number.isNaN(r.sorrisoCru)).toBe(true);
+      expect(r.sorrisoMapa).toBeGreaterThan(0);
       await fecha(x);
     }, LENTO);
 

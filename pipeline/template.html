@@ -421,6 +421,37 @@
   const RURAL_KM2 = new Float64Array(NM);
   for (let m = 0; m < NM; m++) RURAL_KM2[m] = Math.max(M.mun.km2[m] - M.mun.masc_km2[m], 0.01);
 
+  /* ---------- territórios comparáveis (AMC) ----------
+     1.624 dos municípios de hoje foram instalados depois de 1974. Antes de
+     existir, o filho não tem dado, e o pai traz na PAM e na PPM a área do
+     território inteiro da época — que a malha atual desenha menor. Pintar o pai
+     com esse total inflaria a "% da área rural" justamente onde a soja avançou
+     (Sorriso saiu de Nobres em 1986). Nos anos em que um grupo comparável do
+     IBGE/geobr (AMC) está incompleto, o total do grupo é repartido entre todos
+     os membros pela área rural de cada um: a soma não muda, e a densidade passa
+     a ser a do território que existia. */
+  const AMC = MALHA.A.amc;
+  const NG = Math.max(...AMC) + 1;
+  const MEMBROS = Array.from({ length: NG }, () => []);
+  for (let m = 0; m < NM; m++) MEMBROS[AMC[m]].push(m);
+  const RURAL_G = new Float64Array(NG), INST_G = new Int32Array(NG);
+  for (let m = 0; m < NM; m++) {
+    RURAL_G[AMC[m]] += RURAL_KM2[m];
+    INST_G[AMC[m]] = Math.max(INST_G[AMC[m]], M.mun.inst[m]);
+  }
+  const INCOMPLETOS = [...Array(NG).keys()].filter(g => MEMBROS[g].length > 1 && INST_G[g] > M.ano0.prod);
+  const grupoIncompleto = (m, ano) => MEMBROS[AMC[m]].length > 1 && INST_G[AMC[m]] > ano;
+  /* arr: valores absolutos (ha, t, cabeças, R$) por município; muda no lugar */
+  function porAMC(arr, ano) {
+    for (const g of INCOMPLETOS) {
+      if (INST_G[g] <= ano) continue;
+      let tot = 0, tem = false;
+      for (const m of MEMBROS[g]) if (arr[m] > 0) { tot += arr[m]; tem = true; }
+      for (const m of MEMBROS[g]) arr[m] = tem ? tot * RURAL_KM2[m] / RURAL_G[g] : NaN;
+    }
+    return arr;
+  }
+
   /* ---------- séries por item (produção) ----------
      As linhas vêm ordenadas por item, município e ano; o início de cada item é
      achado uma vez, e a série completa de um item é decodificada quando ele é
@@ -516,6 +547,7 @@
       for (const se of series) { const v = se[arr][m * NA + a]; if (v > 0) s = (s > 0 ? s : 0) + v; }
       VAL[m] = s;
     }
+    porAMC(VAL, ano);
   }
 
   function calcula(ano = est.ano) {
@@ -526,7 +558,10 @@
       const it = ITENS[est.itens[0]];
       if (mt === 'rend') {
         const s = serieItem(est.itens[0]), a = ano - A0;
-        for (let m = 0; m < NM; m++) { const ar = s.area[m * NA + a], q = s.q[m * NA + a]; VAL[m] = ar > 0 && q > 0 ? q / ar : NaN; }
+        const ar = new Float32Array(NM), q = new Float32Array(NM);
+        for (let m = 0; m < NM; m++) { ar[m] = s.area[m * NA + a]; q[m] = s.q[m * NA + a]; }
+        porAMC(ar, ano); porAMC(q, ano);
+        for (let m = 0; m < NM; m++) VAL[m] = ar[m] > 0 && q[m] > 0 ? q[m] / ar[m] : NaN;
         return;
       }
       valorPam(mt === 'pct' || mt === 'area' ? 'area' : mt === 'v' ? 'v' : 'q', ano);
@@ -547,9 +582,11 @@
            mesma classe (laranja + limão + tangerina = citros) — comparar a classe
            com uma cultura só inventaria divergência */
         const pamItens = [...new Set(cls.flatMap(itensDaClasse))].map(serieItem), ap = ano - A0;
+        const P = new Float32Array(NM);
+        for (let m = 0; m < NM; m++) for (const s of pamItens) { const v = s.area[m * NA + ap]; if (v > 0) P[m] += v; }
+        porAMC(P, ano);
         for (let m = 0; m < NM; m++) {
-          let p = 0;
-          for (const s of pamItens) { const v = s.area[m * NA + ap]; if (v > 0) p += v; }
+          const p = P[m];
           VAL[m] = p >= 50 && VAL[m] > 0 ? Math.log2(VAL[m] / p) : (p >= 50 ? -Infinity : NaN);
         }
       }
@@ -600,12 +637,19 @@
   const LAVOURAS = ITENS.filter(it => it.area).map(it => it.i);
   function calculaDisputa(ano) {
     const a = ano - A0, sel = est.itens.slice(0, 3);
-    const ss = sel.map(serieItem), todas = LAVOURAS.map(serieItem);
+    const todas = LAVOURAS.map(serieItem);
+    const TOT = new Float32Array(NM);
+    for (let m = 0; m < NM; m++) for (const s of todas) { const v = s.area[m * NA + a]; if (v > 0) TOT[m] += v; }
+    porAMC(TOT, ano);
+    const SEL = sel.map(i => {
+      const s = serieItem(i), x = new Float32Array(NM);
+      for (let m = 0; m < NM; m++) x[m] = s.area[m * NA + a] || 0;
+      return porAMC(x, ano);
+    });
     for (let m = 0; m < NM; m++) {
-      let tot = 0;
-      for (const s of todas) { const v = s.area[m * NA + a]; if (v > 0) tot += v; }
+      const tot = TOT[m] || 0;
       let melhor = 0, vm = 0, soma = 0;
-      ss.forEach((s, k) => { const v = s.area[m * NA + a] || 0; soma += v; if (v > vm) { vm = v; melhor = k + 1; } });
+      SEL.forEach((x, k) => { const v = x[m] || 0; soma += v; if (v > vm) { vm = v; melhor = k + 1; } });
       const outras = tot - soma;
       if (outras > vm) { melhor = 0; vm = outras; }
       CAT[m] = melhor;
@@ -651,7 +695,6 @@
       fundo: v('--fundo'), semdado: v('--semdado'), mascara: v('--mascara'), divisa: v('--divisa'),
       foco: v('--foco'), ink3: v('--ink-3'), linha: v('--linha'), acento: v('--acento'),
     };
-    hachura = null;
   }
   const classe = v => { let i = 0; while (i < quebras.length && v > quebras[i]) i++; return i; };
   function corDe(m) {
@@ -673,17 +716,6 @@
   const cv = $('mapa'), ctx = cv.getContext('2d');
   let W = 0, H = 0, dpr = 1;
   const vista = { k: 1, x: 0, y: 0 };
-  let hachura = null;
-  function padraoHachura() {
-    if (hachura) return hachura;
-    const c = document.createElement('canvas'); c.width = c.height = 8;
-    const g = c.getContext('2d');
-    g.fillStyle = COR.semdado; g.fillRect(0, 0, 8, 8);
-    g.strokeStyle = COR.ink3; g.globalAlpha = 0.5; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(0, 8); g.lineTo(8, 0); g.stroke();
-    hachura = ctx.createPattern(c, 'repeat');
-    return hachura;
-  }
 
   let BR = [Infinity, Infinity, -Infinity, -Infinity];
   for (let m = 0; m < NM; m++) {
@@ -731,8 +763,7 @@
       if (C[4 * m + 2] < vis[0] || C[4 * m] > vis[2] || C[4 * m + 3] < vis[1] || C[4 * m + 1] > vis[3]) continue;
       const fora = !noRecorte(m);
       ctx.globalAlpha = fora ? 0.25 : 1;
-      if (est.modo === 'pam' && ano < M.mun.inst[m]) ctx.fillStyle = padraoHachura();
-      else if (celulas) ctx.fillStyle = COR.semdado;
+      if (celulas) ctx.fillStyle = COR.semdado;
       else ctx.fillStyle = corDe(m);
       ctx.fill(GEO.p[m]);
     }
@@ -889,7 +920,6 @@
 
   function textoValor(m) {
     const v = VAL[m], it = ITENS[est.itens[0]], mt = est.metrica;
-    if (est.modo === 'pam' && est.ano < M.mun.inst[m]) return 'o município ainda não existia';
     if (est.modo === 'pam' && est.disputa) {
       if (!(v >= 1)) return 'menos de 1% da área rural com lavoura';
       const nome = CAT[m] ? ITENS[est.itens[CAT[m] - 1]].nome : 'outras lavouras';
@@ -908,10 +938,17 @@
     if (mt === 'pct') return fmt(v, v < 1 ? 2 : 1) + '%' + (est.modo === 'gs' ? ' dos imóveis do CAR' : est.modo === 'exp' ? ' do município' : ' da área rural');
     return curto(v) + un;
   }
+  function notaAMC(m) {
+    if (!['pam', 'cmp'].includes(est.modo) || !grupoIncompleto(m, est.ano)) return '';
+    const n = MEMBROS[AMC[m]].length;
+    return `estimado: em ${est.ano} o território de ${n} municípios de hoje ainda não estava dividido; o total dele é repartido pela área rural`;
+  }
   function mostraTip(x, y) {
     const t = $('tip');
     if (hover < 0 || arrasto) { t.style.display = 'none'; return; }
-    t.innerHTML = `<b>${M.mun.nome[hover]}</b> · ${M.mun.uf[hover]}<br><span class="num">${textoValor(hover)}</span>`;
+    const nota = notaAMC(hover);
+    t.innerHTML = `<b>${M.mun.nome[hover]}</b> · ${M.mun.uf[hover]}<br><span class="num">${textoValor(hover)}</span>`
+      + (nota ? `<br><span class="num" style="font-size:11px">${nota}</span>` : '');
     t.style.display = 'block';
     const r = t.getBoundingClientRect();
     t.style.left = Math.min(x + 14, W - r.width - 8) + 'px';
@@ -1050,7 +1087,6 @@
     const extras = [`<div><i style="background:${COR.semdado}"></i>Sem registro</div>`];
     if (est.mascara && est.modo !== 'gleba' && est.modo !== 'perda')
       extras.push(`<div><i style="background:${COR.mascara}"></i>Não rural: área urbana, terra indígena, UC de proteção integral</div>`);
-    if (est.modo === 'pam') extras.push(`<div><i style="background:${COR.semdado};background-image:repeating-linear-gradient(135deg,${COR.ink3} 0 1px,transparent 1px 5px)"></i>Município ainda não existia</div>`);
     html += `<div class="extra">${extras.join('')}</div>`;
     el.innerHTML = html;
     $('tit-legenda').textContent = tituloLegenda();
@@ -1066,7 +1102,7 @@
     return nomes + ' · ' + mt;
   }
   const NOTAS = {
-    pam: () => `Área plantada e produção <b>declaradas</b> ao IBGE (Produção Agrícola e da Pecuária Municipal). A área rural de cada município exclui setor censitário urbano de 2010, mancha urbana, terra indígena e UC de proteção integral. De 1974 a 1987 a área é a <b>colhida</b>: a PAM só pergunta a plantada desde 1988. Valor só a partir de 1994 (antes, em moeda da época); produção das lavouras permanentes só a partir de 2001, quando o IBGE trocou a unidade das frutas.`,
+    pam: () => `Área plantada e produção <b>declaradas</b> ao IBGE (Produção Agrícola e da Pecuária Municipal). A área rural de cada município exclui setor censitário urbano de 2010, mancha urbana, terra indígena e UC de proteção integral. De 1974 a 1987 a área é a <b>colhida</b>: a PAM só pergunta a plantada desde 1988. Município que ainda não existia recebe a parte do território de origem: o total do grupo comparável (AMC) repartido pela área rural. Valor só a partir de 1994 (antes, em moeda da época); produção das lavouras permanentes só a partir de 2001, quando o IBGE trocou a unidade das frutas.`,
     sat: () => `Área vista pelo <b>satélite</b> (MapBiomas, coleção 11, pixel de 30 m). O satélite separa soja, cana, arroz, algodão, café, citros e dendê; milho, feijão, trigo e o resto entram juntos em "outras temporárias" ou "outras perenes".` + aviso(),
     cmp: () => `Razão entre a área vista pelo satélite e a declarada ao IBGE, para a mesma classe. Laranja, limão e tangerina são comparados juntos com "citros"; culturas sem classe própria, contra a soma das outras. Municípios com menos de 50 ha declarados ficam de fora. Divergência grande costuma ser safrinha (o milho de 2ª safra ocupa a terra da soja), área declarada desatualizada ou classe que o satélite confunde.` + aviso(),
     exp: () => `Área que <b>virou</b> a classe da cultura na década (1990→2000, 2000→2010, 2010→2020), pela transição do MapBiomas. Use a origem para separar o que veio de floresta, de cerrado ou de pastagem.` + aviso(),
@@ -1292,6 +1328,11 @@
       <span>Terra indígena</span><span>${fmt(M.mun.ti_km2[m])} km²</span>
       <span>UC de proteção integral</span><span>${fmt(M.mun.uc_km2[m])} km²</span></div>`;
 
+    if (M.mun.inst[m] > A0) {
+      const n = MEMBROS[AMC[m]].length;
+      h += `<div class="nota">Instalado por volta de ${M.mun.inst[m]} (primeiro ano com dado). ` +
+        (n > 1 ? `Antes disso, o mapa mostra aqui a parte que cabe a ele no total dos ${n} municípios que formam o mesmo território comparável.` : '') + `</div>`;
+    }
     // lavouras do ano
     const lav = LAVOURAS.map(i => [i, serieItem(i).area[m * NA + aP - A0]]).filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1]);
     h += `<h3>Lavouras declaradas em ${aP}</h3>`;
@@ -1453,7 +1494,7 @@
   $('carregando').remove();
   pede();
   /* gancho para os testes: só existe na cópia que testes/comum.ts injeta */
-  if (window.__testes) window.__testes({ est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista });
+  if (window.__testes) window.__testes({ est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2 });
   /* ---------- fim ---------- */
 })();
 </script>

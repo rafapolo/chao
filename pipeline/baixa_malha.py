@@ -105,3 +105,18 @@ excesso = j.filter(pl.col("area_mascara_km2") > pl.col("area_km2") * 1.01)
 print(f"municípios com máscara > área: {excesso.height}")
 cap = j.filter(pl.col("id_municipio") == "3550308").row(0, named=True)
 print(f"São Paulo capital: {cap['area_mascara_km2'] / cap['area_km2']:.0%} mascarado")
+
+# ---------- áreas mínimas comparáveis ----------
+# Um município desmembrado depois de 1974 não tem dado antes de existir, e o pai,
+# nesses anos, traz na PAM e na PPM a área do território inteiro da época — que a
+# malha atual desenha menor. As 3.800 AMC do geobr agrupam os municípios de hoje
+# em territórios estáveis; a página usa o grupo nos anos em que ele está
+# incompleto. `id_municipio` da tabela é a lista de membros, separada por vírgula.
+amc = roda("amc", """
+COPY (
+  SELECT id_amc, unnest(string_split(id_municipio, ',')) AS id_municipio
+  FROM br_geobr_mapas.area_minima_comparavel_2010
+) TO '{saida}' (FORMAT parquet);
+""")
+cobre = amc["id_municipio"].is_in(malha["id_municipio"].to_list()).sum()
+print(f"AMC: {amc['id_amc'].n_unique()} grupos, {cobre} de {malha.height} municípios da malha cobertos")
