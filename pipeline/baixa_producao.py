@@ -4,13 +4,16 @@
 Saída: pipeline/dados/producao.parquet com uma linha por item × município × ano:
   item, ano, id_municipio, area (ha), quantidade, valor (R$ mil)
 
-As três armadilhas da PAM medidas em 2026-10-21 são tratadas aqui:
+As armadilhas da PAM medidas em 2026-10-21 são tratadas aqui:
   - valor_producao está em R$ mil e, antes de 1994, em moeda da época: o valor
     só entra a partir de 1994;
   - a quantidade das lavouras permanentes troca de unidade em 2001 (frutas em mil
     frutos -> t; a laranja vai de 106.651 mil para 16.983 mil): a quantidade
     delas só entra a partir de 2001;
-  - café vem em Total, Arábica e Canephora: só o Total, para não somar duas vezes.
+  - café vem em Total, Arábica e Canephora: só o Total, para não somar duas vezes;
+  - área plantada (e destinada à colheita, nas permanentes) só existe a partir de
+    1988 — de 1974 a 1987 a PAM só tem área colhida, que entra no lugar (soja 1987:
+    9,1 M ha colhidos; 1988: 10,5 M plantados). A página avisa.
 Na PPM, "Galináceos - galinhas" e "Suíno - matrizes" são subconjuntos dos totais
 e ficam de fora pelo mesmo motivo.
 """
@@ -30,18 +33,19 @@ reb_fora = ", ".join(f"'{p}'" for p in REBANHOS_FORA)
 df = roda("producao", f"""
 COPY (
   SELECT 'T|' || produto AS item, ano, id_municipio,
-         area_plantada::DOUBLE AS area, quantidade_produzida AS quantidade,
+         coalesce(area_plantada, CASE WHEN ano < 1988 THEN area_colhida END)::DOUBLE AS area,
+         quantidade_produzida AS quantidade,
          CASE WHEN ano >= 1994 THEN valor_producao END AS valor
   FROM br_ibge_pam.lavoura_temporaria
-  WHERE coalesce(area_plantada, 0) > 0 OR coalesce(quantidade_produzida, 0) > 0
+  WHERE coalesce(area_plantada, area_colhida, 0) > 0 OR coalesce(quantidade_produzida, 0) > 0
   UNION ALL
   SELECT 'P|' || produto, ano, id_municipio,
-         area_destinada_colheita::DOUBLE,
+         coalesce(area_destinada_colheita, CASE WHEN ano < 1988 THEN area_colhida END)::DOUBLE,
          CASE WHEN ano >= 2001 THEN quantidade_produzida END,
          CASE WHEN ano >= 1994 THEN valor_producao END
   FROM br_ibge_pam.lavoura_permanente
   WHERE produto NOT IN ('Café (em grão) Arábica', 'Café (em grão) Canephora')
-    AND (coalesce(area_destinada_colheita, 0) > 0 OR coalesce(quantidade_produzida, 0) > 0)
+    AND (coalesce(area_destinada_colheita, area_colhida, 0) > 0 OR coalesce(quantidade_produzida, 0) > 0)
   UNION ALL
   SELECT 'R|' || tipo_rebanho, ano, id_municipio, NULL, quantidade::DOUBLE, NULL
   FROM br_ibge_ppm.efetivo_rebanhos
