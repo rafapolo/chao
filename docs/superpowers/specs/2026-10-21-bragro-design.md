@@ -49,10 +49,18 @@ impressas e números medidos, nunca arredondados para enfeite.
 | IBGE PAM | `br_ibge_pam.lavoura_temporaria` (`area_plantada`) e `.lavoura_permanente` (`area_destinada_colheita`); ambas com `area_colhida`, `quantidade_produzida`, `rendimento_medio_producao`, `valor_producao` | município × produto × ano | 1974–2024; 33 + 38 produtos |
 | MapBiomas | `br_mapbiomas_estatisticas.cobertura_municipio_classe` (`area_ha`, `id_classe`, `bioma`, `colecao`) + `.classe` + `.transicao_municipio_de_para_decenal` | município × classe × ano | 1985–2025 |
 | geobr | `br_geobr_mapas`: `municipio`, `pegada_urbana`, `setor_censitario_2010` (`situacao_setor`), `terra_indigena`, `unidade_conservacao`, `bioma`, `uf` | polígono | estático |
-| SICOR | `br_bcb_sicor.recurso_publico_gleba` (+ `proagro_rcp_gleba`) → `operacao` (`id_referencia_bacen`, `numero_ordem`, `ano_safra_emissao`, `id_empreendimento`) → `empreendimento` (`produto`) | polígono de gleba | a medir |
+| SICOR | `br_bcb_sicor.recurso_publico_gleba` → `operacao` (`id_referencia_bacen`, `numero_ordem` — chave única, 28,4 M) → `empreendimento` (`produto` em texto, `finalidade`); município por `recurso_publico_complemento_operacao.id_municipio` | polígono de gleba | 2013–2025, 7,3 M glebas (326 sem geometria); 0 glebas sem operação em 2023 |
+| Proagro | `br_bcb_sicor.proagro_rcp` (`area`, `id_evento`, datas) + `proagro_rcp_gleba` (polígono) | perda comprovada por operação | a partir de ~2013 |
+| IBGE PPM | `br_ibge_ppm.efetivo_rebanhos` (`tipo_rebanho`, `quantidade`), `producao_aquicultura`, `producao_origem_animal` | município × item × ano | 1974–2025 (aquicultura desde 2013) |
+| Garantia-Safra | `br_cgu_garantia_safra.garantia_safra` (`codigo_municipio_siafi`, `nis_favorecido`, `valor_parcela`, `mes_referencia`) | pagamento | 2013-01 a 2026-07, 1.327 municípios |
+| SICAR | `br_sfb_sicar.area_imovel` (última foto, 2025-10-15, sem cancelados), `reserva_legal`, `app` (só `APP_TOTAL`, `area < 1e7`), `area_pousio`, `vegetacao_nativa`, `area_consolidada` | imóvel → município | retrato único |
 
 Escala conferida: soma nacional da PAM em 2024 dá soja 46,2 M ha, milho 21,4 M e
-cana 10,1 M.
+cana 10,1 M. MapBiomas: uma só coleção (11). Sorriso no geobr: 9.347 km² (IBGE: 9.329).
+**As glebas são amostra, não total**: na safra 2023/24, o custeio de soja com gleba financia
+3,3 M ha, contra 46 M ha da PAM, porque a tabela só traz crédito com recurso público. A camada
+diz isso na legenda e filtra `finalidade = 'Custeio'` de produto agrícola (bovinos, pastagem e
+obras de investimento ficam de fora).
 
 Armadilhas já registradas no rodado:
 
@@ -80,7 +88,7 @@ beelink (DuckDB) ──ssh──> pipeline/*.py (Polars) ──> pipeline/*.bin|
 | `baixa_malha.py` | busca município, pegada urbana, setores urbanos, TI, UC, UF e bioma; calcula **rural = município − urbano − setores urbanos − TI − UC de proteção integral**; simplifica (Douglas-Peucker, tolerância para o zoom máximo) e quantiza as coordenadas | área rural ≥ área agropecuária do MapBiomas (classe 14) no último ano, por município; lista as exceções |
 | `baixa_pam.py` | busca as duas lavouras por município × produto × ano; mantém só as células não nulas; normaliza o nome do produto | soma nacional por produto e ano; soja em 2024 ≈ 46,2 M ha |
 | `baixa_mapbiomas.py` | busca cobertura e transição só das classes agrícolas, pasto, silvicultura e mosaico | uma só `colecao`; soma por classe e ano |
-| `baixa_glebas.py` | liga gleba → operação → empreendimento sem duplicar a chave; extrai o centroide; agrega em **H3 res 6** × produto × safra | células com < 5 glebas são descartadas, e o script imprime quantas caíram; área total das glebas por cultura e safra ÷ área da PAM |
+| `baixa_glebas.py` | liga gleba → operação → empreendimento sem duplicar a chave; extrai o centroide; agrega numa **grade regular de 0,05°** (~30 km², sem dependência de H3) × produto × safra | células com < 5 glebas são descartadas, e o script imprime quantas caíram; área total das glebas por cultura e safra ÷ área da PAM |
 | `correspondencia.yaml` | liga produto da PAM ↔ classe do MapBiomas (soja↔39, cana↔20, arroz↔40, algodão↔62, café↔46, laranja/limão/tangerina↔47; demais temporárias↔41, demais perenes↔48) e produto do SICOR ↔ produto da PAM | — |
 | `monta_pagina.py` | serializa em arrays tipados (Float32/Uint16), comprime e preenche os marcadores do template | tamanho por bloco e tamanho total ≤ 25 MB |
 
@@ -93,7 +101,8 @@ Cada bloco ocupa um marcador `/*__NOME__*/` no template:
 | `MALHA` | polígonos rurais quantizados; inclui `id_municipio`, nome, UF, bioma, ano de instalação e a área urbana e protegida recortada, desenhada em cinza |
 | `PAM` | colunar: índice de município, índice de produto, ano − 1974, área, produção, valor, rendimento |
 | `MAPB` | colunar: índice de município, classe, ano − 1985, `area_ha`; transição decenal à parte |
-| `GLEBAS` | índice H3 (como 2 × Uint32), produto, safra, área, número de glebas |
+| `GLEBAS` | célula da grade (i, j), produto, safra, área, número de glebas; idem `PROAGRO` com evento |
+| `PPM`, `GSAFRA`, `SICAR` | cubo município × item × ano (PPM), município × ano (Garantia-Safra), município (SICAR) |
 | `FONTE` | fonte mono subconjunto, como no rios |
 
 Orçamento de tamanho:
@@ -179,8 +188,24 @@ Se o total estourar 25 MB, o primeiro corte é a produção e o valor antes de
 
 - Raster do MapBiomas a 30 m e tiles.
 - Polígono de gleba individual.
-- SICAR, PPM e Garantia-Safra.
 - Remoto no GitHub e deploy.
+
+## Fontes adicionadas na execução (2026-10-21, a pedido)
+
+- **PPM**: rebanhos, aquicultura e produção de origem animal entram no mesmo seletor
+  das culturas, num grupo "pecuária", com a métrica "quantidade" (cabeças, kg, litros).
+- **Proagro**: modo "perdas" — área com perda comprovada por célula da grade e por
+  município, filtrável por evento (seca, chuva excessiva, geada, granizo…).
+- **Garantia-Safra**: modo "Garantia-Safra" — agricultores pagos por município e ano.
+- **SICAR**: só na ficha — imóveis, área cadastrada por tamanho, reserva legal, APP,
+  pousio, vegetação nativa.
+
+## Simplificação da área rural
+
+Em vez de recortar o polígono rural (diferença geométrica cara e frágil), a página desenha
+o município inteiro e pinta **por cima** a máscara cinza (setores urbanos de 2010, pegada
+urbana, TI, UC de proteção integral). O efeito visual é o mesmo; a área rural (área do
+município − área da máscara unida) é calculada no pipeline e alimenta "% da área rural".
 
 ## Pendências medidas antes da implementação (passo 1 do plano)
 
