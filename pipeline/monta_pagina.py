@@ -589,6 +589,68 @@ bcl.meta = {"anos": [int(cla["ano"].min()), int(cla["ano"].max())], "anos_est": 
                          for i, n, la, lo in EST.iter_rows()],
             "desastres": GRUPOS_DES, "ano_desastres": int(pl.read_parquet(D / "desastres.parquet")["ano"].max())}
 
+# ---------- séries genéricas município × ano (3ª etapa) ----------
+def series(bloco, df, cols, ano0=1970, inteiro=()):
+    """Uma série por coluna: K_m, K_a (ano − ano0) e K_v (escala log, ou i32 cru nas
+    colunas em `inteiro`, que podem ser negativas). Sem as linhas nulas ou zero."""
+    meta = {}
+    for chave, col in cols.items():
+        d = df.filter(pl.col(col).is_not_null() & (pl.col(col) != 0)).sort(["m", "ano"])
+        bloco.add(chave + "_m", d["m"], "u16"); bloco.add(chave + "_a", d["ano"] - ano0, "u8")
+        if col in inteiro:
+            bloco.add(chave + "_v", d[col].round(0), "i32")
+        else:
+            bloco.add(chave + "_v", log16(d[col].to_numpy()), "u16")
+        meta[chave] = {"anos": [int(d["ano"].min()), int(d["ano"].max())], "int": col in inteiro}
+    return meta
+
+
+print("mercado")
+bx = Bloco()
+trs = idx_mun(pl.read_parquet(D / "trase.parquet"))
+soja = trs.filter(pl.col("produto") == "soja").rename({"t": "soja_t", "usd": "soja_usd", "desm_ha": "soja_desm"})
+carne = trs.filter(pl.col("produto") == "carne").rename({"t": "carne_t"})
+cxm = idx_mun(pl.read_parquet(D / "comex.parquet")).filter(pl.col("ano") <= 2025)
+SER = {}
+SER.update(series(bx, soja, {"soja_t": "soja_t", "soja_usd": "soja_usd", "soja_desm": "soja_desm"}))
+SER.update(series(bx, carne, {"carne_t": "carne_t"}))
+SER.update(series(bx, cxm, {"cx_agro": "agro_usd", "cx_fert": "fert_usd", "cx_def": "defensivo_usd"}))
+tpa = (idx_mun(pl.read_parquet(D / "trase_pais.parquet"))
+       .sort(["m", "t", "pais"], descending=[False, True, False]).group_by("m", maintain_order=True).head(5))
+PAISES = sorted(tpa["pais"].unique().to_list())
+bx.add("tp_m", tpa["m"], "u16"); bx.add("tp_p", tpa["pais"].replace_strict({p: i for i, p in enumerate(PAISES)}, return_dtype=pl.Int32), "u16")
+bx.add("tp_t", log16(tpa["t"].to_numpy()), "u16")
+lgm = idx_mun(pl.read_parquet(D / "logistica.parquet"))
+LOG_COLS = ["armazens", "cap_armazem", "esmagadoras", "cap_esmagadora", "frigorificos"]
+for c in LOG_COLS:
+    arr = np.zeros(NMUN); arr[lgm["m"].to_numpy()] = lgm[c].fill_null(0).to_numpy()
+    bx.add("lg_" + c, np.round(arr), "u32")
+bx.meta = {"series": SER, "paises": PAISES, "logistica": LOG_COLS}
+
+print("emissões")
+bs = Bloco()
+sgm = idx_mun(pl.read_parquet(D / "seeg.parquet"))
+bs.meta = {"series": series(bs, sgm, {"se_agro": "agro", "se_ent": "enterica", "se_solos": "solos", "se_dej": "dejetos",
+                                      "se_arroz": "arroz", "se_mut": "mut", "se_rem": "remocao"})}
+
+print("gente")
+bg = Bloco()
+tbm = idx_mun(pl.read_parquet(D / "trabalho.parquet"))
+som = idx_mun(pl.read_parquet(D / "social.parquet"))
+# privacidade: pescadores pagos no defeso com menos de MIN_CELULA pessoas no município × ano não entram
+som = som.with_columns([pl.when(pl.col("defeso").fill_null(0) < MIN_CELULA).then(None).otherwise(pl.col(c)).alias(c)
+                        for c in ("defeso", "defeso_valor")])
+imv = idx_mun(pl.read_parquet(D / "imoveis.parquet")).with_columns(
+    pl.lit(2025).alias("ano_cafir"), pl.lit(2022).alias("ano_cnefe"))
+SER = {}
+SER.update(series(bg, tbm, {"rais": "vinculos", "caged": "saldo"}, inteiro=("saldo",)))
+SER.update(series(bg, som, {"cad_agri": "agricultores", "cad_pesc": "pescadores", "cad_extr": "extrativistas",
+                            "cad_asse": "assentados", "cad_rural": "familias_rurais", "def_n": "defeso",
+                            "def_v": "defeso_valor", "pop": "populacao"}))
+SER.update(series(bg, imv.rename({"ano_cafir": "ano"}), {"cafir": "imoveis_cafir"}))
+SER.update(series(bg, imv.rename({"ano_cnefe": "ano"}), {"cnefe": "estabelecimentos_agro"}))
+bg.meta = {"series": SER}
+
 # ---------- metadados ----------
 meta = {
     "mun": {
@@ -641,6 +703,12 @@ sor = cla.filter(pl.col("id_municipio") == "5107925")
 fix["clima"] = {"mun": "5107925", "ano": 2015, "chuva": float(sor.filter(pl.col("ano") == 2015)["chuva_mm"][0]),
                 "media": float(sor["chuva_mm"].mean()),
                 "estacoes": int(est.filter(pl.col("ano") == 2015).height)}
+fix["series"] = {
+    "soja_t": {"mun": "5107925", "ano": 2020, "v": float(soja.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2020))["soja_t"][0])},
+    "se_agro": {"mun": "5107925", "ano": 2022, "v": float(sgm.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2022))["agro"][0])},
+    "rais": {"mun": "5107925", "ano": 2020, "v": float(tbm.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2020))["vinculos"][0])},
+    "caged": {"ano": 2023, "v": float(tbm.filter(pl.col("ano") == 2023)["saldo"].sum())},
+}
 fix["pib"] = {"mun": "5107925", "ano": 2021,
               "va_agro": float(pb.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2021))["va_agro"][0])}
 (RAIZ / "testes" / "fixture.json").write_text(json.dumps(fix, ensure_ascii=False, indent=1))
@@ -650,7 +718,8 @@ print("blocos")
 tpl = (S / "template.html").read_text().replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
 BLOCOS = [("MALHA", "malha", bm), ("PROD", "prod", bp), ("PRODQV", "prodqv", bq), ("MAPB", "mapb", bb),
           ("CRED", "cred", bc), ("CAD", "cad", bk), ("CONTORNOS", "contornos", bt), ("CREDRS", "credrs", br),
-          ("ECON", "econ", be), ("TERRA", "terra", bd), ("FOGO", "fogo", bf), ("CLIMA", "clima", bcl)]
+          ("ECON", "econ", be), ("TERRA", "terra", bd), ("FOGO", "fogo", bf), ("CLIMA", "clima", bcl),
+          ("MERCADO", "mercado", bx), ("EMIS", "emis", bs), ("GENTE", "gente", bg)]
 GZ = {nome: comprime(nome, bloco) for _, nome, bloco in BLOCOS}
 
 # 1. index.html: arquivo único, abre por file:// (os blocos em base64 dentro dele)

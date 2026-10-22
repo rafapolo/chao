@@ -253,6 +253,7 @@
   .barra .v { font-family: "Mono", monospace; font-size: 11.5px; color: var(--ink-2); text-align: right; min-width: 9ch; }
   .kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12px; }
   .kv span:nth-child(even) { font-family: "Mono", monospace; color: var(--ink-2); text-align: right; }
+  .kv small { color: var(--ink-3); font-size: 10.5px; }
   .ficha svg { display: block; width: 100%; overflow: visible; }
   .ficha .sel-ficha { width: 100%; margin-bottom: 8px; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--linha); background: var(--fundo); }
   .ficha .vazio { color: var(--ink-3); font-size: 12px; }
@@ -431,6 +432,9 @@
 <script id="b-terra" type="text/plain" data-etapa="sob-demanda">/*__TERRA__*/</script>
 <script id="b-fogo" type="text/plain" data-etapa="sob-demanda">/*__FOGO__*/</script>
 <script id="b-clima" type="text/plain" data-etapa="sob-demanda">/*__CLIMA__*/</script>
+<script id="b-mercado" type="text/plain" data-etapa="sob-demanda">/*__MERCADO__*/</script>
+<script id="b-emis" type="text/plain" data-etapa="sob-demanda">/*__EMIS__*/</script>
+<script id="b-gente" type="text/plain" data-etapa="sob-demanda">/*__GENTE__*/</script>
 <script>
 (async function () {
   'use strict';
@@ -711,13 +715,17 @@
     { id: 'cmp', nome: 'Satélite × declarado', sub: '1985–2024', sec: 'Produção' },
     { id: 'exp', nome: 'Expansão', sub: 'de onde veio · por década', sec: 'Terra' },
     { id: 'desm', nome: 'Desmatamento', sub: 'PRODES, DETER, IBAMA', sec: 'Terra', blocos: ['terra'] },
+    { id: 'emis', nome: 'Emissões', sub: 'SEEG · 1990–2024', sec: 'Terra', blocos: ['emis'] },
     { id: 'gleba', nome: 'Glebas', sub: 'crédito rural · 2012–2025', sec: 'Dinheiro' },
     { id: 'cred', nome: 'Crédito rural', sub: 'SICOR, ESTBAN, BNDES', sec: 'Dinheiro', blocos: ['credrs'] },
     { id: 'econ', nome: 'Economia', sub: 'PIB municipal · 1999–2021', sec: 'Dinheiro', blocos: ['econ'] },
+    { id: 'expo', nome: 'Exportação', sub: 'Trase, Comex', sec: 'Dinheiro', blocos: ['mercado'] },
     { id: 'clima', nome: 'Clima', sub: 'chuva e calor · SISAM, INMET', sec: 'Clima e fogo', blocos: ['clima'] },
     { id: 'perda', nome: 'Perdas', sub: 'Proagro · 2012–2025', sec: 'Clima e fogo' },
     { id: 'gs', nome: 'Garantia-Safra', sub: 'semiárido · 2013–2026', sec: 'Clima e fogo', blocos: ['contornos'] },
     { id: 'fogo', nome: 'Fogo', sub: 'focos do INPE · 2003–2026', sec: 'Clima e fogo', blocos: ['fogo'] },
+    { id: 'trab', nome: 'Trabalho e estrutura', sub: 'RAIS, CAGED, CNEFE, CAFIR', sec: 'Gente', blocos: ['gente'] },
+    { id: 'social', nome: 'Famílias do campo', sub: 'CadÚnico, Seguro-Defeso', sec: 'Gente', blocos: ['gente'] },
   ];
   const UFS = [...new Set(M.mun.uf)].sort();
   const BIOMAS = [...new Set(M.mun.bioma.filter(b => b && b !== '0'))].sort();
@@ -748,6 +756,8 @@
         return b ? b.safras : [2012, 2025];
       }
       case 'econ': return SOB.econ?.meta.anos || [1999, 2021];
+      case 'expo': case 'emis': case 'trab': case 'social':
+        return SOB[SERIES[est.modo].bloco]?.meta.series[est.metrica]?.anos || [2000, 2024];
       case 'desm': {
         const A = SOB.terra?.meta.anos;
         if (!A) return [2001, 2025];
@@ -780,6 +790,7 @@
     if (est.modo === 'exp') return [['pct', '% da área do município'], ['area', 'Área convertida (ha)']];
     if (est.modo === 'gleba') return [['area', 'Área das glebas (ha)'], ['n', 'Número de glebas']];
     if (est.modo === 'perda') return [['area', 'Área com perda (ha)'], ['n', 'Número de perdas']];
+    if (SERIES[est.modo]) return SERIES[est.modo].medidas.map(([k, n]) => [k, n]);
     if (est.modo === 'cred') return CRED_MEDIDAS;
     if (est.modo === 'desm') return [['km2', 'km² desmatados no ano (PRODES)'], ['pct', '% do município desmatado no ano'],
       ['grade', 'Desmatamento na grade de 0,1° (km²)'], ['acum', 'Desmatado acumulado (km²)'], ['deter', 'Alertas DETER: desmatamento (km²)'],
@@ -805,6 +816,35 @@
     ['coop', '% tomado por cooperados'], ['car', '% das operações com CAR'], ['saldo', 'Dívida rural em aberto (dez.)'],
     ['estban', 'Saldo nos bancos (ESTBAN)'], ['bndes', 'BNDES à agropecuária (R$)']];
   const CRED_SOMA = new Set(['v', 'vha', 'n', 'pronaf']);
+  /* Modos de série genérica: cada medida é uma série município × ano do bloco
+     (K_m, K_a = ano − 1970, K_v), com nome e unidade. */
+  const SERIES = {
+    expo: { bloco: 'mercado', titulo: 'Exportação', medidas: [
+      ['soja_t', 'Soja exportada, pelo município que produz (t, Trase)', 't'], ['soja_usd', 'Soja exportada (US$, Trase)', 'US$'],
+      ['soja_desm', 'Soja: exposição a desmatamento (ha, Trase)', 'ha'], ['carne_t', 'Carne bovina exportada (t eq., Trase)', 't'],
+      ['cx_agro', 'Exportação do agro, pela sede da empresa (US$, Comex)', 'US$'], ['cx_fert', 'Fertilizantes importados (US$)', 'US$'],
+      ['cx_def', 'Defensivos importados (US$)', 'US$']] },
+    emis: { bloco: 'emis', titulo: 'Emissões', medidas: [
+      ['se_agro', 'Agropecuária (tCO₂e)', 'tCO₂e'], ['se_ent', 'Fermentação entérica do gado (tCO₂e)', 'tCO₂e'],
+      ['se_solos', 'Solos manejados e adubo (tCO₂e)', 'tCO₂e'], ['se_dej', 'Manejo de dejetos (tCO₂e)', 'tCO₂e'],
+      ['se_arroz', 'Arroz irrigado (tCO₂e)', 'tCO₂e'], ['se_mut', 'Mudança de uso da terra: emissão (tCO₂e)', 'tCO₂e'],
+      ['se_rem', 'Remoção por vegetação (tCO₂e)', 'tCO₂e']] },
+    trab: { bloco: 'gente', titulo: 'Trabalho e estrutura', medidas: [
+      ['rais', 'Empregos formais na agropecuária (RAIS, 31/12)', 'empregos'], ['caged', 'Saldo de empregos no ano (CAGED)', 'vagas'],
+      ['cnefe', 'Estabelecimentos agropecuários (CNEFE, Censo 2022)', 'estabelecimentos'], ['cafir', 'Imóveis rurais ativos (CAFIR, Receita)', 'imóveis']] },
+    social: { bloco: 'gente', titulo: 'Famílias do campo', medidas: [
+      ['cad_agri', 'Famílias de agricultores familiares (CadÚnico)', 'famílias'], ['cad_pesc', 'Famílias de pescadores artesanais (CadÚnico)', 'famílias'],
+      ['cad_extr', 'Famílias extrativistas (CadÚnico)', 'famílias'], ['cad_asse', 'Famílias assentadas da reforma agrária (CadÚnico)', 'famílias'],
+      ['cad_rural', 'Famílias em domicílio rural (CadÚnico)', 'famílias'], ['def_n', 'Pescadores pagos no Seguro-Defeso', 'pescadores'],
+      ['def_v', 'Seguro-Defeso pago (R$)', 'R$'], ['pop', 'População (IBGE)', 'pessoas']] },
+  };
+  const medidaSerie = () => SERIES[est.modo]?.medidas.find(([k]) => k === est.metrica);
+  function valorSerie(B, k, m, ano) {
+    // o valor da série k no município m e no ano (NaN se não há)
+    const M_ = B.A[k + '_m'], A_ = B.A[k + '_a'], V_ = B.A[k + '_v'], int = B.meta.series[k].int;
+    for (let r = 0; r < M_.length; r++) if (M_[r] === m && A_[r] + 1970 === ano) return int ? V_[r] : LUT[V_[r]];
+    return NaN;
+  }
   const CRED_PCT = new Set(['pronaf', 'lib', 'desc', 'pj', 'top10', 'coopcred', 'coop', 'car']);
   const CRV = new Float32Array(NM);   // R$ contratados no ano, por trás das porcentagens (a faixa soma isto)
 
@@ -911,6 +951,13 @@
     if (est.modo === 'cred') return calculaCredito(ano);
     if (est.modo === 'desm' || est.modo === 'fogo') return calculaTerra(ano);
     if (est.modo === 'clima') return calculaClima(ano);
+    if (SERIES[est.modo]) {
+      const B = SOB[SERIES[est.modo].bloco], k = est.metrica;
+      if (!B || !B.meta.series[k]) return;
+      const M_ = B.A[k + '_m'], A_ = B.A[k + '_a'], V_ = B.A[k + '_v'], a = ano - 1970, int = B.meta.series[k].int;
+      for (let r = 0; r < M_.length; r++) if (A_[r] === a) VAL[M_[r]] = int ? V_[r] : LUT[V_[r]];
+      return;
+    }
     if (est.modo === 'econ') {
       const E = SOB.econ?.A;
       if (!E) return;
@@ -974,7 +1021,7 @@
   /* Clima: por município (SISAM) ou em pontos (estações do INMET, PONTOS). A
      anomalia é a chuva do ano contra a média de 2000–2019 da mesma fonte. */
   let PONTOS = [];
-  const DIVERGENTE = () => est.modo === 'clima' && (est.metrica === 'anom' || est.metrica === 'estanom');
+  const DIVERGENTE = () => (est.modo === 'clima' && (est.metrica === 'anom' || est.metrica === 'estanom')) || (est.modo === 'trab' && est.metrica === 'caged');
   const emPontos = () => est.modo === 'clima' && (est.metrica === 'est' || est.metrica === 'estanom');
   function calculaClima(ano) {
     const C = SOB.clima, mt = est.metrica;
@@ -1098,7 +1145,16 @@
   let quebras = [];
   function refazEscala() {
     if (est.modo === 'cmp') { quebras = [-1, -0.5, -0.15, 0.15, 0.5, 1]; return; }
-    if (DIVERGENTE()) { quebras = [-40, -20, -7, 7, 20, 40]; calcula(); return; }
+    if (DIVERGENTE() && est.modo === 'clima') { quebras = [-40, -20, -7, 7, 20, 40]; calcula(); return; }
+    if (DIVERGENTE()) {
+      // saldo de vagas: quebras simétricas pelos quantis do valor absoluto de todos os anos
+      const [a0, a1] = anosDoModo(), abs = [];
+      for (let a = a0; a <= a1; a++) { calcula(a); for (let m = 0; m < NM; m++) if (Number.isFinite(VAL[m]) && VAL[m] !== 0) abs.push(Math.abs(VAL[m])); }
+      abs.sort((x, y) => x - y);
+      const q = f => abs[Math.floor(f * (abs.length - 1))] || 1;
+      quebras = [-q(0.9), -q(0.6), -q(0.25), q(0.25), q(0.6), q(0.9)];
+      calcula(); return;
+    }
     if (est.modo === 'pam' && est.disputa) { quebras = []; return; }
     const [a0, a1] = anosDoModo(), amostra = [];
     const passo = est.modo === 'exp' ? 10 : Math.max(1, Math.round((a1 - a0) / 12));
@@ -1449,6 +1505,11 @@
       if (mt.startsWith('des')) return fmt(v) + ' reconhecimentos vigentes';
       return fmt(v, 1) + ' °C';
     }
+    const ms = medidaSerie();
+    if (ms) {
+      if (!Number.isFinite(v)) return 'sem registro';
+      return ms[2] === 'US$' || ms[2] === 'R$' ? ms[2] + ' ' + curto(v) : (est.metrica === 'caged' && v > 0 ? '+' : '') + curto(v) + ' ' + ms[2];
+    }
     if (!(v > 0)) return 'sem registro';
     if (est.modo === 'cred') {
       if (CRED_PCT.has(mt)) return fmt(v, v < 1 ? 2 : 1) + '% · R$ ' + curto(CRV[m]) + ' contratados';
@@ -1515,6 +1576,10 @@
     desm: '<path d="M9 2.5l4 6H5zM9 6.5l5 7H4zM9 13.5V16.5"/><path d="M13.5 15.5l3-3M15 11l1.8 1.8"/>',
     clima: '<path d="M5.5 11.5a3 3 0 0 1 .3-6 4 4 0 0 1 7.6.9 2.6 2.6 0 0 1-.2 5.1z"/><path d="M7 14.2l-.6 1.6M10 14.2l-.6 1.6M13 14.2l-.6 1.6"/><circle cx="14" cy="3.6" r="1.6"/>',
     fogo: '<path d="M9 16.5c-3 0-5-2-5-4.8 0-3 2.2-4.6 3-7.7 1.6 1.2 2.4 2.8 2.3 4.6 1-.6 1.7-1.6 1.9-2.8 1.6 1.4 2.8 3.4 2.8 5.9 0 2.8-2 4.8-5 4.8z"/>',
+    expo: '<path d="M2 12.5h14l-2 3.5H4zM4.5 12.5V8h9v4.5M7 8V5h4v3M9 2.5V5"/>',
+    emis: '<path d="M4.5 13a3 3 0 0 1 .4-6 4.3 4.3 0 0 1 8.2 1A2.6 2.6 0 0 1 13 13z"/><path d="M7 10.5h1.6M10 9.7v1.6"/>',
+    trab: '<path d="M3 15.5V9l6-4 6 4v6.5zM7 15.5v-4h4v4"/>',
+    social: '<circle cx="6.5" cy="6" r="2.2"/><circle cx="12" cy="7" r="1.8"/><path d="M2.5 15c0-2.6 1.8-4.5 4-4.5s4 1.9 4 4.5M10.5 11.2c.5-.3 1-.4 1.5-.4 1.9 0 3.5 1.6 3.5 4.2"/>',
     cred: '<ellipse cx="9" cy="5" rx="5.5" ry="2.2"/><path d="M3.5 5v4c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V5M3.5 9v4c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V9"/>',
     econ: '<path d="M2 16h14M4 13V9M8 13V6M12 13V8M16 3l-4.5 3.5L8 4 3 7.5"/>',
     gs: '<circle cx="9" cy="9" r="3.2"/><path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.7 3.7l1.4 1.4M12.9 12.9l1.4 1.4M3.7 14.3l1.4-1.4M12.9 5.1l1.4-1.4"/>',
@@ -1728,7 +1793,8 @@
         }).join('') + '</div>';
     } else if (DIVERGENTE()) {
       html += `<div class="faixa">${COR.d.map(c => `<span style="background:${c}"></span>`).join('')}</div>
-        <div class="rotulos"><span>mais seco</span><span>normal</span><span>mais chuvoso</span></div>`;
+        <div class="rotulos">${est.modo === 'clima' ? '<span>mais seco</span><span>normal</span><span>mais chuvoso</span>'
+          : `<span>fechou ${curto(-quebras[0])}+</span><span>zero</span><span>abriu ${curto(quebras[5])}+</span>`}</div>`;
     } else if (est.modo === 'cmp') {
       html += `<div class="faixa">${COR.d.map(c => `<span style="background:${c}"></span>`).join('')}</div>
         <div class="rotulos"><span>satélite vê ½</span><span>igual</span><span>vê 2×</span></div>`;
@@ -1767,6 +1833,7 @@
     if (est.modo === 'desm') return 'Desmatamento · ' + mt;
     if (est.modo === 'fogo') return 'Fogo · ' + mt;
     if (est.modo === 'clima') return 'Clima · ' + mt;
+    if (SERIES[est.modo]) return SERIES[est.modo].titulo + ' · ' + mt;
     return nomes + ' · ' + mt;
   }
   const NOTAS = {
@@ -1778,6 +1845,10 @@
     perda: () => `Área com <b>perda comprovada</b> no Proagro, o seguro do crédito rural, por safra e evento, na grade de 0,05°. A seca responde por 59% da área com perda de 2012 a 2025. Células com menos de ${M.min_celula} perdas não aparecem.`,
     cred: () => `Crédito rural contratado no <b>SICOR</b> (Banco Central), por safra. <b>Só o crédito com município</b>: o SICOR põe o município apenas nas operações de recurso controlado ou equalizado (poupança rural equalizada, BNDES/Finame, fundos constitucionais, LCA equalizada, Funcafé, Pronaf, Pronamp). A LCA livre e os recursos livres não têm município: na safra 2023/24 foram R$ 136 bi com município de R$ 422 bi no país (com uma UF no recorte, a faixa mostra o total dela). Combinação de município, safra, finalidade, atividade e programa com menos de ${M.min_celula} operações não aparece (8% do valor), e o que vem de tomador só onde há ${M.min_celula} ou mais. <b>ESTBAN</b>: saldo de financiamentos rurais nas agências, em dezembro; no espelho faltam os anos ímpares desde 2003, e a queda de 2020 não aparece no SICOR. <b>BNDES</b>: desembolso ao setor agropecuário.`,
     desm: () => `<b>PRODES</b> (INPE): área de vegetação nativa suprimida por ano (de agosto a julho), em todos os biomas; de 2017 em diante pelo incremento municipal, antes pela diferença do acumulado. A grade soma os polígonos em células de 0,1° (~120 km²). <b>DETER</b>: alertas diários (Amazônia desde 2016, Cerrado desde 2018, Pantanal e não-floresta desde 2023), separados em desmatamento e degradação; cicatriz de queimada fica no modo Fogo. <b>IBAMA</b>: embargos e autos de infração de flora não cancelados, pelo ano da lavratura; a área embargada vem sem unidade declarada na fonte (tratada como ha). Nome de embargado ou autuado não entra.`,
+    expo: () => `<b>Trase</b>: a exportação de soja (2004–2020, em equivalente de grão) e de carne bovina (2015–2017) ligada ao <b>município onde foi produzida</b>, com a exposição da soja ao desmatamento (área desmatada atribuída à soja exportada). <b>Comex Stat</b>: exportação de produtos do agro (capítulos 01–24 do SH, mais couro, celulose e algodão) e importação de fertilizantes e defensivos, pelo <b>domicílio fiscal da empresa</b>: a soja de Sorriso pode sair por Rondonópolis ou por São Paulo. Compare as duas.`,
+    emis: () => `Emissões de gases de efeito estufa por município, em tCO₂e (GWP-AR5), estimadas pelo <b>SEEG</b> (Observatório do Clima): agropecuária (fermentação entérica do gado, solos e adubo, dejetos, arroz irrigado) e mudança de uso da terra (desmatamento e queima de vegetação), com a remoção por vegetação secundária e áreas protegidas.`,
+    trab: () => `<b>RAIS</b>: empregos formais da agropecuária (subsetor IBGE 25) em 31 de dezembro; o emprego informal, a maior parte do trabalho no campo, não aparece. <b>CAGED</b>: admissões menos desligamentos na seção A da CNAE, de 2020 em diante (vermelho: fechou vagas). <b>CNEFE</b>: endereços de estabelecimentos agropecuários no Censo 2022. <b>CAFIR</b>: imóveis rurais ativos no cadastro da Receita, na data mais recente (a área do cadastro fica de fora: não fecha em nenhuma unidade).`,
+    social: () => `Famílias inscritas no <b>Cadastro Único</b> por grupo (agricultores familiares, pescadores artesanais, extrativistas, assentados) e em domicílio rural, no último mês de cada ano. <b>Seguro-Defeso</b>: pescadores artesanais pagos no período em que a pesca é proibida (Portal da Transparência), contados pelo NIS; município com menos de ${M.min_celula} não aparece. População estimada pelo IBGE.`,
     clima: () => `<b>SISAM</b> (INPE): chuva e temperatura por município, de 2000 a 2019, a partir de modelo e satélite, não de pluviômetro: serve para comparar um ano com outro no mesmo lugar (a <b>anomalia</b>, contra a média de 2000–2019), menos para o valor absoluto. As <b>estações do INMET</b> são medição direta, de 2000 a 2025, desenhadas como pontos: só os anos com 90% ou mais das horas medidas. <b>S2ID</b> (Defesa Civil): situações de emergência ou calamidade reconhecidas e ainda vigentes; a fonte só guarda o retrato atual. Compare a seca de 2012–2016 no semiárido com as Perdas do Proagro e o Garantia-Safra.`,
     fogo: () => `Focos de calor do <b>satélite de referência</b> do INPE (AQUA, passagem da tarde), por ano: é a série comparável ao longo do tempo. Desde 2023 a fonte traz todos os satélites (30 vezes mais focos, o mesmo fogo visto várias vezes); só o de referência entra. Foco não é área queimada: a área vem da cicatriz de queimada do DETER (Amazônia, Cerrado, Pantanal).`,
     econ: () => `Valor adicionado bruto da <b>agropecuária</b> no PIB dos municípios (IBGE), em R$ correntes, de 1999 a 2021 (1999–2001 pela série antiga; o IBGE ainda não abriu 2022 e 2023 por setor). É o que a agropecuária gera de renda no município, não o que ela vende: a soja processada na indústria conta na indústria.`,
@@ -1816,7 +1887,7 @@
           if (!noRecorte(m)) continue;
           let v = VAL[m];
           if (absoluto) v = valorAbsoluto(m, a);
-          if (v > 0 && Number.isFinite(v)) s += v;
+          if ((v > 0 || est.metrica === 'caged') && Number.isFinite(v)) s += v;
         }
       }
       serieNacional.push([a, s]);
@@ -1876,6 +1947,7 @@
     if (est.modo === 'econ') return 'R$ de VA agro';
     if (est.modo === 'desm') return { emb: 'embargos', autos: 'autos', embha: 'ha', multas: 'R$' }[est.metrica] || 'km²';
     if (est.modo === 'fogo') return est.metrica === 'queim' ? 'km²' : 'focos';
+    if (medidaSerie()) return medidaSerie()[2];
     if (est.modo === 'clima') return DIVERGENTE() ? '% da média (média do recorte)' : est.metrica.startsWith('des') ? 'reconhecimentos (média)'
       : est.metrica === 'secos' ? 'dias (média do recorte)' : ['temp', 'tmax'].includes(est.metrica) ? '°C (média do recorte)' : 'mm (média do recorte)';
     if (est.modo === 'perda' || est.modo === 'gleba') return est.metrica === 'n' ? (est.modo === 'gleba' ? 'glebas' : 'perdas') : 'ha';
@@ -1897,7 +1969,8 @@
     $('ano-txt').textContent = $('chip-ano').textContent = est.modo === 'exp' ? `${a - 10}→${a}` : a;
     const safra = 'safra ' + a + '/' + String(a + 1).slice(2);
     $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
-      clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', desm: ['emb', 'embha', 'autos', 'multas', 'deter', 'degr'].includes(est.metrica) ? 'ano' : 'ago→jul (PRODES)', fogo: 'ano',
+      clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', expo: 'ano', emis: 'ano', social: 'ano',
+      trab: est.metrica === 'cnefe' ? 'Censo 2022' : est.metrica === 'cafir' ? 'retrato atual' : 'ano', desm: ['emb', 'embha', 'autos', 'multas', 'deter', 'degr'].includes(est.metrica) ? 'ano' : 'ago→jul (PRODES)', fogo: 'ano',
       cred: est.metrica === 'estban' ? 'dezembro' : est.metrica === 'bndes' ? 'ano' : safra }[est.modo];
     calcula();
     if (emCelulas() || est.glebas) CEL = celulasAtuais();
@@ -1961,7 +2034,7 @@
       b.title = b.disabled ? 'carregando…' : '';
     });
     $('sobre-glebas').disabled = !pronto;
-    const comItens = !['perda', 'gs', 'cred', 'econ', 'desm', 'fogo', 'clima'].includes(est.modo);
+    const comItens = !['perda', 'gs', 'cred', 'econ', 'desm', 'fogo', 'clima', 'expo', 'emis', 'trab', 'social'].includes(est.modo);
     $('sec-itens').style.display = comItens ? '' : 'none';
     $('alt-disputa').style.display = est.modo === 'pam' ? '' : 'none';
     const principal = est.modo === 'pam' && est.disputa;
@@ -2032,8 +2105,38 @@
   /* Crédito e economia na ficha: pedem os blocos da 3ª etapa ao abrir a ficha */
   /* Os blocos da 3ª etapa não são baixados só porque a ficha abriu: cada seção
      aparece se o bloco já veio (pelo modo, ou pelo botão no fim da ficha). */
-  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo', 'clima'];
-  const NOME_EXTRA = { credrs: 'crédito', econ: 'economia', terra: 'desmatamento e terra', fogo: 'fogo', clima: 'clima' };
+  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo', 'clima', 'mercado', 'emis', 'gente'];
+  const NOME_EXTRA = { credrs: 'crédito', econ: 'economia', terra: 'desmatamento e terra', fogo: 'fogo', clima: 'clima',
+    mercado: 'exportação', emis: 'emissões', gente: 'trabalho e famílias' };
+  /* séries genéricas na ficha: o valor do ano (ou o mais recente antes dele) */
+  function fichaSeries(m, a) {
+    let h = '';
+    for (const [id, def] of Object.entries(SERIES)) {
+      const B = SOB[def.bloco];
+      if (!B) continue;
+      const linhas = [];
+      for (const [k, nome, un] of def.medidas) {
+        const S = B.meta.series[k];
+        if (!S) continue;
+        let v = NaN, y = Math.min(a, S.anos[1]);
+        for (; y >= S.anos[0]; y--) { v = valorSerie(B, k, m, y); if (Number.isFinite(v)) break; }
+        if (!Number.isFinite(v)) continue;
+        const txt = un === 'US$' || un === 'R$' ? un + ' ' + curto(v) : (k === 'caged' && v > 0 ? '+' : '') + curto(v) + ' ' + un;
+        linhas.push(`<span>${nome.replace(/ \(.*\)$/, '')}${y !== a ? ` <small>(${y})</small>` : ''}</span><span>${txt}</span>`);
+      }
+      if (id === 'expo') {
+        const A = B.A, ps = [];
+        for (let r = 0; r < A.tp_m.length; r++) if (A.tp_m[r] === m) ps.push(`${B.meta.paises[A.tp_p[r]]} ${curto(LUT[A.tp_t[r]])} t`);
+        if (ps.length) linhas.push(`<span>Destinos da soja, 2016–2020 (Trase)</span><span>${ps.join(' · ')}</span>`);
+        const lg = c => A['lg_' + c][m];
+        if (lg('armazens')) linhas.push(`<span>Armazéns de grãos</span><span>${fmt(lg('armazens'))} · ${curto(lg('cap_armazem'))} t</span>`);
+        if (lg('esmagadoras')) linhas.push(`<span>Esmagadoras de soja</span><span>${fmt(lg('esmagadoras'))} · ${curto(lg('cap_esmagadora'))} t/dia</span>`);
+        if (lg('frigorificos')) linhas.push(`<span>Frigoríficos com SIF</span><span>${fmt(lg('frigorificos'))}</span>`);
+      }
+      if (linhas.length) h += `<h3>${def.titulo}</h3><div class="kv">${linhas.join('')}</div>`;
+    }
+    return h;
+  }
   function fichaClima(m, a) {
     const C = SOB.clima;
     if (!C) return '';
@@ -2341,7 +2444,7 @@
         gsPts.map(([y, v]) => barra(String(y), v, maxG, fmt(v), y === a ? COR.acento : COR.ink3)).join('') + '</div>';
     }
 
-    h += fichaDinheiro(m, a) + fichaTerra(m, a) + fichaClima(m, a);
+    h += fichaDinheiro(m, a) + fichaTerra(m, a) + fichaClima(m, a) + fichaSeries(m, a);
     const faltam = EXTRAS.filter(id => !SOB[id]);
     if (faltam.length) h += `<button class="carrega-extras" id="carrega-extras">${PROMESSAS.has(faltam[0]) ? 'carregando…' : 'Mostrar também: ' + faltam.map(id => NOME_EXTRA[id]).join(', ')}</button>`;
 

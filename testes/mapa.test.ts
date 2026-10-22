@@ -239,6 +239,28 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("séries genéricas: Trase, SEEG, RAIS e CAGED batem com o pipeline; o saldo do CAGED é divergente", async () => {
+      const F = FIXTURE.series;
+      for (const [modo, k] of [["expo", "soja_t"], ["emis", "se_agro"], ["trab", "rais"]]) {
+        const f = F[k];
+        const x = await abre(nav, `?f=${modo}&m=${k}&a=${f.ano}&mun=${f.mun}`);
+        await x.p.waitForFunction(() => document.getElementById("rotulo-carga")!.hidden && (window as any).__T.est.metrica, null, { timeout: 60_000 });
+        await x.p.waitForFunction(m => (window as any).__T.VAL[(window as any).__T.M.mun.id.indexOf(m)] > 0, f.mun, { timeout: 60_000 });
+        const v = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
+        expect(Math.abs(v / f.v - 1), k).toBeLessThan(0.005);
+        expect(await x.p.locator("#ficha").textContent(), k).toContain(modo === "expo" ? "Destinos da soja" : modo === "emis" ? "Emissões" : "Trabalho e estrutura");
+        expect(x.erros).toEqual([]);
+        await fecha(x);
+      }
+      const x = await abre(nav, `?f=trab&m=caged&a=${F.caged.ano}`);
+      await x.p.waitForFunction(() => (window as any).__T.SOB.gente, null, { timeout: 60_000 });
+      await quadro(x.p);
+      const tot = await roda<number>(x.p, "let s = 0; for (const v of T.VAL) if (Number.isFinite(v)) s += v; return s;");
+      expect(tot).toBe(F.caged.v);
+      expect(await x.p.locator("#legenda .rotulos").textContent()).toContain("fechou");
+      await fecha(x);
+    }, LENTO);
+
     test("lavoura principal: árvore de famílias liga e desliga, conta municípios e vai para a URL", async () => {
       const x = await abre(nav, "?c=soja&a=2020&d=1");
       await quadro(x.p);
