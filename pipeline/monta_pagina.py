@@ -563,6 +563,32 @@ bf.add("fq_m", dq["m"], "u16"); bf.add("fq_a", dq["ano"] - 2000, "u8"); bf.add("
 bf.meta = {"delta": delta, "passo": PASSO_TERRA, "anos": [int(fano["ano"].min()), int(fano["ano"].max())],
            "deter": [int(dq["ano"].min()), int(dq["ano"].max())]}
 
+# ---------- clima (3ª etapa) ----------
+print("clima")
+bcl = Bloco()
+cla = idx_mun(pl.read_parquet(D / "clima_ano.parquet")).sort(["m", "ano"])
+bcl.add("ca_m", cla["m"], "u16"); bcl.add("ca_a", cla["ano"] - 2000, "u8")
+bcl.add("ca_chuva", cla["chuva_mm"].round(0), "u16")
+bcl.add("ca_temp", (cla["temp_media"] * 10).round(0), "i16"); bcl.add("ca_tmax", (cla["temp_max"] * 10).round(0), "i16")
+bcl.add("ca_secos", cla["dias_sem_chuva"], "u16")
+cln = idx_mun(pl.read_parquet(D / "clima_normal.parquet"))
+normal = np.zeros((NMUN, 12))
+normal[cln["m"].to_numpy(), cln["mes"].to_numpy() - 1] = cln["chuva_mm"].to_numpy()
+bcl.add("normal", np.round(normal.ravel() * 10), "u16")   # décimos de mm, município × mês
+est = pl.read_parquet(D / "estacoes.parquet").sort(["id_estacao", "ano"])
+EST = est.group_by("id_estacao", maintain_order=True).agg(pl.col("nome").first(), pl.col("lat").first(), pl.col("lon").first())
+EIDX_EST = {e: i for i, e in enumerate(EST["id_estacao"].to_list())}
+bcl.add("es_k", [EIDX_EST[e] for e in est["id_estacao"].to_list()], "u16"); bcl.add("es_a", est["ano"] - 2000, "u8")
+bcl.add("es_chuva", est["chuva_mm"].round(0), "u16"); bcl.add("es_temp", (est["temp_media"].fill_null(0) * 10).round(0), "i16")
+GRUPOS_DES = ["seca", "chuva", "frio, granizo e vento", "outros"]
+dsr = idx_mun(pl.read_parquet(D / "desastres.parquet")).group_by(["m", "grupo"]).agg(pl.col("reconhecimentos").sum()).sort(["m", "grupo"])
+bcl.add("ds_m", dsr["m"], "u16"); bcl.add("ds_g", dsr["grupo"].replace_strict({g: i for i, g in enumerate(GRUPOS_DES)}, return_dtype=pl.Int32), "u8")
+bcl.add("ds_n", dsr["reconhecimentos"], "u16")
+bcl.meta = {"anos": [int(cla["ano"].min()), int(cla["ano"].max())], "anos_est": [int(est["ano"].min()), int(est["ano"].max())],
+            "estacoes": [{"id": i, "nome": n.title(), "lat": round(la, 4), "lon": round(lo, 4)}
+                         for i, n, la, lo in EST.iter_rows()],
+            "desastres": GRUPOS_DES, "ano_desastres": int(pl.read_parquet(D / "desastres.parquet")["ano"].max())}
+
 # ---------- metadados ----------
 meta = {
     "mun": {
@@ -611,6 +637,10 @@ fix["credito"] = {"mun": "5107925", "safra": 2023,
 fix["prodes"] = {"mun": "1505031", "ano": 2023,   # Novo Progresso (PA)
                  "km2": float(pmu.filter((pl.col("id_municipio") == "1505031") & (pl.col("ano") == 2023))["incremento"][0])}
 fix["fogo"] = {"ano": 2024, "focos": int(fano.filter(pl.col("ano") == 2024)["focos"].sum())}
+sor = cla.filter(pl.col("id_municipio") == "5107925")
+fix["clima"] = {"mun": "5107925", "ano": 2015, "chuva": float(sor.filter(pl.col("ano") == 2015)["chuva_mm"][0]),
+                "media": float(sor["chuva_mm"].mean()),
+                "estacoes": int(est.filter(pl.col("ano") == 2015).height)}
 fix["pib"] = {"mun": "5107925", "ano": 2021,
               "va_agro": float(pb.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2021))["va_agro"][0])}
 (RAIZ / "testes" / "fixture.json").write_text(json.dumps(fix, ensure_ascii=False, indent=1))
@@ -620,7 +650,7 @@ print("blocos")
 tpl = (S / "template.html").read_text().replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
 BLOCOS = [("MALHA", "malha", bm), ("PROD", "prod", bp), ("PRODQV", "prodqv", bq), ("MAPB", "mapb", bb),
           ("CRED", "cred", bc), ("CAD", "cad", bk), ("CONTORNOS", "contornos", bt), ("CREDRS", "credrs", br),
-          ("ECON", "econ", be), ("TERRA", "terra", bd), ("FOGO", "fogo", bf)]
+          ("ECON", "econ", be), ("TERRA", "terra", bd), ("FOGO", "fogo", bf), ("CLIMA", "clima", bcl)]
 GZ = {nome: comprime(nome, bloco) for _, nome, bloco in BLOCOS}
 
 # 1. index.html: arquivo único, abre por file:// (os blocos em base64 dentro dele)

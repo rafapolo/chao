@@ -219,6 +219,26 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("clima: chuva do SISAM em Sorriso, anomalia divergente, estações do INMET como pontos e a ficha com o clima", async () => {
+      const f = FIXTURE.clima;
+      const x = await abre(nav, `?f=clima&a=${f.ano}&mun=${f.mun}`);
+      await x.p.waitForFunction(() => (window as any).__T.SOB.clima, null, { timeout: 60_000 });
+      const chuva = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
+      expect(Math.abs(chuva - f.chuva)).toBeLessThan(1);
+      await x.p.selectOption("#metrica", "anom");
+      const anom = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
+      expect(Math.abs(anom - (f.chuva / f.media - 1) * 100)).toBeLessThan(0.5);
+      expect(await x.p.locator("#legenda .rotulos").textContent()).toContain("mais seco");
+      await x.p.selectOption("#metrica", "est");
+      await quadro(x.p);
+      expect(await roda<number>(x.p, "return T.PONTOS.length")).toBe(f.estacoes);   // as do ano com ≥ 90% medido
+      const ficha = await x.p.locator("#ficha").textContent();
+      expect(ficha).toContain("Clima");
+      expect(ficha).toContain("estação do INMET");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
     test("lavoura principal: árvore de famílias liga e desliga, conta municípios e vai para a URL", async () => {
       const x = await abre(nav, "?c=soja&a=2020&d=1");
       await quadro(x.p);

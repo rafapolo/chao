@@ -430,6 +430,7 @@
 <script id="b-econ" type="text/plain" data-etapa="sob-demanda" data-src="dados/econ.85c4445614ff.bin"></script>
 <script id="b-terra" type="text/plain" data-etapa="sob-demanda" data-src="dados/terra.cf637784043e.bin"></script>
 <script id="b-fogo" type="text/plain" data-etapa="sob-demanda" data-src="dados/fogo.a1228cf72b72.bin"></script>
+<script id="b-clima" type="text/plain" data-etapa="sob-demanda" data-src="dados/clima.fd9f419205c4.bin"></script>
 <script>
 (async function () {
   'use strict';
@@ -588,7 +589,18 @@
      "carregando…". */
   const SOB = {};
   let CONT = null;   // contornos de região: { tipo → Path2D[] por nome }
+  let MEDIA_CHUVA = null, MEDIA_EST = null;   // médias de 2000–2019 (SISAM por município, INMET por estação)
   const AO_CHEGAR = {
+    clima: b => {
+      const A = b.A, s = new Float64Array(NM), n = new Float64Array(NM);
+      for (let r = 0; r < A.ca_m.length; r++) { s[A.ca_m[r]] += A.ca_chuva[r]; n[A.ca_m[r]]++; }
+      MEDIA_CHUVA = new Float32Array(NM).map((_, m) => n[m] ? s[m] / n[m] : NaN);
+      const NE = b.meta.estacoes.length, se = new Float64Array(NE), ne = new Float64Array(NE);
+      for (let r = 0; r < A.es_k.length; r++) if (A.es_a[r] <= 19) { se[A.es_k[r]] += A.es_chuva[r]; ne[A.es_k[r]]++; }
+      // estação com menos de 5 anos completos em 2000–2019 não tem média para anomalia
+      MEDIA_EST = new Float32Array(NE).map((_, k) => ne[k] >= 5 ? se[k] / ne[k] : NaN);
+      b.meta.estacoes.forEach(e => { e.x = projX(e.lon) * W_ESC; e.y = merc(e.lat) * W_ESC; });
+    },
     contornos: b => {
       const rs = b.meta.regioes, ps = caminhos(b.A, 'r_', rs.length).p;
       CONT = {};
@@ -702,6 +714,7 @@
     { id: 'gleba', nome: 'Glebas', sub: 'crédito rural · 2012–2025', sec: 'Dinheiro' },
     { id: 'cred', nome: 'Crédito rural', sub: 'SICOR, ESTBAN, BNDES', sec: 'Dinheiro', blocos: ['credrs'] },
     { id: 'econ', nome: 'Economia', sub: 'PIB municipal · 1999–2021', sec: 'Dinheiro', blocos: ['econ'] },
+    { id: 'clima', nome: 'Clima', sub: 'chuva e calor · SISAM, INMET', sec: 'Clima e fogo', blocos: ['clima'] },
     { id: 'perda', nome: 'Perdas', sub: 'Proagro · 2012–2025', sec: 'Clima e fogo' },
     { id: 'gs', nome: 'Garantia-Safra', sub: 'semiárido · 2013–2026', sec: 'Clima e fogo', blocos: ['contornos'] },
     { id: 'fogo', nome: 'Fogo', sub: 'focos do INPE · 2003–2026', sec: 'Clima e fogo', blocos: ['fogo'] },
@@ -741,6 +754,13 @@
         const mt = est.metrica;
         return mt === 'acum' ? A.acum : ['deter', 'degr'].includes(mt) ? A.deter : ['emb', 'embha', 'autos', 'multas'].includes(mt) ? A.ibama : A.prodes;
       }
+      case 'clima': {
+        const C = SOB.clima?.meta;
+        if (!C) return [2000, 2019];
+        if (est.metrica === 'est' || est.metrica === 'estanom') return C.anos_est;
+        if (est.metrica.startsWith('des')) return [C.ano_desastres, C.ano_desastres];
+        return C.anos;
+      }
       case 'fogo': return SOB.fogo ? (est.metrica === 'queim' ? SOB.fogo.meta.deter : SOB.fogo.meta.anos) : [2003, 2026];
     }
   }
@@ -765,6 +785,10 @@
       ['grade', 'Desmatamento na grade de 0,1° (km²)'], ['acum', 'Desmatado acumulado (km²)'], ['deter', 'Alertas DETER: desmatamento (km²)'],
       ['degr', 'Alertas DETER: degradação (km²)'], ['emb', 'Embargos do IBAMA'], ['embha', 'Área embargada (ha)'],
       ['autos', 'Autos de infração de flora'], ['multas', 'Multas de flora (R$)']];
+    if (est.modo === 'clima') return [['chuva', 'Chuva no ano (mm, SISAM)'], ['anom', 'Anomalia da chuva (vs. 2000–2019)'],
+      ['secos', 'Dias sem chuva'], ['temp', 'Temperatura média (°C)'], ['tmax', 'Temperatura da tarde (°C)'],
+      ['est', 'Estações do INMET: chuva (mm)'], ['estanom', 'Estações do INMET: anomalia da chuva'],
+      ['desseca', 'Seca e estiagem reconhecidas (S2ID)'], ['deschuva', 'Chuva e inundação reconhecidas (S2ID)']];
     if (est.modo === 'fogo') return [['focos', 'Focos de calor'], ['dens', 'Focos por 1.000 km²'], ['grade', 'Focos na grade de 0,1°'],
       ['queim', 'Cicatriz de queimada, DETER (km²)']];
     if (est.modo === 'econ') return [['va', 'VA agropecuário (R$)'], ['pct', '% do valor adicionado do município'], ['vakm', 'VA agro por km² rural']];
@@ -886,6 +910,7 @@
     }
     if (est.modo === 'cred') return calculaCredito(ano);
     if (est.modo === 'desm' || est.modo === 'fogo') return calculaTerra(ano);
+    if (est.modo === 'clima') return calculaClima(ano);
     if (est.modo === 'econ') {
       const E = SOB.econ?.A;
       if (!E) return;
@@ -944,6 +969,37 @@
     if (mt === 'queim') { for (let r = 0; r < F.fq_m.length; r++) if (F.fq_a[r] === s) poe(F.fq_m[r], LUT[F.fq_v[r]]); return; }
     for (let r = 0; r < F.fm_m.length; r++) if (F.fm_a[r] === s) poe(F.fm_m[r], F.fm_n[r]);
     if (mt === 'dens') for (let m = 0; m < NM; m++) VAL[m] = VAL[m] / M.mun.km2[m] * 1000;
+  }
+
+  /* Clima: por município (SISAM) ou em pontos (estações do INMET, PONTOS). A
+     anomalia é a chuva do ano contra a média de 2000–2019 da mesma fonte. */
+  let PONTOS = [];
+  const DIVERGENTE = () => est.modo === 'clima' && (est.metrica === 'anom' || est.metrica === 'estanom');
+  const emPontos = () => est.modo === 'clima' && (est.metrica === 'est' || est.metrica === 'estanom');
+  function calculaClima(ano) {
+    const C = SOB.clima, mt = est.metrica;
+    PONTOS = [];
+    if (!C) return;
+    const A = C.A, a = ano - 2000;
+    if (emPontos()) {
+      for (let r = 0; r < A.es_k.length; r++) {
+        if (A.es_a[r] !== a) continue;
+        const k = A.es_k[r], e = C.meta.estacoes[k], v = mt === 'est' ? A.es_chuva[r] : (A.es_chuva[r] / MEDIA_EST[k] - 1) * 100;
+        if (Number.isFinite(v)) PONTOS.push({ x: e.x, y: e.y, v, k });
+      }
+      return;
+    }
+    if (mt === 'desseca' || mt === 'deschuva') {
+      const g = mt === 'desseca' ? 0 : 1;
+      for (let r = 0; r < A.ds_m.length; r++) if (A.ds_g[r] === g) VAL[A.ds_m[r]] = A.ds_n[r];
+      return;
+    }
+    for (let r = 0; r < A.ca_m.length; r++) {
+      if (A.ca_a[r] !== a) continue;
+      const m = A.ca_m[r];
+      VAL[m] = mt === 'chuva' ? A.ca_chuva[r] : mt === 'anom' ? (A.ca_chuva[r] / MEDIA_CHUVA[m] - 1) * 100
+        : mt === 'secos' ? A.ca_secos[r] : mt === 'temp' ? A.ca_temp[r] / 10 : A.ca_tmax[r] / 10;
+    }
   }
 
   function calculaCredito(ano) {
@@ -1042,12 +1098,14 @@
   let quebras = [];
   function refazEscala() {
     if (est.modo === 'cmp') { quebras = [-1, -0.5, -0.15, 0.15, 0.5, 1]; return; }
+    if (DIVERGENTE()) { quebras = [-40, -20, -7, 7, 20, 40]; calcula(); return; }
     if (est.modo === 'pam' && est.disputa) { quebras = []; return; }
     const [a0, a1] = anosDoModo(), amostra = [];
     const passo = est.modo === 'exp' ? 10 : Math.max(1, Math.round((a1 - a0) / 12));
     for (let a = a1; a >= a0; a -= passo) {
       calcula(a);
       for (let m = 0; m < NM; m++) if (VAL[m] > 0 && Number.isFinite(VAL[m])) amostra.push(VAL[m]);
+      for (const pt of PONTOS) if (pt.v > 0) amostra.push(pt.v);
     }
     amostra.sort((x, y) => x - y);
     const qs = [0.15, 0.3, 0.45, 0.6, 0.75, 0.9];
@@ -1110,6 +1168,7 @@
       if (!(v >= 1)) return COR.semdado;
       return COR.i[VENCE[m]] || COR.f[CAT[m]];
     }
+    if (DIVERGENTE()) return Number.isFinite(v) ? COR.d[classe(v)] : COR.semdado;
     if (est.modo === 'cmp') {
       if (v === -Infinity) return COR.d[0];
       if (!Number.isFinite(v)) return COR.semdado;
@@ -1173,7 +1232,7 @@
     ctx.fillStyle = COR.fundo; ctx.fillRect(0, 0, W, H);
     ctx.setTransform(dpr * vista.k, 0, 0, dpr * vista.k, dpr * vista.x, dpr * vista.y);
     const vis = [(0 - vista.x) / vista.k, (0 - vista.y) / vista.k, (W - vista.x) / vista.k, (H - vista.y) / vista.k];
-    const C = GEO.caixa, celulas = emCelulas();
+    const C = GEO.caixa, celulas = emCelulas() || emPontos();
     const ano = est.ano;
     for (let m = 0; m < NM; m++) {
       if (C[4 * m + 2] < vis[0] || C[4 * m] > vis[2] || C[4 * m + 3] < vis[1] || C[4 * m + 1] > vis[3]) continue;
@@ -1203,7 +1262,16 @@
       if (rg && !(est.modo === 'gs' && est.regiao === 'semiarido')) ctx.stroke(rg);
       ctx.setLineDash([]);
     }
-    if (celulas || (est.glebas && est.modo === 'pam')) desenhaCelulas();
+    if (emCelulas() || (est.glebas && est.modo === 'pam')) desenhaCelulas();
+    if (emPontos()) {
+      // estações: círculo de raio fixo na tela, com contorno do fundo para separar vizinhas
+      const r = 4.5 / vista.k;
+      ctx.lineWidth = 1 / vista.k; ctx.strokeStyle = COR.fundo;
+      for (const pt of PONTOS) {
+        ctx.fillStyle = DIVERGENTE() ? COR.d[classe(pt.v)] : COR.s[classe(pt.v)];
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, r, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      }
+    }
     if (est.mun >= 0) {
       ctx.strokeStyle = COR.foco; ctx.lineWidth = 2 / vista.k; ctx.stroke(GEO.p[est.mun]);
     }
@@ -1372,6 +1440,15 @@
       if (!Number.isFinite(v)) return 'menos de 50 ha declarados';
       return `satélite vê ${fmt(Math.pow(2, v), 2)}× o declarado`;
     }
+    if (est.modo === 'clima') {
+      if (emPontos()) return 'estações do INMET: os pontos no mapa';
+      if (!Number.isFinite(v)) return 'sem registro';
+      if (mt === 'anom') return (v >= 0 ? '+' : '') + fmt(v, 0) + '% da chuva média de 2000–2019';
+      if (mt === 'chuva') return fmt(v) + ' mm no ano';
+      if (mt === 'secos') return fmt(v) + ' dias sem chuva';
+      if (mt.startsWith('des')) return fmt(v) + ' reconhecimentos vigentes';
+      return fmt(v, 1) + ' °C';
+    }
     if (!(v > 0)) return 'sem registro';
     if (est.modo === 'cred') {
       if (CRED_PCT.has(mt)) return fmt(v, v < 1 ? 2 : 1) + '% · R$ ' + curto(CRV[m]) + ' contratados';
@@ -1436,6 +1513,7 @@
     gleba: '<path d="M2.5 4l6-1.5 7 2-1 9-7 1.5-5-2.5z"/><path d="M8.5 2.5L7.5 15M2.5 9l13-.5"/>',
     perda: '<path d="M5 11.5a3.2 3.2 0 0 1 .4-6.4 4.2 4.2 0 0 1 8 .9 2.8 2.8 0 0 1-.3 5.5z"/><path d="M6.5 14l-.8 1.8M9.5 14l-.8 1.8M12.5 14l-.8 1.8"/>',
     desm: '<path d="M9 2.5l4 6H5zM9 6.5l5 7H4zM9 13.5V16.5"/><path d="M13.5 15.5l3-3M15 11l1.8 1.8"/>',
+    clima: '<path d="M5.5 11.5a3 3 0 0 1 .3-6 4 4 0 0 1 7.6.9 2.6 2.6 0 0 1-.2 5.1z"/><path d="M7 14.2l-.6 1.6M10 14.2l-.6 1.6M13 14.2l-.6 1.6"/><circle cx="14" cy="3.6" r="1.6"/>',
     fogo: '<path d="M9 16.5c-3 0-5-2-5-4.8 0-3 2.2-4.6 3-7.7 1.6 1.2 2.4 2.8 2.3 4.6 1-.6 1.7-1.6 1.9-2.8 1.6 1.4 2.8 3.4 2.8 5.9 0 2.8-2 4.8-5 4.8z"/>',
     cred: '<ellipse cx="9" cy="5" rx="5.5" ry="2.2"/><path d="M3.5 5v4c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V5M3.5 9v4c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V9"/>',
     econ: '<path d="M2 16h14M4 13V9M8 13V6M12 13V8M16 3l-4.5 3.5L8 4 3 7.5"/>',
@@ -1648,6 +1726,9 @@
           }).join('') + '</div>';
           return h + '</div>';
         }).join('') + '</div>';
+    } else if (DIVERGENTE()) {
+      html += `<div class="faixa">${COR.d.map(c => `<span style="background:${c}"></span>`).join('')}</div>
+        <div class="rotulos"><span>mais seco</span><span>normal</span><span>mais chuvoso</span></div>`;
     } else if (est.modo === 'cmp') {
       html += `<div class="faixa">${COR.d.map(c => `<span style="background:${c}"></span>`).join('')}</div>
         <div class="rotulos"><span>satélite vê ½</span><span>igual</span><span>vê 2×</span></div>`;
@@ -1658,7 +1739,8 @@
         <div class="rotulos"><span>${rotQ(q[0])}</span><span>${rotQ(q[3])}</span><span>${rotQ(q[5])}+</span></div>`;
     }
     const extras = [`<div><i style="background:${COR.semdado}"></i>Sem registro</div>`];
-    if (est.mascara && !emCelulas())
+    if (emPontos()) extras.push(`<div><i style="background:${COR.s[4]};border-radius:50%"></i>Estação com o ano ≥ 90% medido</div>`);
+    if (est.mascara && !emCelulas() && !emPontos())
       extras.push(`<div><i style="background:${COR.mascara}"></i>Não rural: área urbana, terra indígena, UC de proteção integral</div>`);
     html += `<div class="extra">${extras.join('')}</div>`;
     el.innerHTML = html;
@@ -1684,6 +1766,7 @@
     if (est.modo === 'econ') return 'Economia · ' + mt;
     if (est.modo === 'desm') return 'Desmatamento · ' + mt;
     if (est.modo === 'fogo') return 'Fogo · ' + mt;
+    if (est.modo === 'clima') return 'Clima · ' + mt;
     return nomes + ' · ' + mt;
   }
   const NOTAS = {
@@ -1695,6 +1778,7 @@
     perda: () => `Área com <b>perda comprovada</b> no Proagro, o seguro do crédito rural, por safra e evento, na grade de 0,05°. A seca responde por 59% da área com perda de 2012 a 2025. Células com menos de ${M.min_celula} perdas não aparecem.`,
     cred: () => `Crédito rural contratado no <b>SICOR</b> (Banco Central), por safra. <b>Só o crédito com município</b>: o SICOR põe o município apenas nas operações de recurso controlado ou equalizado (poupança rural equalizada, BNDES/Finame, fundos constitucionais, LCA equalizada, Funcafé, Pronaf, Pronamp). A LCA livre e os recursos livres não têm município: na safra 2023/24 foram R$ 136 bi com município de R$ 422 bi no país (com uma UF no recorte, a faixa mostra o total dela). Combinação de município, safra, finalidade, atividade e programa com menos de ${M.min_celula} operações não aparece (8% do valor), e o que vem de tomador só onde há ${M.min_celula} ou mais. <b>ESTBAN</b>: saldo de financiamentos rurais nas agências, em dezembro; no espelho faltam os anos ímpares desde 2003, e a queda de 2020 não aparece no SICOR. <b>BNDES</b>: desembolso ao setor agropecuário.`,
     desm: () => `<b>PRODES</b> (INPE): área de vegetação nativa suprimida por ano (de agosto a julho), em todos os biomas; de 2017 em diante pelo incremento municipal, antes pela diferença do acumulado. A grade soma os polígonos em células de 0,1° (~120 km²). <b>DETER</b>: alertas diários (Amazônia desde 2016, Cerrado desde 2018, Pantanal e não-floresta desde 2023), separados em desmatamento e degradação; cicatriz de queimada fica no modo Fogo. <b>IBAMA</b>: embargos e autos de infração de flora não cancelados, pelo ano da lavratura; a área embargada vem sem unidade declarada na fonte (tratada como ha). Nome de embargado ou autuado não entra.`,
+    clima: () => `<b>SISAM</b> (INPE): chuva e temperatura por município, de 2000 a 2019, a partir de modelo e satélite, não de pluviômetro: serve para comparar um ano com outro no mesmo lugar (a <b>anomalia</b>, contra a média de 2000–2019), menos para o valor absoluto. As <b>estações do INMET</b> são medição direta, de 2000 a 2025, desenhadas como pontos: só os anos com 90% ou mais das horas medidas. <b>S2ID</b> (Defesa Civil): situações de emergência ou calamidade reconhecidas e ainda vigentes; a fonte só guarda o retrato atual. Compare a seca de 2012–2016 no semiárido com as Perdas do Proagro e o Garantia-Safra.`,
     fogo: () => `Focos de calor do <b>satélite de referência</b> do INPE (AQUA, passagem da tarde), por ano: é a série comparável ao longo do tempo. Desde 2023 a fonte traz todos os satélites (30 vezes mais focos, o mesmo fogo visto várias vezes); só o de referência entra. Foco não é área queimada: a área vem da cicatriz de queimada do DETER (Amazônia, Cerrado, Pantanal).`,
     econ: () => `Valor adicionado bruto da <b>agropecuária</b> no PIB dos municípios (IBGE), em R$ correntes, de 1999 a 2021 (1999–2001 pela série antiga; o IBGE ainda não abriu 2022 e 2023 por setor). É o que a agropecuária gera de renda no município, não o que ela vende: a soja processada na indústria conta na indústria.`,
     gs: () => `Agricultores familiares do semiárido pagos pelo <b>Garantia-Safra</b> (Portal da Transparência) por ano do pagamento. A porcentagem compara com o número de imóveis no CAR do município — é ordem de grandeza, não cobertura exata.`,
@@ -1714,6 +1798,15 @@
     for (let a = a0; a <= a1; a += (est.modo === 'exp' ? 10 : 1)) {
       let s = 0;
       if (emCelulas()) { for (const v of celulasAtuais(a).values()) s += v; }
+      else if (est.modo === 'clima') {
+        // mm, °C e anomalia não se somam: a faixa mostra a média do recorte
+        calcula(a);
+        let n = 0;
+        if (emPontos()) for (const pt of PONTOS) { s += pt.v; n++; }
+        else for (let m = 0; m < NM; m++) if (noRecorte(m) && Number.isFinite(VAL[m])) { s += VAL[m]; n++; }
+        s = n ? s / n : 0;
+        if (DIVERGENTE()) s += 100;   // a barra mostra a chuva em % da média (100 = normal)
+      }
       else {
         calcula(a);
         const absoluto = ['pct', 'dens', 'rend', 'porcab', 'vpa', 'vha', 'vakm'].includes(est.metrica) || CRED_PCT.has(est.metrica)
@@ -1783,6 +1876,8 @@
     if (est.modo === 'econ') return 'R$ de VA agro';
     if (est.modo === 'desm') return { emb: 'embargos', autos: 'autos', embha: 'ha', multas: 'R$' }[est.metrica] || 'km²';
     if (est.modo === 'fogo') return est.metrica === 'queim' ? 'km²' : 'focos';
+    if (est.modo === 'clima') return DIVERGENTE() ? '% da média (média do recorte)' : est.metrica.startsWith('des') ? 'reconhecimentos (média)'
+      : est.metrica === 'secos' ? 'dias (média do recorte)' : ['temp', 'tmax'].includes(est.metrica) ? '°C (média do recorte)' : 'mm (média do recorte)';
     if (est.modo === 'perda' || est.modo === 'gleba') return est.metrica === 'n' ? (est.modo === 'gleba' ? 'glebas' : 'perdas') : 'ha';
     if (est.modo === 'pam' && it && !it.area) return est.metrica === 'v' ? 'mil R$' : it.un;   // por cabeça: a faixa soma o produto (leite, lã)
     if (est.modo === 'pam' && (est.metrica === 'q')) return it.un;
@@ -1802,7 +1897,7 @@
     $('ano-txt').textContent = $('chip-ano').textContent = est.modo === 'exp' ? `${a - 10}→${a}` : a;
     const safra = 'safra ' + a + '/' + String(a + 1).slice(2);
     $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
-      desm: ['emb', 'embha', 'autos', 'multas', 'deter', 'degr'].includes(est.metrica) ? 'ano' : 'ago→jul (PRODES)', fogo: 'ano',
+      clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', desm: ['emb', 'embha', 'autos', 'multas', 'deter', 'degr'].includes(est.metrica) ? 'ano' : 'ago→jul (PRODES)', fogo: 'ano',
       cred: est.metrica === 'estban' ? 'dezembro' : est.metrica === 'bndes' ? 'ano' : safra }[est.modo];
     calcula();
     if (emCelulas() || est.glebas) CEL = celulasAtuais();
@@ -1866,7 +1961,7 @@
       b.title = b.disabled ? 'carregando…' : '';
     });
     $('sobre-glebas').disabled = !pronto;
-    const comItens = !['perda', 'gs', 'cred', 'econ', 'desm', 'fogo'].includes(est.modo);
+    const comItens = !['perda', 'gs', 'cred', 'econ', 'desm', 'fogo', 'clima'].includes(est.modo);
     $('sec-itens').style.display = comItens ? '' : 'none';
     $('alt-disputa').style.display = est.modo === 'pam' ? '' : 'none';
     const principal = est.modo === 'pam' && est.disputa;
@@ -1937,8 +2032,40 @@
   /* Crédito e economia na ficha: pedem os blocos da 3ª etapa ao abrir a ficha */
   /* Os blocos da 3ª etapa não são baixados só porque a ficha abriu: cada seção
      aparece se o bloco já veio (pelo modo, ou pelo botão no fim da ficha). */
-  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo'];
-  const NOME_EXTRA = { credrs: 'crédito', econ: 'economia', terra: 'desmatamento e terra', fogo: 'fogo' };
+  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo', 'clima'];
+  const NOME_EXTRA = { credrs: 'crédito', econ: 'economia', terra: 'desmatamento e terra', fogo: 'fogo', clima: 'clima' };
+  function fichaClima(m, a) {
+    const C = SOB.clima;
+    if (!C) return '';
+    const A = C.A, sis = [];
+    let h = '<h3>Clima</h3>';
+    for (let r = 0; r < A.ca_m.length; r++) if (A.ca_m[r] === m) sis.push([2000 + A.ca_a[r], A.ca_chuva[r]]);
+    // a estação do INMET mais próxima do município (até 100 km), com os anos completos
+    const lat = M.mun.lat[m], lon = M.mun.lon[m], kmGrau = 111.32;
+    let k = -1, dmin = 100;
+    C.meta.estacoes.forEach((e, i) => {
+      const d = Math.hypot((e.lat - lat) * kmGrau, (e.lon - lon) * kmGrau * Math.cos(lat * Math.PI / 180));
+      if (d < dmin) { dmin = d; k = i; }
+    });
+    const series = [{ nome: 'SISAM, município (modelo)', cor: COR.c[1], pts: sis }];
+    if (k >= 0) {
+      const pts = [];
+      for (let r = 0; r < A.es_k.length; r++) if (A.es_k[r] === k) pts.push([2000 + A.es_a[r], A.es_chuva[r]]);
+      series.push({ nome: `estação do INMET ${C.meta.estacoes[k].nome}, a ${fmt(dmin)} km`, cor: COR.c[3], pts, tracejado: true });
+    }
+    const atual = sis.find(([y]) => y === a);
+    if (atual) h += `<div class="nota" style="margin:0 0 6px">${a}: ${fmt(atual[1])} mm, ${atual[1] >= MEDIA_CHUVA[m] ? '+' : ''}${fmt((atual[1] / MEDIA_CHUVA[m] - 1) * 100, 0)}% da média de 2000–2019 (${fmt(MEDIA_CHUVA[m])} mm).</div>`;
+    h += serieSvg(series, 2000, C.meta.anos_est[1], 'mm');
+    // a chuva média de cada mês: o calendário das águas
+    const meses = 'JFMAMJJASOND', nm = Array.from({ length: 12 }, (_, i) => A.normal[m * 12 + i] / 10), mx = Math.max(...nm);
+    if (mx > 0) h += `<div class="nota" style="margin:8px 0 4px">Chuva média de cada mês, 2000–2019:</div><svg viewBox="0 0 340 54" role="img" aria-label="Chuva média por mês">`
+      + nm.map((v, i) => `<rect x="${i * 28 + 2}" y="${40 - v / mx * 36}" width="24" height="${v / mx * 36}" fill="${COR.c[1]}" rx="2"/><text x="${i * 28 + 14}" y="52" font-size="10" fill="${COR.ink3}" text-anchor="middle" font-family="Mono, monospace">${meses[i]}</text>`).join('')
+      + '</svg>';
+    const ds = [];
+    for (let r = 0; r < A.ds_m.length; r++) if (A.ds_m[r] === m) ds.push(`${fmt(A.ds_n[r])} de ${C.meta.desastres[A.ds_g[r]]}`);
+    if (ds.length) h += `<div class="kv" style="margin-top:6px"><span>Reconhecimentos vigentes (S2ID)</span><span>${ds.join(' · ')}</span></div>`;
+    return h;
+  }
   function fichaTerra(m, a) {
     let h = '';
     const T = SOB.terra?.A, F = SOB.fogo?.A;
@@ -2214,7 +2341,7 @@
         gsPts.map(([y, v]) => barra(String(y), v, maxG, fmt(v), y === a ? COR.acento : COR.ink3)).join('') + '</div>';
     }
 
-    h += fichaDinheiro(m, a) + fichaTerra(m, a);
+    h += fichaDinheiro(m, a) + fichaTerra(m, a) + fichaClima(m, a);
     const faltam = EXTRAS.filter(id => !SOB[id]);
     if (faltam.length) h += `<button class="carrega-extras" id="carrega-extras">${PROMESSAS.has(faltam[0]) ? 'carregando…' : 'Mostrar também: ' + faltam.map(id => NOME_EXTRA[id]).join(', ')}</button>`;
 
@@ -2306,7 +2433,7 @@
   /* gancho para os testes: só existe na cópia que testes/comum.ts injeta; chamado
      com os dados completos */
   const gancho = () => {
-    if (window.__testes) window.__testes({ get CEL() { return CEL; }, CRV, noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
+    if (window.__testes) window.__testes({ get PONTOS() { return PONTOS; }, get CEL() { return CEL; }, CRV, noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
       carrega, garante, get CONT() { return CONT; }, get SOB() { return SOB; }, get CAD() { return CAD; }, MALHA });
   };
   if (pronto) gancho();
