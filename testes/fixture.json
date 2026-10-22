@@ -24,5 +24,15 @@
   "valor": 325871640.0,
   "agricultores": 443285
  },
- "semiarido": 1262
+ "semiarido": 1262,
+ "credito": {
+  "mun": "5107925",
+  "safra": 2023,
+  "valor": 211465528.17000005
+ },
+ "pib": {
+  "mun": "5107925",
+  "ano": 2021,
+  "va_agro": 4271404000.0
+ }
 }

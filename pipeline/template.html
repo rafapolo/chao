@@ -354,6 +354,10 @@
       <div class="linha-ctl"><select id="metrica" aria-label="Medida"></select></div>
       <div class="linha-ctl" id="ctl-evento"><select id="evento" aria-label="Evento de perda"></select></div>
       <div class="linha-ctl" id="ctl-origem"><select id="origem" aria-label="De onde veio a lavoura"></select></div>
+      <div id="ctl-credito">
+        <div class="linha-ctl"><select id="cred-fin" aria-label="Finalidade do crédito"></select><select id="cred-ativ" aria-label="Atividade"></select></div>
+        <div class="linha-ctl"><select id="cred-prog" aria-label="Programa"></select></div>
+      </div>
     </div>
     <div class="secao">
       <div class="titulo">Recorte</div>
@@ -412,6 +416,8 @@
 <script id="b-cad" type="text/plain">/*__CAD__*/</script>
 <!-- 3ª etapa: blocos sob demanda, pedidos só quando um modo ou a ficha precisa deles -->
 <script id="b-contornos" type="text/plain" data-etapa="sob-demanda">/*__CONTORNOS__*/</script>
+<script id="b-credrs" type="text/plain" data-etapa="sob-demanda">/*__CREDRS__*/</script>
+<script id="b-econ" type="text/plain" data-etapa="sob-demanda">/*__ECON__*/</script>
 <script>
 (async function () {
   'use strict';
@@ -681,6 +687,8 @@
     { id: 'cmp', nome: 'Satélite × declarado', sub: '1985–2024', sec: 'Produção' },
     { id: 'exp', nome: 'Expansão', sub: 'de onde veio · por década', sec: 'Terra' },
     { id: 'gleba', nome: 'Glebas', sub: 'crédito rural · 2012–2025', sec: 'Dinheiro' },
+    { id: 'cred', nome: 'Crédito rural', sub: 'SICOR, ESTBAN, BNDES', sec: 'Dinheiro', blocos: ['credrs'] },
+    { id: 'econ', nome: 'Economia', sub: 'PIB municipal · 1999–2021', sec: 'Dinheiro', blocos: ['econ'] },
     { id: 'perda', nome: 'Perdas', sub: 'Proagro · 2012–2025', sec: 'Clima e fogo' },
     { id: 'gs', nome: 'Garantia-Safra', sub: 'semiárido · 2013–2026', sec: 'Clima e fogo', blocos: ['contornos'] },
   ];
@@ -690,6 +698,7 @@
   const est = {
     modo: 'pam', itens: [SOJA], metrica: '', ano: 2024, uf: '', bioma: '', regiao: '', mun: -1,
     disputa: false, evento: -1, origem: 'natural', mascara: true, glebas: false,
+    credFin: -1, credAtiv: -1, credProg: -1,   // filtros do crédito (-1 = todos)
     desligadas: new Set(),   // lavoura principal: lavouras tiradas da disputa (índice do item)
     abertas: new Set(),      // famílias abertas na árvore da legenda
   };
@@ -705,6 +714,13 @@
       case 'exp': return [2000, 2020];
       case 'gleba': case 'perda': return M.anos.safra;
       case 'gs': return M.anos.gsafra;
+      case 'cred': {
+        const b = SOB.credrs?.meta;
+        if (est.metrica === 'estban') return b ? [b.estban[0], b.estban.at(-1)] : [1995, 2023];
+        if (est.metrica === 'bndes') return b ? b.bndes : [1995, 2025];
+        return b ? b.safras : [2012, 2025];
+      }
+      case 'econ': return SOB.econ?.meta.anos || [1999, 2021];
     }
   }
   function metricasDoModo() {
@@ -723,8 +739,23 @@
     if (est.modo === 'exp') return [['pct', '% da área do município'], ['area', 'Área convertida (ha)']];
     if (est.modo === 'gleba') return [['area', 'Área das glebas (ha)'], ['n', 'Número de glebas']];
     if (est.modo === 'perda') return [['area', 'Área com perda (ha)'], ['n', 'Número de perdas']];
+    if (est.modo === 'cred') return CRED_MEDIDAS;
+    if (est.modo === 'econ') return [['va', 'VA agropecuário (R$)'], ['pct', '% do valor adicionado do município'], ['vakm', 'VA agro por km² rural']];
     if (est.modo === 'gs') return [['n', 'Agricultores pagos'], ['v', 'R$ pagos'], ['vpa', 'R$ por agricultor'], ['pct', '% dos imóveis do CAR']];
   }
+
+  /* Crédito rural: as medidas que somam (R$, operações) obedecem aos filtros de
+     finalidade, atividade e programa; os indicadores da safra (liberado,
+     tomadores, concentração, cooperativas, CAR, saldo) valem para todo o crédito
+     com município do ano. */
+  const CRED_MEDIDAS = [['v', 'R$ contratados'], ['vha', 'R$ por ha rural'], ['n', 'Operações'], ['pronaf', '% via Pronaf'],
+    ['lib', '% liberado do contratado'], ['desc', '% de operações desclassificadas'], ['tom', 'Tomadores'],
+    ['pj', '% de tomadores pessoa jurídica'], ['top10', 'Parte dos 10% maiores tomadores'], ['coopcred', '% via cooperativa de crédito'],
+    ['coop', '% tomado por cooperados'], ['car', '% das operações com CAR'], ['saldo', 'Dívida rural em aberto (dez.)'],
+    ['estban', 'Saldo nos bancos (ESTBAN)'], ['bndes', 'BNDES à agropecuária (R$)']];
+  const CRED_SOMA = new Set(['v', 'vha', 'n', 'pronaf']);
+  const CRED_PCT = new Set(['pronaf', 'lib', 'desc', 'pj', 'top10', 'coopcred', 'coop', 'car']);
+  const CRV = new Float32Array(NM);   // R$ contratados no ano, por trás das porcentagens (a faixa soma isto)
 
   /* ---------- valores por município no ano ---------- */
   const VAL = new Float32Array(NM);
@@ -826,6 +857,20 @@
       }
       return;
     }
+    if (est.modo === 'cred') return calculaCredito(ano);
+    if (est.modo === 'econ') {
+      const E = SOB.econ?.A;
+      if (!E) return;
+      const a = ano - 1990;
+      CRV.fill(0);
+      for (let r = 0; r < E.m.length; r++) {
+        if (E.a[r] !== a) continue;
+        const m = E.m[r], va = LUT[E.va_agro[r]];
+        CRV[m] = va;
+        VAL[m] = mt === 'pct' ? va / LUT[E.va[r]] * 100 : mt === 'vakm' ? va / RURAL_KM2[m] : va;
+      }
+      return;
+    }
     if (est.modo === 'gs') {
       const s = ano - 2000, G = CAD.A, imov = CAD.A.car_imoveis;
       GS_N.fill(0);
@@ -835,6 +880,53 @@
         GS_N[m] = n;
         VAL[m] = mt === 'pct' ? (imov[m] > 0 ? n / imov[m] * 100 : NaN) : mt === 'v' ? v : mt === 'vpa' ? (n > 0 ? v / n : NaN) : n;
       }
+    }
+  }
+
+  function calculaCredito(ano) {
+    const B = SOB.credrs?.A, mt = est.metrica;
+    CRV.fill(0);
+    if (!B) return;
+    const s = ano - 2000;
+    if (mt === 'estban' || mt === 'bndes') {
+      const [Mm, Aa, V] = mt === 'estban' ? [B.eb_m, B.eb_a, B.eb_v] : [B.bn_m, B.bn_a, B.bn_v], a = ano - 1990;
+      for (let r = 0; r < Mm.length; r++) if (Aa[r] === a) { VAL[Mm[r]] = LUT[V[r]]; CRV[Mm[r]] = LUT[V[r]]; }
+      return;
+    }
+    if (CRED_SOMA.has(mt)) {
+      const P = new Float32Array(NM);
+      for (let r = 0; r < B.cr_m.length; r++) {
+        if (B.cr_s[r] !== s || (est.credFin >= 0 && B.cr_f[r] !== est.credFin) || (est.credAtiv >= 0 && B.cr_t[r] !== est.credAtiv)) continue;
+        const m = B.cr_m[r], v = LUT[B.cr_v[r]];
+        if (B.cr_p[r] === 0) P[m] += v;
+        if (mt !== 'pronaf' && est.credProg >= 0 && B.cr_p[r] !== est.credProg) continue;
+        CRV[m] += v;
+        if (mt === 'n') VAL[m] = (VAL[m] > 0 ? VAL[m] : 0) + B.cr_n[r];
+      }
+      for (let m = 0; m < NM; m++) {
+        if (!(CRV[m] > 0)) continue;
+        if (mt === 'v') VAL[m] = CRV[m];
+        else if (mt === 'vha') VAL[m] = CRV[m] / (RURAL_KM2[m] * 100);
+        else if (mt === 'pronaf') VAL[m] = P[m] / CRV[m] * 100;
+      }
+      return;
+    }
+    for (let r = 0; r < B.ci_m.length; r++) {
+      if (B.ci_s[r] !== s) continue;
+      const m = B.ci_m[r], v = LUT[B.ci_valor[r]], ops = B.ci_ops[r];
+      CRV[m] = v > 0 ? v : 0;
+      let x = NaN;
+      if (mt === 'lib') x = v > 0 ? LUT[B.ci_liberado[r]] / v * 100 : NaN;
+      else if (mt === 'desc') x = ops >= M.min_celula ? B.ci_desclass[r] / ops * 100 : NaN;
+      else if (mt === 'tom') x = B.ci_tom[r] || NaN;
+      else if (mt === 'pj') x = B.ci_tom[r] ? B.ci_tompj[r] / B.ci_tom[r] * 100 : NaN;
+      else if (mt === 'top10') x = B.ci_top10[r] ? (B.ci_top10[r] - 1) / 2 : NaN;
+      else if (mt === 'coopcred') x = v > 0 ? (LUT[B.ci_via_coop_credito[r]] || 0) / v * 100 : NaN;
+      else if (mt === 'coop') x = v > 0 ? (LUT[B.ci_cooperado[r]] || 0) / v * 100 : NaN;
+      else if (mt === 'car') x = ops >= M.min_celula ? B.ci_car[r] / ops * 100 : NaN;
+      else if (mt === 'saldo') x = LUT[B.ci_saldo[r]];
+      // porcentagem zero é dado (nenhuma operação desclassificada), não ausência
+      VAL[m] = CRED_PCT.has(mt) && x === 0 ? 1e-6 : x;
     }
   }
 
@@ -1201,6 +1293,18 @@
       return `satélite vê ${fmt(Math.pow(2, v), 2)}× o declarado`;
     }
     if (!(v > 0)) return 'sem registro';
+    if (est.modo === 'cred') {
+      if (CRED_PCT.has(mt)) return fmt(v, v < 1 ? 2 : 1) + '% · R$ ' + curto(CRV[m]) + ' contratados';
+      if (mt === 'n') return fmt(v) + ' operações';
+      if (mt === 'tom') return fmt(v) + ' tomadores';
+      if (mt === 'vha') return 'R$ ' + fmt(v) + ' por ha rural';
+      return 'R$ ' + curto(v);
+    }
+    if (est.modo === 'econ') {
+      if (mt === 'pct') return fmt(v, 1) + '% do VA · R$ ' + curto(CRV[m]);
+      if (mt === 'vakm') return 'R$ ' + curto(v) + ' por km² rural';
+      return 'R$ ' + curto(v) + ' de VA agropecuário';
+    }
     if (est.modo === 'gs' && mt === 'v') return 'R$ ' + curto(v) + ' pagos';
     if (est.modo === 'gs' && mt === 'vpa') return 'R$ ' + fmt(v) + ' por agricultor';
     if (mt === 'porcab') return fmt(v) + ' ' + it.porcab.txt;
@@ -1238,6 +1342,8 @@
     exp: '<path d="M9 16.5V8.5M9 8.5c0-3.2 2-5.2 5.5-5.2 0 3.3-2 5.2-5.5 5.2zM9 10.8C9 8 7.2 6.3 3.8 6.3c0 2.8 1.8 4.5 5.2 4.5z"/>',
     gleba: '<path d="M2.5 4l6-1.5 7 2-1 9-7 1.5-5-2.5z"/><path d="M8.5 2.5L7.5 15M2.5 9l13-.5"/>',
     perda: '<path d="M5 11.5a3.2 3.2 0 0 1 .4-6.4 4.2 4.2 0 0 1 8 .9 2.8 2.8 0 0 1-.3 5.5z"/><path d="M6.5 14l-.8 1.8M9.5 14l-.8 1.8M12.5 14l-.8 1.8"/>',
+    cred: '<ellipse cx="9" cy="5" rx="5.5" ry="2.2"/><path d="M3.5 5v4c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V5M3.5 9v4c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V9"/>',
+    econ: '<path d="M2 16h14M4 13V9M8 13V6M12 13V8M16 3l-4.5 3.5L8 4 3 7.5"/>',
     gs: '<circle cx="9" cy="9" r="3.2"/><path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.7 3.7l1.4 1.4M12.9 12.9l1.4 1.4M3.7 14.3l1.4-1.4M12.9 5.1l1.4-1.4"/>',
   };
   const modosEl = $('modos');
@@ -1332,6 +1438,16 @@
     ['campo', 'Vinda de campo'], ['pasto', 'Vinda de pastagem'], ['todas', 'De qualquer origem']]
     .map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
   $('origem').onchange = e => { est.origem = e.target.value; atualiza(true); };
+  const opcoes = (todos, nomes) => `<option value="-1">${todos}</option>` + nomes.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+  function montaFiltrosCredito() {
+    const B = SOB.credrs?.meta;
+    if (!B || $('cred-fin').options.length) return;
+    $('cred-fin').innerHTML = opcoes('Todas as finalidades', B.finalidades);
+    $('cred-ativ').innerHTML = opcoes('Agrícola e pecuária', B.atividades);
+    $('cred-prog').innerHTML = opcoes('Todos os programas', B.programas.map(p => p === 'Demais' ? 'Fora do Pronaf e do Pronamp' : p));
+  }
+  for (const [id, k] of [['cred-fin', 'credFin'], ['cred-ativ', 'credAtiv'], ['cred-prog', 'credProg']])
+    $(id).onchange = e => { est[k] = +e.target.value; atualiza(true); };
   $('metrica').onchange = e => { est.metrica = e.target.value; atualiza(true); };
   $('mostra-mascara').onchange = e => { est.mascara = e.target.checked; atualiza(false); };
   $('sobre-glebas').onchange = e => { est.glebas = e.target.checked; atualiza(true); };
@@ -1446,6 +1562,16 @@
     if (est.modo === 'pam' && est.disputa) return 'Lavoura principal · municípios';
     if (est.modo === 'perda') return 'Perdas · ' + (est.evento >= 0 ? M.eventos[est.evento] : 'todos os eventos');
     if (est.modo === 'gs') return 'Garantia-Safra · ' + mt;
+    if (est.modo === 'cred') {
+      const B = SOB.credrs?.meta, f = [];
+      if (B && CRED_SOMA.has(est.metrica)) {
+        if (est.credFin >= 0) f.push(B.finalidades[est.credFin].toLowerCase());
+        if (est.credAtiv >= 0) f.push(B.atividades[est.credAtiv].toLowerCase());
+        if (est.credProg >= 0 && est.metrica !== 'pronaf') f.push(B.programas[est.credProg]);
+      }
+      return 'Crédito rural · ' + mt + (f.length ? ' · ' + f.join(', ') : '');
+    }
+    if (est.modo === 'econ') return 'Economia · ' + mt;
     return nomes + ' · ' + mt;
   }
   const NOTAS = {
@@ -1455,6 +1581,8 @@
     exp: () => `Área que <b>virou</b> a classe da cultura na década (1990→2000, 2000→2010, 2010→2020), pela transição do MapBiomas. Use a origem para separar o que veio de floresta, de cerrado ou de pastagem.` + aviso(),
     gleba: () => `Polígonos das <b>glebas de custeio agrícola</b> financiadas com recurso público (SICOR, Banco Central), somados numa grade de 0,05° (~30 km²). É uma <b>amostra de onde se planta</b>, não o total: na safra 2023/24 a soja com gleba soma ~4 milhões de ha, contra 46 milhões declarados. Células com menos de ${M.min_celula} glebas não aparecem, para não identificar propriedade.` + (produtosSicor().size ? '' : ' <span class="aviso">Nenhuma cultura escolhida tem crédito com gleba.</span>'),
     perda: () => `Área com <b>perda comprovada</b> no Proagro, o seguro do crédito rural, por safra e evento, na grade de 0,05°. A seca responde por 59% da área com perda de 2012 a 2025. Células com menos de ${M.min_celula} perdas não aparecem.`,
+    cred: () => `Crédito rural contratado no <b>SICOR</b> (Banco Central), por safra. <b>Só o crédito com município</b>: o SICOR põe o município apenas nas operações de recurso controlado ou equalizado (poupança rural equalizada, BNDES/Finame, fundos constitucionais, LCA equalizada, Funcafé, Pronaf, Pronamp). A LCA livre e os recursos livres não têm município: na safra 2023/24 foram R$ 136 bi com município de R$ 422 bi no país (com uma UF no recorte, a faixa mostra o total dela). Combinação de município, safra, finalidade, atividade e programa com menos de ${M.min_celula} operações não aparece (8% do valor), e o que vem de tomador só onde há ${M.min_celula} ou mais. <b>ESTBAN</b>: saldo de financiamentos rurais nas agências, em dezembro; no espelho faltam os anos ímpares desde 2003, e a queda de 2020 não aparece no SICOR. <b>BNDES</b>: desembolso ao setor agropecuário.`,
+    econ: () => `Valor adicionado bruto da <b>agropecuária</b> no PIB dos municípios (IBGE), em R$ correntes, de 1999 a 2021 (1999–2001 pela série antiga; o IBGE ainda não abriu 2022 e 2023 por setor). É o que a agropecuária gera de renda no município, não o que ela vende: a soja processada na indústria conta na indústria.`,
     gs: () => `Agricultores familiares do semiárido pagos pelo <b>Garantia-Safra</b> (Portal da Transparência) por ano do pagamento. A porcentagem compara com o número de imóveis no CAR do município — é ordem de grandeza, não cobertura exata.`,
   };
   function aviso() {
@@ -1474,7 +1602,8 @@
       if (est.modo === 'gleba' || est.modo === 'perda') { for (const v of celulasAtuais(a).values()) s += v; }
       else {
         calcula(a);
-        const absoluto = ['pct', 'dens', 'rend', 'porcab', 'vpa'].includes(est.metrica) || est.modo === 'cmp' || est.disputa;
+        const absoluto = ['pct', 'dens', 'rend', 'porcab', 'vpa', 'vha', 'vakm'].includes(est.metrica) || CRED_PCT.has(est.metrica)
+          || est.modo === 'cmp' || est.disputa;
         for (let m = 0; m < NM; m++) {
           if (!noRecorte(m)) continue;
           let v = VAL[m];
@@ -1499,6 +1628,7 @@
     if (est.modo === 'sat') return VAL[m] * RURAL_KM2[m];
     if (est.modo === 'cmp') { let s = 0; for (const c of classesDosItens()) s += serieClasse(c)[m * NAMB + a - A0MB]; return s; }
     if (est.modo === 'exp') return VAL[m] * M.mun.km2[m];
+    if (est.modo === 'cred' || est.modo === 'econ') return CRV[m];
     if (est.modo === 'gs') return est.metrica === 'vpa' ? VAL[m] * GS_N[m] : VAL[m] * CAD.A.car_imoveis[m] / 100;
     return VAL[m];
   }
@@ -1524,11 +1654,18 @@
     fctx.font = '10.5px Mono, monospace';
     fctx.textBaseline = 'top';
     const un = unidadeFaixa();
-    fctx.fillText(`${nomeRecorte()}: ${atual ? curto(atual[1]) : '—'} ${un}`, 0, 0);
+    const rs = un.startsWith('R$');
+    let txt = `${nomeRecorte()}: ${rs ? 'R$ ' : ''}${atual ? curto(atual[1]) : '—'} ${rs ? un.slice(3) : un}`;
+    // crédito com UF no recorte: o total da UF, de todas as fontes (com e sem município)
+    const U = est.modo === 'cred' && est.uf && CRED_SOMA.has(est.metrica) && SOB.credrs?.meta.uf[est.uf];
+    if (U) { const k = U.safra.indexOf(est.ano); if (k >= 0) txt += ` · todo o crédito da UF: R$ ${curto(U.valor[k])}`; }
+    fctx.fillText(txt, 0, 0);
   }
   function unidadeFaixa() {
     const it = ITENS[est.itens[0]];
     if (est.modo === 'gs') return ['v', 'vpa'].includes(est.metrica) ? 'R$' : 'agricultores';
+    if (est.modo === 'cred') return est.metrica === 'n' ? 'operações' : est.metrica === 'tom' ? 'tomadores' : 'R$';
+    if (est.modo === 'econ') return 'R$ de VA agro';
     if (est.modo === 'perda' || est.modo === 'gleba') return est.metrica === 'n' ? (est.modo === 'gleba' ? 'glebas' : 'perdas') : 'ha';
     if (est.modo === 'pam' && it && !it.area) return est.metrica === 'v' ? 'mil R$' : it.un;   // por cabeça: a faixa soma o produto (leite, lã)
     if (est.modo === 'pam' && (est.metrica === 'q')) return it.un;
@@ -1546,7 +1683,9 @@
     est.ano = a;
     $('ano').value = a;
     $('ano-txt').textContent = $('chip-ano').textContent = est.modo === 'exp' ? `${a - 10}→${a}` : a;
-    $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: 'safra ' + a + '/' + String(a + 1).slice(2), perda: 'safra ' + a + '/' + String(a + 1).slice(2), gs: 'pagamento' }[est.modo];
+    const safra = 'safra ' + a + '/' + String(a + 1).slice(2);
+    $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
+      cred: est.metrica === 'estban' ? 'dezembro' : est.metrica === 'bndes' ? 'ano' : safra }[est.modo];
     calcula();
     if (est.modo === 'gleba' || est.modo === 'perda' || est.glebas) CEL = celulasAtuais();
     if (est.modo === 'pam' && est.disputa) montaLegenda();   // a contagem muda a cada ano
@@ -1608,7 +1747,7 @@
       b.title = b.disabled ? 'carregando…' : '';
     });
     $('sobre-glebas').disabled = !pronto;
-    const comItens = !['perda', 'gs'].includes(est.modo);
+    const comItens = !['perda', 'gs', 'cred', 'econ'].includes(est.modo);
     $('sec-itens').style.display = comItens ? '' : 'none';
     $('alt-disputa').style.display = est.modo === 'pam' ? '' : 'none';
     const principal = est.modo === 'pam' && est.disputa;
@@ -1616,6 +1755,9 @@
     $('disputa').checked = est.disputa;
     $('ctl-evento').style.display = est.modo === 'perda' ? '' : 'none';
     $('ctl-origem').style.display = est.modo === 'exp' ? '' : 'none';
+    montaFiltrosCredito();
+    $('ctl-credito').style.display = est.modo === 'cred' && CRED_SOMA.has(est.metrica) && SOB.credrs ? '' : 'none';
+    for (const [id, k] of [['cred-fin', 'credFin'], ['cred-ativ', 'credAtiv'], ['cred-prog', 'credProg']]) $(id).value = est[k];
     $('alt-glebas').style.display = est.modo === 'pam' && !est.disputa ? '' : 'none';
     $('uf').value = est.uf; $('regiao').value = valorRegiao();
     $('evento').value = est.evento; $('origem').value = est.origem;
@@ -1673,6 +1815,76 @@
   }
 
   let itemFicha = -1;   // cultura escolhida no select da série; -1 = a do mapa
+  /* Crédito e economia na ficha: pedem os blocos da 3ª etapa ao abrir a ficha */
+  function fichaDinheiro(m, a) {
+    if (!garante(['credrs', 'econ'])) return '<h3>Crédito rural e economia</h3><div class="vazio">carregando…</div>';
+    const B = SOB.credrs.A, BM = SOB.credrs.meta, s = a - 2000;
+    let h = '';
+    const sa = Math.min(Math.max(a, BM.safras[0]), BM.safras[1]), ss = sa - 2000;
+    const porFin = new Float64Array(BM.finalidades.length);
+    let tot = 0, pronaf = 0, ops = 0;
+    for (let r = 0; r < B.cr_m.length; r++) {
+      if (B.cr_m[r] !== m || B.cr_s[r] !== ss) continue;
+      const v = LUT[B.cr_v[r]];
+      tot += v; porFin[B.cr_f[r]] += v; ops += B.cr_n[r];
+      if (B.cr_p[r] === 0) pronaf += v;
+    }
+    h += `<h3>Crédito rural contratado, safra ${sa}/${String(sa + 1).slice(2)}</h3>`;
+    if (tot > 0) {
+      const lista = BM.finalidades.map((f, i) => [f, porFin[i]]).filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1]);
+      h += `<div class="nota" style="margin:0 0 6px">R$ ${curto(tot)} em ${fmt(ops)} operações com município · ${fmt(pronaf / tot * 100, 0)}% pelo Pronaf.</div><div class="barras">`
+        + lista.map(([f, v]) => barra(f, v, lista[0][1], 'R$ ' + curto(v), COR.c[1])).join('') + '</div>';
+      const r = [...B.ci_m.keys()].find(r => B.ci_m[r] === m && B.ci_s[r] === ss);
+      if (r !== undefined) {
+        const v = LUT[B.ci_valor[r]], linhas = [];
+        const pct = x => fmt(x, x < 10 ? 1 : 0) + '%';
+        if (B.ci_tom[r]) linhas.push(['Tomadores', `${fmt(B.ci_tom[r])} · ${pct(B.ci_tompj[r] / B.ci_tom[r] * 100)} pessoa jurídica`]);
+        if (B.ci_top10[r]) linhas.push(['Parte dos 10% maiores tomadores', pct((B.ci_top10[r] - 1) / 2)]);
+        if (LUT[B.ci_liberado[r]] > 0) linhas.push(['Liberado ÷ contratado', pct(LUT[B.ci_liberado[r]] / v * 100)]);
+        if (LUT[B.ci_via_coop_credito[r]] > 0) linhas.push(['Via cooperativa de crédito', pct(LUT[B.ci_via_coop_credito[r]] / v * 100)]);
+        if (B.ci_ops[r] >= M.min_celula) linhas.push(['Operações com CAR informado', pct(B.ci_car[r] / B.ci_ops[r] * 100)]);
+        if (B.ci_desclass[r]) linhas.push(['Operações desclassificadas', fmt(B.ci_desclass[r])]);
+        if (LUT[B.ci_saldo[r]] > 0) linhas.push(['Dívida rural em aberto (dez.)', 'R$ ' + curto(LUT[B.ci_saldo[r]])]);
+        if (linhas.length) h += '<div class="kv" style="margin-top:8px">' + linhas.map(([k, x]) => `<span>${k}</span><span>${x}</span>`).join('') + '</div>';
+      }
+    } else h += '<div class="vazio">Nenhuma operação com município nesta safra (ou menos de ' + M.min_celula + ' por combinação).</div>';
+    const ext = [];
+    const ultimo = (Mm, Aa, V, lim) => { let best = -1, val = 0; for (let r = 0; r < Mm.length; r++) if (Mm[r] === m && Aa[r] + 1990 <= lim && Aa[r] > best) { best = Aa[r]; val = LUT[V[r]]; } return best >= 0 ? [best + 1990, val] : null; };
+    const eb = ultimo(B.eb_m, B.eb_a, B.eb_v, a), bn = ultimo(B.bn_m, B.bn_a, B.bn_v, a);
+    if (eb) ext.push([`Saldo nos bancos, dez. ${eb[0]} (ESTBAN)`, 'R$ ' + curto(eb[1])]);
+    if (bn) ext.push([`BNDES à agropecuária, ${bn[0]}`, 'R$ ' + curto(bn[1])]);
+    if (ext.length) h += '<div class="kv" style="margin-top:6px">' + ext.map(([k, x]) => `<span>${k}</span><span>${x}</span>`).join('') + '</div>';
+    // quem empresta
+    const ifs = [];
+    for (let r = 0; r < B.if_m.length; r++) if (B.if_m[r] === m) ifs.push([BM.inst[B.if_k[r]], LUT[B.if_v[r]], B.if_n[r]]);
+    if (ifs.length) {
+      h += `<h3>Quem empresta, ${BM.safras[0]}–${BM.safras[1]}</h3><div class="barras">`
+        + ifs.map(([i, v]) => barra(i.nome.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()), v, ifs[0][1], 'R$ ' + curto(v),
+          /COOPERATIV/.test(i.seg) ? COR.c[3] : COR.ink3)).join('') + '</div><div class="nota">Em verde, cooperativas de crédito.</div>';
+    }
+    // UF: todo o crédito e a carteira do SCR
+    const uf = M.mun.uf[m], U = BM.uf[uf], S = BM.scr[uf];
+    if (U) {
+      const k = U.safra.indexOf(sa), linhas = [];
+      if (k >= 0) linhas.push([`Todo o crédito rural na safra`, `R$ ${curto(U.valor[k])} · ${fmt(U.valor_mun[k] / U.valor[k] * 100, 0)}% com município`]);
+      const j = S ? S.ano.indexOf(Math.min(a, S.ano.at(-1))) : -1;
+      if (j >= 0) linhas.push([`Carteira rural no SCR, dez. ${S.ano[j]}`, `R$ ${curto(S.carteira[j])} · ${fmt(S.inad[j] / S.carteira[j] * 100, 1)}% inadimplente`]);
+      if (linhas.length) h += `<h3>Crédito rural em ${uf}</h3><div class="kv">` + linhas.map(([x, y]) => `<span>${x}</span><span>${y}</span>`).join('') + '</div>';
+    }
+    // economia
+    const E = SOB.econ.A, pts = [];
+    let lin = null;
+    for (let r = 0; r < E.m.length; r++) if (E.m[r] === m) {
+      const y = E.a[r] + 1990; pts.push([y, LUT[E.va_agro[r]]]);
+      if (y <= a) lin = r;
+    }
+    if (pts.length) {
+      h += `<h3>Economia: valor adicionado da agropecuária</h3>`;
+      if (lin !== null) h += `<div class="nota" style="margin:0 0 6px">${E.a[lin] + 1990}: R$ ${curto(LUT[E.va_agro[lin]])}, ${fmt(LUT[E.va_agro[lin]] / LUT[E.va[lin]] * 100, 1)}% do valor adicionado do município (PIB de R$ ${curto(LUT[E.pib[lin]])}).</div>`;
+      h += serieSvg([{ nome: 'VA agropecuário (R$ correntes)', cor: COR.c[3], pts }], pts[0][0], pts.at(-1)[0], 'R$');
+    }
+    return h;
+  }
   /* Seções da ficha recolhíveis: cada <h3> vira o resumo de um <details> com o que
      vem até o próximo. Quem foi fechado continua fechado de um município a outro
      (a chave é o título sem números). */
@@ -1834,6 +2046,8 @@
         gsPts.map(([y, v]) => barra(String(y), v, maxG, fmt(v), y === a ? COR.acento : COR.ink3)).join('') + '</div>';
     }
 
+    h += fichaDinheiro(m, a);
+
     // CAR
     const car = k => CAD.A['car_' + k][m];
     if (car('imoveis')) {
@@ -1875,6 +2089,9 @@
     if (est.mun >= 0) p.set('mun', M.mun.id[est.mun]);
     if (est.evento >= 0) p.set('ev', est.evento);
     if (est.origem !== 'natural') p.set('o', est.origem);
+    if (est.credFin >= 0) p.set('cf', est.credFin);
+    if (est.credAtiv >= 0) p.set('ca', est.credAtiv);
+    if (est.credProg >= 0) p.set('cp', est.credProg);
     try { history.replaceState(null, '', '?' + p.toString()); } catch { /* file:// em alguns motores */ }
   }
   function leUrl() {
@@ -1891,6 +2108,7 @@
     if (['semiarido', 'amazonia', ...REGIOES].includes(p.get('rg'))) est.regiao = p.get('rg');
     if (p.get('ev')) est.evento = +p.get('ev');
     if (p.get('o')) est.origem = p.get('o');
+    for (const [q, k] of [['cf', 'credFin'], ['ca', 'credAtiv'], ['cp', 'credProg']]) if (p.get(q)) est[k] = +p.get(q);
     const mid = p.get('mun');
     return mid ? M.mun.id.indexOf(mid) : -1;
   }
@@ -1916,7 +2134,7 @@
   /* gancho para os testes: só existe na cópia que testes/comum.ts injeta; chamado
      com os dados completos */
   const gancho = () => {
-    if (window.__testes) window.__testes({ noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
+    if (window.__testes) window.__testes({ CRV, noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
       carrega, garante, get CONT() { return CONT; }, get SOB() { return SOB; }, get CAD() { return CAD; }, MALHA });
   };
   if (pronto) gancho();

@@ -72,8 +72,9 @@ for (const motor of ESCOLHIDOS) {
 
     test("todas as fontes desenham sem erro, e a legenda acompanha", async () => {
       const x = await abre(nav, "?c=soja&a=2020");
-      for (const modo of ["pam", "sat", "cmp", "exp", "gleba", "perda", "gs"]) {
+      for (const modo of await x.p.locator("#modos button").evaluateAll(bs => bs.map(b => (b as HTMLElement).dataset.modo!))) {
         await x.p.click(`[data-modo="${modo}"]`);
+        await x.p.waitForFunction(() => document.getElementById("rotulo-carga")!.hidden, null, { timeout: 30_000 });
         await quadro(x.p);
         expect(await x.p.locator("#nota").textContent(), modo).not.toBe("");
         expect(await x.p.locator("#legenda .extra").count(), modo).toBe(1);
@@ -143,6 +144,44 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("crédito rural em R$: Sorriso bate com o SICOR, os filtros mudam o mapa e a ficha diz quem empresta", async () => {
+      const f = FIXTURE.credito;
+      const x = await abre(nav, `?f=cred&a=${f.safra}&mun=${f.mun}`);
+      await x.p.waitForFunction(() => (window as any).__T.SOB.credrs, null, { timeout: 60_000 });
+      await quadro(x.p);
+      const v = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
+      expect(Math.abs(v / f.valor - 1)).toBeLessThan(0.01);
+      const antes = await digital(x.p);
+      await x.p.selectOption("#cred-fin", "0");
+      await quadro(x.p);
+      expect(await digital(x.p)).not.toBe(antes);
+      expect(x.p.url()).toContain("cf=0");
+      const custeio = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
+      expect(custeio).toBeLessThan(v);
+      const ficha = await x.p.locator("#ficha").textContent();
+      expect(ficha).toContain("Quem empresta");
+      expect(ficha).toContain("Crédito rural contratado");
+      for (const mt of ["pronaf", "top10", "car", "estban", "bndes"]) {
+        await x.p.selectOption("#metrica", mt);
+        expect(await x.p.locator("#tit-legenda").textContent(), mt).not.toBe("");
+      }
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("economia: VA agropecuário de Sorriso bate com o PIB municipal", async () => {
+      const f = FIXTURE.pib;
+      const x = await abre(nav, `?f=econ&a=${f.ano}`);
+      await x.p.waitForFunction(() => (window as any).__T.SOB.econ, null, { timeout: 60_000 });
+      const v = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
+      expect(Math.abs(v / f.va_agro - 1)).toBeLessThan(0.005);
+      await x.p.selectOption("#metrica", "pct");
+      const pct = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
+      expect(pct).toBeGreaterThan(5); expect(pct).toBeLessThan(80);
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
     test("lavoura principal: árvore de famílias liga e desliga, conta municípios e vai para a URL", async () => {
       const x = await abre(nav, "?c=soja&a=2020&d=1");
       await quadro(x.p);
@@ -175,7 +214,7 @@ for (const motor of ESCOLHIDOS) {
 
     test("sobre em diálogo, ícone por fonte, linha do tempo e painel recolhíveis", async () => {
       const x = await abre(nav, "?c=soja&a=2020");
-      expect(await x.p.locator("#modos button svg").count()).toBe(7);
+      expect(await x.p.locator("#modos button svg").count()).toBe(await x.p.locator("#modos button").count());
       expect(await x.p.locator("#sobre").isVisible()).toBe(false);
       await x.p.click("#abre-sobre");
       expect(await x.p.locator("#sobre").isVisible()).toBe(true);
@@ -223,6 +262,14 @@ for (const motor of ESCOLHIDOS) {
       expect(minimos[0]).toBeGreaterThanOrEqual(5);
       expect(minimos[1]).toBeGreaterThanOrEqual(5);
       expect(minimos[2]).toBe(5);
+      // crédito em R$: combinação, tomadores e instituição por município, todos com o corte
+      const cr = await roda<number[]>(x.p, `return T.carrega('credrs').then(b => {
+        const A = b.A; let n = Infinity, t = Infinity, i = Infinity;
+        for (const v of A.cr_n) if (v < n) n = v;
+        for (const v of A.ci_tom) if (v > 0 && v < t) t = v;
+        for (const v of A.if_n) if (v < i) i = v;
+        return [n, t, i]; })`);
+      for (const v of cr) expect(v).toBeGreaterThanOrEqual(5);
       await fecha(x);
     }, LENTO);
 

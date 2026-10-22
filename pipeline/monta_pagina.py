@@ -430,6 +430,80 @@ for c in SICAR_COLS:
     bk.add("car_" + c, np.round(arr), "u32")
 anos_gs = (int(gs["ano"].min()), int(gs["ano"].max()))
 
+# ---------- dinheiro (3ª etapa): crédito do SICOR, ESTBAN, BNDES, SCR e PIB ----------
+print("crédito em R$")
+FINALIDADES = ["Custeio", "Investimento", "Comercialização", "Industrialização"]
+ATIVIDADES = ["Agrícola", "Pecuária"]
+PROGRAMAS = ["Pronaf", "Pronamp", "Demais"]
+cm = idx_mun(pl.read_parquet(D / "credito_mun.parquet"))
+v0 = cm["valor"].sum()
+# privacidade: combinação município × safra × finalidade × atividade × programa com
+# menos de MIN_CELULA operações identificaria o valor emprestado a uma pessoa
+cm = cm.filter(pl.col("operacoes") >= MIN_CELULA)
+print(f"    corte de {MIN_CELULA} operações: fica {cm['valor'].sum() / v0 * 100:.1f}% do valor")
+cm = cm.with_columns(pl.col("finalidade").replace_strict({f: i for i, f in enumerate(FINALIDADES)}, return_dtype=pl.Int32).alias("f"),
+                     pl.col("atividade").replace_strict({f: i for i, f in enumerate(ATIVIDADES)}, return_dtype=pl.Int32).alias("t"),
+                     pl.col("programa").replace_strict({f: i for i, f in enumerate(PROGRAMAS)}, return_dtype=pl.Int32).alias("p"),
+                     ).sort(["m", "safra", "f", "t", "p"])
+br = Bloco()
+br.add("cr_m", dif(cm["m"]), "u16"); br.add("cr_s", cm["safra"] - 2000, "u8")
+br.add("cr_f", cm["f"], "u8"); br.add("cr_t", cm["t"], "u8"); br.add("cr_p", cm["p"], "u8")
+br.add("cr_n", cm["operacoes"], "u32"); br.add("cr_v", log16(cm["valor"].to_numpy()), "u16")
+br.add("cr_a", log16(cm["area"].to_numpy()), "u16")
+
+ci = idx_mun(pl.read_parquet(D / "credito_ind.parquet")).filter(pl.col("safra").is_between(2012, 2026)).sort(["m", "safra"])
+# o que vem de tomador (contagem, PJ, concentração) só onde há ao menos MIN_CELULA tomadores
+poucos = pl.col("tomadores").fill_null(0) < MIN_CELULA
+ci = ci.with_columns([pl.when(poucos).then(None).otherwise(pl.col(c)).alias(c) for c in ("tomadores", "tomadores_pj", "top10")])
+br.add("ci_m", ci["m"], "u16"); br.add("ci_s", ci["safra"] - 2000, "u8")
+br.add("ci_ops", ci["ops"].fill_null(0), "u32")
+for c in ("valor", "liberado", "desclass_valor", "via_coop_credito", "cooperado", "saldo"):
+    br.add("ci_" + c, log16(ci[c].to_numpy()), "u16")
+br.add("ci_desclass", ci["desclass_ops"].fill_null(0), "u32")
+br.add("ci_tom", ci["tomadores"].fill_null(0), "u32"); br.add("ci_tompj", ci["tomadores_pj"].fill_null(0), "u32")
+br.add("ci_top10", (ci["top10"].fill_null(-1) * 200 + 1).clip(lower_bound=0).round(), "u8")   # 0 = sem dado; passo de 0,5%
+br.add("ci_car", ci["ops_car"].fill_null(0), "u32")
+
+# quem empresta: as 5 maiores instituições por município, com MIN_CELULA operações
+cf = (idx_mun(pl.read_parquet(D / "credito_if.parquet")).filter(pl.col("operacoes") >= MIN_CELULA)
+      .group_by(["m", "instituicao", "segmento"]).agg(pl.col("operacoes").sum(), pl.col("valor").sum())
+      .sort(["m", "valor", "instituicao"], descending=[False, True, False])
+      .group_by("m", maintain_order=True).head(5))
+INST = sorted(set(zip(cf["instituicao"].to_list(), cf["segmento"].to_list())))
+IIDX_INST = {k: i for i, k in enumerate(INST)}
+br.add("if_m", cf["m"], "u16")
+br.add("if_k", [IIDX_INST[k] for k in zip(cf["instituicao"].to_list(), cf["segmento"].to_list())], "u16")
+br.add("if_n", cf["operacoes"], "u32"); br.add("if_v", log16(cf["valor"].to_numpy()), "u16")
+
+eb = idx_mun(pl.read_parquet(D / "estban.parquet")).sort(["m", "ano"])
+br.add("eb_m", eb["m"], "u16"); br.add("eb_a", eb["ano"] - 1990, "u8"); br.add("eb_v", log16(eb["saldo"].to_numpy()), "u16")
+bn = idx_mun(pl.read_parquet(D / "bndes.parquet")).sort(["m", "ano"])
+br.add("bn_m", bn["m"], "u16"); br.add("bn_a", bn["ano"] - 1990, "u8"); br.add("bn_v", log16(bn["valor"].to_numpy()), "u16")
+
+cu = pl.read_parquet(D / "credito_uf.parquet").filter(pl.col("safra").is_between(2012, 2025)).sort(["sigla_uf", "safra"])
+scr = pl.read_parquet(D / "scr.parquet").sort(["sigla_uf", "ano"])
+br.meta = {
+    "delta": ["cr_m"],
+    "finalidades": FINALIDADES, "atividades": ATIVIDADES, "programas": PROGRAMAS,
+    "inst": [{"nome": n, "seg": sg} for n, sg in INST],
+    "safras": [int(cm["safra"].min()), int(cm["safra"].max())],
+    "estban": sorted(eb["ano"].unique().to_list()), "bndes": [int(bn["ano"].min()), int(bn["ano"].max())],
+    # por UF: todo o crédito (com e sem município) e a carteira do SCR
+    "uf": {u: {"safra": g["safra"].to_list(), "valor": g["valor"].round(0).to_list(), "valor_mun": g["valor_mun"].fill_null(0).round(0).to_list()}
+           for (u,), g in cu.group_by(["sigla_uf"], maintain_order=True)},
+    "scr": {u: {"ano": g["ano"].to_list(), "carteira": g["carteira"].round(0).to_list(), "inad": g["inadimplencia"].round(0).to_list()}
+            for (u,), g in scr.group_by(["sigla_uf"], maintain_order=True)},
+}
+
+print("economia")
+# 2022 e 2023 vêm só com o PIB total, sem o valor adicionado por setor (medido em 2026-10-22)
+pb = idx_mun(pl.read_parquet(D / "pib.parquet")).filter(pl.col("va_agro").is_not_null()).sort(["m", "ano"])
+be = Bloco()
+be.add("m", pb["m"], "u16"); be.add("a", pb["ano"] - 1990, "u8")
+for c in ("pib", "va", "va_agro"):
+    be.add(c, log16(pb[c].to_numpy()), "u16")
+be.meta = {"anos": [int(pb["ano"].min()), int(pb["ano"].max())]}
+
 # ---------- metadados ----------
 meta = {
     "mun": {
@@ -471,13 +545,20 @@ fix["acai_ext"] = {"mun": acai["id_municipio"], "ano": 2024, "q": acai["quantida
 fix["gs_2020"] = {"valor": float(gs.filter(pl.col("ano") == 2020)["valor"].sum()),
                   "agricultores": int(gs.filter(pl.col("ano") == 2020)["agricultores"].sum())}
 fix["semiarido"] = int(div["semiarido"].sum())
+cr = pl.read_parquet(D / "credito_mun.parquet")
+fix["credito"] = {"mun": "5107925", "safra": 2023,
+                  "valor": float(cr.filter((pl.col("id_municipio") == "5107925") & (pl.col("safra") == 2023)
+                                           & (pl.col("operacoes") >= MIN_CELULA))["valor"].sum())}
+fix["pib"] = {"mun": "5107925", "ano": 2021,
+              "va_agro": float(pb.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2021))["va_agro"][0])}
 (RAIZ / "testes" / "fixture.json").write_text(json.dumps(fix, ensure_ascii=False, indent=1))
 
 # ---------- página ----------
 print("blocos")
 tpl = (S / "template.html").read_text().replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
 BLOCOS = [("MALHA", "malha", bm), ("PROD", "prod", bp), ("PRODQV", "prodqv", bq), ("MAPB", "mapb", bb),
-          ("CRED", "cred", bc), ("CAD", "cad", bk), ("CONTORNOS", "contornos", bt)]
+          ("CRED", "cred", bc), ("CAD", "cad", bk), ("CONTORNOS", "contornos", bt), ("CREDRS", "credrs", br),
+          ("ECON", "econ", be)]
 GZ = {nome: comprime(nome, bloco) for _, nome, bloco in BLOCOS}
 
 # 1. index.html: arquivo único, abre por file:// (os blocos em base64 dentro dele)
