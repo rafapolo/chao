@@ -1,8 +1,9 @@
 <p align="center"><img src="favicon.svg" width="72" alt=""></p>
 
-# Safra a Safra
+# Chão
 
-O que o Brasil planta e cria, município a município, de 1974 a 2025. É uma página só,
+O campo brasileiro, município a município: o que se planta e se cria de 1974 a 2025, a
+terra, o dinheiro, o clima e quem vive dele. É uma página só,
 `index.html`, que abre sem internet: basta dar dois cliques no arquivo.
 
 ## O que dá para ver
@@ -24,7 +25,26 @@ O que o Brasil planta e cria, município a município, de 1974 a 2025. É uma p�
   SICOR (Banco Central, 2012–2025), numa grade de ~30 km². É uma amostra, não o total.
 - **Perdas:** onde e por quê a safra quebrou (seca, chuva, geada, granizo…), pelas perdas
   comprovadas no Proagro.
-- **Garantia-Safra:** agricultores familiares do semiárido pagos a cada ano.
+- **Garantia-Safra:** agricultores familiares do semiárido pagos a cada ano, e quanto receberam.
+- **Calendário:** em que mês se planta cada cultura, quanto dura o ciclo e quanto é 2ª safra,
+  pelas datas do custeio no SICOR.
+- **Desmatamento:** PRODES por ano e em grade, alertas do DETER, embargos e multas do IBAMA.
+- **Emissões:** gases da agropecuária e da mudança de uso da terra (SEEG).
+- **Crédito rural:** todo o crédito com município no SICOR, por finalidade e programa, quem
+  empresta, concentração, cooperativas, CAR; saldo nos bancos (ESTBAN) e BNDES.
+- **Economia:** o valor adicionado da agropecuária no PIB de cada município.
+- **Exportação:** a soja e a carne exportadas pelo município que produz (Trase) e o agro pela
+  sede da empresa (Comex), com fertilizantes e defensivos importados.
+- **Clima:** chuva, anomalia e temperatura (SISAM), as estações do INMET e as emergências
+  reconhecidas pela Defesa Civil.
+- **Fogo:** focos de calor do INPE e cicatriz de queimada.
+- **Trabalho e estrutura:** emprego formal (RAIS, CAGED), estabelecimentos agropecuários
+  (Censo 2022) e imóveis rurais (Receita).
+- **Famílias do campo:** agricultores familiares, pescadores, extrativistas e assentados no
+  CadÚnico, e o Seguro-Defeso.
+
+O recorte vai por estado, bioma, região, semiárido ou Amazônia Legal, e qualquer medida pode
+ser somada por região imediata, microrregião, mesorregião, estado ou grande região.
 
 A ficha de cada município junta:
 - a série histórica de qualquer lavoura do município (escolhida num select), declarada e
@@ -34,7 +54,9 @@ A ficha de cada município junta:
 - os rebanhos;
 - o crédito e as perdas;
 - o Garantia-Safra;
-- o Cadastro Ambiental Rural: imóveis por tamanho, reserva legal, APP e vegetação nativa.
+- o Cadastro Ambiental Rural: imóveis por tamanho, reserva legal, APP e vegetação nativa;
+- e, sob demanda, crédito, economia, desmatamento, fogo, clima, calendário, exportação,
+  emissões, trabalho e famílias.
 
 ## Como usar
 
@@ -49,18 +71,21 @@ A ficha de cada município junta:
   `index.html?c=soja&a=2010&mun=5107925` abre a soja de 2010 com a ficha de Sorriso (MT), e
   `index.html?a=1985&d=1` abre a lavoura principal de 1985.
 
-A versão para a web fica em `site/`: uma página leve que baixa os dados aos poucos. O
-mapa aparece com 6,5 MB, e o resto chega por trás. Para vê-la localmente:
+A versão para a web fica em `site/` e é publicada em https://rafapolo.github.io/chao/: uma
+página leve que baixa os dados aos poucos. O mapa aparece com a primeira etapa, a segunda
+chega por trás, e o resto só quando um modo pede. Para vê-la localmente:
 `bunx serve site`.
 
 ## Fontes
 
-- **IBGE:** PAM, PPM, malha municipal e setores censitários de 2010.
+- **IBGE:** PAM, PPM, PEVS, PIB municipal, população, malha, setores de 2010, CNEFE.
 - **MapBiomas.**
-- **Banco Central:** SICOR e Proagro.
-- **CGU:** Garantia-Safra.
-- **Serviço Florestal Brasileiro:** SICAR.
-- **FUNAI** e **MMA (CNUC).**
+- **Banco Central:** SICOR, Proagro, ESTBAN, SCR. **BNDES.**
+- **INPE:** PRODES, DETER, queimadas, SISAM. **INMET.** **Defesa Civil (S2ID).**
+- **IBAMA:** embargos e autos. **INCRA:** assentamentos, SIGEF, SNCI.
+- **CGU:** Garantia-Safra, Seguro-Defeso. **MDS:** CadÚnico. **MTE:** RAIS, CAGED.
+- **Receita Federal:** CAFIR. **MDIC:** Comex Stat. **Trase.** **SEEG.**
+- **Serviço Florestal Brasileiro:** SICAR. **FUNAI** e **MMA (CNUC).**
 
 Todas vêm do espelho do projeto [rodado](https://rodado.xyz).
 
@@ -71,7 +96,9 @@ Todas vêm do espelho do projeto [rodado](https://rodado.xyz).
 - De 1974 a 1987 a área é a **colhida**: a PAM só pergunta a plantada desde 1988.
 - Municípios criados depois de 1974 recebem, antes de existir, a parte que lhes cabe do
   território de origem (área mínima comparável do IBGE).
-- Células e municípios com menos de 5 glebas ou perdas ficam de fora, para não identificar
-  propriedade.
+- Células e municípios com menos de 5 glebas, perdas, operações de crédito ou pescadores
+  ficam de fora, para não identificar pessoa ou propriedade.
+- O crédito com município é só o de recurso controlado ou equalizado (cerca de um terço do
+  total); a chuva por município do SISAM é estimativa de modelo e vai até 2019.
 
 Como a página é gerada e testada: ver `CLAUDE.md`.

@@ -2,7 +2,7 @@
 """Cobertura e transição do MapBiomas (Coleção 11) por município.
 
 Saídas em pipeline/dados/:
-  mapbiomas.parquet  — classe (rótulo do bragro), ano, id_municipio, area_ha
+  mapbiomas.parquet  — classe (rótulo da página), ano, id_municipio, area_ha
   transicao.parquet  — decada_fim, id_municipio, de (grupo), para (classe agrícola), area_ha
   bioma.parquet      — id_municipio, bioma de maior área
 
@@ -17,7 +17,7 @@ import polars as pl
 
 from beelink import roda
 
-# rótulo do bragro <- classes do MapBiomas
+# rótulo da página <- classes do MapBiomas
 CLASSES = {
     "Soja": [39], "Cana": [20], "Arroz": [40], "Algodão": [62],
     "Outras temporárias": [41], "Café": [46], "Citros": [47], "Dendê": [35],

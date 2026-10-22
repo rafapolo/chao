@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Safra a Safra</title>
-<meta name="description" content="O que o Brasil planta e cria, município a município, de 1974 a 2025: lavouras, rebanhos, satélite, crédito rural e perdas.">
+<title>Chão</title>
+<meta name="description" content="O campo brasileiro, município a município: o que se planta e se cria, a terra, o dinheiro, o clima e quem vive dele.">
 <meta name="theme-color" content="#121211">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23121211'/%3E%3Cpath d='M16 27.5V14.5' stroke='%23c3c2b7' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M16 16c0-6.2 3.6-9.8 10.2-9.8 0 6.4-3.7 9.8-10.2 9.8z' fill='%23b9a43f'/%3E%3Cpath d='M16 20.5c0-5.2-3-8.3-8.8-8.3 0 5.2 3.1 8.3 8.8 8.3z' fill='%2326bf9e'/%3E%3C/svg%3E">
 <style>
@@ -343,9 +343,9 @@
 
 <aside class="painel" id="painel" aria-label="Controles do mapa">
   <header>
-    <h1>Safra a Safra</h1>
+    <h1>Chão</h1>
     <button class="recolhe" id="recolhe-painel" aria-expanded="true" aria-controls="painel" aria-label="Recolher os filtros"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 9L7 4.5 11.5 9"/></svg></button>
-    <p>O que o Brasil planta e cria, município a município, de 1974 a 2025.</p>
+    <p>O campo brasileiro, município a município: produção, terra, dinheiro, clima e gente.</p>
   </header>
   <div class="rolagem">
     <div class="secao">
@@ -414,7 +414,7 @@
   <form method="dialog"><button class="fechar" aria-label="Fechar">×</button></form>
   <h2 id="sobre-tit">Sobre os dados</h2>
   <div class="nota" id="nota"></div>
-  <p class="fino">Fontes: IBGE (PAM, PPM, malha 2022, setores censitários 2010) · MapBiomas coleção 11 · Banco Central (SICOR, Proagro) · CGU (Garantia-Safra) · Serviço Florestal Brasileiro (SICAR) · FUNAI · MMA (CNUC). Todas pelo espelho do projeto rodado.</p>
+  <p class="fino">Fontes: IBGE (PAM, PPM, PEVS, PIB, população, malha 2022, setores 2010, CNEFE) · MapBiomas coleção 11 · Banco Central (SICOR, Proagro, ESTBAN, SCR) · BNDES · INPE (PRODES, DETER, queimadas, SISAM) · INMET · Defesa Civil (S2ID) · IBAMA · INCRA · CGU (Garantia-Safra, Seguro-Defeso) · MDS (CadÚnico) · MTE (RAIS, CAGED) · Receita (CAFIR) · MDIC (Comex Stat) · Trase · SEEG · Serviço Florestal Brasileiro (SICAR) · FUNAI · MMA (CNUC). Todas pelo espelho do projeto rodado.</p>
 </dialog>
 <div class="tip" id="tip"></div>
 <div class="rotulo-celular" id="rotulo-celular" aria-hidden="true"></div>
@@ -2654,7 +2654,7 @@
         <div class="nota">Área declarada pelo próprio dono e não conferida; imóveis se sobrepõem, então a soma pode passar da área do município.</div>`;
     }
     }
-    h += `<div class="fontes">Fontes: IBGE (PAM, PPM, malha 2022, setores 2010) · MapBiomas coleção 11 · Banco Central (SICOR, Proagro) · CGU (Garantia-Safra) · Serviço Florestal Brasileiro (SICAR) · FUNAI · MMA (CNUC).</div>`;
+    h += `<div class="fontes">Fontes: IBGE (PAM, PPM, PEVS, PIB, população, malha 2022, setores 2010, CNEFE) · MapBiomas coleção 11 · Banco Central (SICOR, Proagro, ESTBAN, SCR) · BNDES · INPE (PRODES, DETER, queimadas, SISAM) · INMET · Defesa Civil (S2ID) · IBAMA · INCRA · CGU (Garantia-Safra, Seguro-Defeso) · MDS (CadÚnico) · MTE (RAIS, CAGED) · Receita (CAFIR) · MDIC (Comex Stat) · Trase · SEEG · Serviço Florestal Brasileiro (SICAR) · FUNAI · MMA (CNUC).</div>`;
     f.innerHTML = h;
     recolhiveis(f);
     f.querySelector('.fechar').onclick = () => seleciona(-1);

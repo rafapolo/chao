@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "bragro",
+      "name": "chao",
       "devDependencies": {
         "playwright": "1.62.0",
       },

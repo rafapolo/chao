@@ -16,8 +16,8 @@ export const LENTO = 120_000;
 
 export const MOTORES = { chromium, firefox, webkit };
 export type Motor = keyof typeof MOTORES;
-/* BRAGRO_MOTORES=chromium roda só um; o padrão são os três */
-export const ESCOLHIDOS = ((process.env.BRAGRO_MOTORES || "chromium,firefox,webkit").split(",") as Motor[]);
+/* CHAO_MOTORES=chromium roda só um; o padrão são os três */
+export const ESCOLHIDOS = ((process.env.CHAO_MOTORES || "chromium,firefox,webkit").split(",") as Motor[]);
 
 /** Abre a página com o gancho de teste: a página chama window.__testes(internos)
  *  no fim do carregamento, e o gancho guarda tudo em window.__T. O produto não

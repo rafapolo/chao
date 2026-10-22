@@ -4,8 +4,9 @@ Orientação para agentes que trabalham neste repositório.
 
 ## O que é
 
-"Safra a Safra" é uma página HTML autocontida, `index.html` (~26 MB), com o mapa do que se planta e se cria
-em cada município do Brasil, de 1974 a 2025. Ela tem linha do tempo, filtros por cultura,
+"Chão" (repositório `rafapolo/chao`, antes "bragro" e "Safra a Safra") é uma página HTML
+autocontida, `index.html` (~38 MB), com o mapa do campo brasileiro em cada município: o que se
+planta e se cria de 1974 a 2025, a terra, o crédito, o clima e quem vive do campo. Ela tem linha do tempo, filtros por cultura,
 medida, fonte e recorte, e uma ficha por município. A spec está em
 `docs/superpowers/specs/2026-10-21-bragro-design.md`.
 
@@ -52,7 +53,7 @@ for s in malha producao mapbiomas credito cadastros regioes dinheiro terra clima
 python3 monta_pagina.py      # parquet -> blocos -> ../index.html (arquivo único) e ../site/ (GitHub Pages)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
-bun test                                   # 81 testes (27 × 3 motores, 2 deles sobre site/), ~2 min; BRAGRO_MOTORES=chromium para um só
+bun test                                   # 93 testes (31 × 3 motores, 2 deles sobre site/), ~2 min; CHAO_MOTORES=chromium para um só
 ```
 
 Dependências Python: `polars`, `numpy`, `shapely`. Cada `baixa_*.py` imprime a própria
