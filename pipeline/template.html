@@ -172,7 +172,7 @@
   .legenda .abre:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
   .legenda .filhos { margin: 0 0 4px 36px; padding-left: 6px; border-left: 1px solid var(--linha); }
   .legenda .item.sub { padding: 2px 4px; }
-  .legenda .item.sub i { width: 8px; height: 8px; }
+  .legenda .item.sub i { width: 10px; height: 10px; }
   .legenda .item.sub .rot { font-size: 12px; color: var(--ink-2); }
 
   /* ---------- sobre os dados: diálogo, como o "about" do swissviz ---------- */
@@ -824,10 +824,10 @@
     }
   }
   function tonsDaFamilia(hex, n) {
-    const [L, C, h] = hexOklch(hex), passo = Math.min(0.07, 0.3 / Math.max(1, n - 1));
+    const [L, C, h] = hexOklch(hex), passo = Math.min(0.11, 0.42 / Math.max(1, n - 1));
     return Array.from({ length: n }, (_, k) => {
       const d = k === 0 ? 0 : Math.ceil(k / 2) * passo * (k % 2 ? 1 : -1);
-      return oklchHex(Math.min(0.9, Math.max(0.32, L + d)), C, h);
+      return oklchHex(Math.min(0.9, Math.max(0.3, L + d)), C, h);
     });
   }
   function lerTons() {
