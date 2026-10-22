@@ -665,6 +665,11 @@ SER.update(series(bg, imv.rename({"ano_cafir": "ano"}), {"cafir": "imoveis_cafir
 SER.update(series(bg, imv.rename({"ano_cnefe": "ano"}), {"cnefe": "estabelecimentos_agro"}))
 bg.meta = {"series": SER}
 
+sedes = (pl.DataFrame({"id_municipio": IDS}).join(pl.read_parquet(D / "sedes.parquet"), on="id_municipio", how="left")
+         .join(mun.select("id_municipio", pl.col("lon").alias("lon2"), pl.col("lat").alias("lat2")), on="id_municipio")
+         .with_columns(pl.col("lon").fill_null(pl.col("lon2")), pl.col("lat").fill_null(pl.col("lat2"))))
+assert sedes["lon"].null_count() == 0
+
 # ---------- metadados ----------
 meta = {
     "mun": {
@@ -677,6 +682,8 @@ meta = {
         "uc_km2": mun["area_uc_km2"].round(1).to_list(),
         "lon": mun["lon"].round(3).to_list(), "lat": mun["lat"].round(3).to_list(),
         "inst": inst_arr.tolist(),
+        # sede (rótulo no zoom alto); os 5 municípios de 2013 ficam com o ponto interno
+        "slon": sedes["lon"].round(3).to_list(), "slat": sedes["lat"].round(3).to_list(),
     },
     "ufs": ufs_geo["nome"].to_list(), "divisoes": DIVISOES,
     "itens": ITENS, "familias": FAM_META, "mb": MB_CLASSES, "origens": ORIGENS, "sicor": SICOR, "eventos": EVENTOS,

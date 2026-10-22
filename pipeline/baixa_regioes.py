@@ -4,6 +4,8 @@
 Saídas em pipeline/dados/:
   regioes.parquet — tipo (uf, regiao, pais, bioma, semiarido, amazonia_legal),
                     nome, wkb simplificado (~1 km): só traço por cima do mapa
+  sedes.parquet   — id_municipio, lon, lat da sede (2010; os 5 municípios de 2013 ficam
+                    com o ponto interno do polígono, em monta_pagina.py)
   divisao.parquet — id_municipio, semiarido, amazonia_legal (booleanos) e o código
                     e o nome de região, mesorregião, microrregião, região
                     intermediária e imediata e região metropolitana
@@ -45,6 +47,13 @@ COPY (
 ) TO '{{saida}}' (FORMAT parquet);
 """)
 
+sd = roda("sedes", """
+COPY (
+  SELECT id_municipio, ST_X(geometria) lon, ST_Y(geometria) lat
+  FROM br_geobr_mapas.sede_municipal WHERE ano = 2010 ORDER BY 1
+) TO '{saida}' (FORMAT parquet);
+""")
+
 div = roda("divisao", """
 COPY (
   SELECT d.id_municipio,
@@ -63,6 +72,8 @@ COPY (
 
 # ---------- conferências ----------
 print(reg.group_by("tipo").len().sort("tipo"))
+print(f"sedes: {sd.height} (geobr 2010: 5.565)")
+assert sd.height == 5565 and sd["lon"].is_between(-75, -28).all()
 print(f"semiárido: {div['semiarido'].sum()} municípios (ref. 1.262 na delimitação de 2021)")
 print(f"Amazônia Legal: {div['amazonia_legal'].sum()} municípios (ref. 772)")
 for c in ["regiao", "id_mesorregiao", "id_microrregiao", "id_regiao_intermediaria", "id_regiao_imediata"]:

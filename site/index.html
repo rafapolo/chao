@@ -378,6 +378,7 @@
       </div>
       <div class="linha-ctl"><input class="busca" id="busca-mun" type="search" placeholder="Ir para município…" autocomplete="off" aria-label="Buscar município" list="lista-mun"></div>
       <datalist id="lista-mun"></datalist>
+      <div class="linha-ctl"><select id="agrupa" aria-label="Agrupar municípios"></select></div>
       <label class="alternar"><input type="checkbox" id="mostra-mascara" checked> Cobrir o que não é rural</label>
       <label class="alternar" id="alt-glebas"><input type="checkbox" id="sobre-glebas"> Glebas financiadas por cima</label>
     </div>
@@ -419,7 +420,7 @@
 <div class="rotulo-celular" id="rotulo-celular" aria-hidden="true"></div>
 <div id="carregando">carregando dados…</div>
 
-<script id="b-malha" type="text/plain" data-src="dados/malha.90cbb5cd7547.bin"></script>
+<script id="b-malha" type="text/plain" data-src="dados/malha.d19dc4a8cd35.bin"></script>
 <script id="b-prod" type="text/plain" data-src="dados/prod.35547fee29de.bin"></script>
 <script id="b-prodqv" type="text/plain" data-src="dados/prodqv.eba874568462.bin"></script>
 <script id="b-mapb" type="text/plain" data-src="dados/mapb.16bafbae7911.bin"></script>
@@ -736,6 +737,7 @@
     modo: 'pam', itens: [SOJA], metrica: '', ano: 2024, uf: '', bioma: '', regiao: '', mun: -1,
     disputa: false, evento: -1, origem: 'natural', mascara: true, glebas: false,
     credFin: -1, credAtiv: -1, credProg: -1,   // filtros do crédito (-1 = todos)
+    agrupa: '',   // agrupar por região ('' = cada município)
     desligadas: new Set(),   // lavoura principal: lavouras tiradas da disputa (índice do item)
     abertas: new Set(),      // famílias abertas na árvore da legenda
   };
@@ -873,7 +875,51 @@
     porAMC(VAL, ano);
   }
 
+  /* Agrupar por: o valor de cada município passa a ser o do grupo (UF, região
+     imediata…). Grandezas que se somam (ha, R$, cabeças) somam; as outras viram a
+     média ponderada pela área — para % e densidades, com zero onde falta, o que dá
+     exatamente soma do numerador ÷ soma da área. */
+  const AGRUPA = [['', 'Cada município'], ['imediata', 'Região imediata'], ['micro', 'Microrregião'],
+    ['intermediaria', 'Região intermediária'], ['meso', 'Mesorregião'], ['uf', 'Estado'], ['regiao', 'Grande região']];
+  const UF_IDX = M.mun.uf.map(u => UFS.indexOf(u));
+  const grupoDe = (m, k = est.agrupa) => k === 'uf' ? UF_IDX[m] : MALHA.A['dv_' + k][m];
+  const nomeGrupo = (m, k = est.agrupa) => k === 'uf' ? M.mun.uf[m] : M.divisoes[k][grupoDe(m, k)];
+  const agrupavel = () => est.agrupa && !(est.modo === 'pam' && est.disputa) && !(est.modo === 'cal' && est.metrica === 'mes') && !emCelulas() && !emPontos();
+  function porArea() {
+    // medidas que são densidade ou %: zero onde falta, peso da área (rural ou total)
+    const mt = est.metrica;
+    if (['pct', 'dens', 'vha', 'vakm'].includes(mt)) return ['exp', 'desm', 'fogo'].includes(est.modo) ? M.mun.km2 : RURAL_KM2;
+    return null;
+  }
+  // o agrupamento valeria no estado atual, se escolhido?
+  const agrupavelSe = () => { const g = est.agrupa; est.agrupa = 'uf'; const r = agrupavel(); est.agrupa = g; return r; };
+  function aditiva() {
+    const mt = est.metrica;
+    if (['cmp', 'clima', 'cal'].includes(est.modo) || porArea()) return false;
+    if (['rend', 'porcab', 'vpa', 'mes', 'ciclo', 'safrinha', 'lib', 'desc', 'pj', 'top10', 'coopcred', 'coop', 'car', 'pronaf'].includes(mt)) return false;
+    return true;
+  }
+  function agrega() {
+    if (!agrupavel()) return;
+    const NGr = est.agrupa === 'uf' ? UFS.length : M.divisoes[est.agrupa].length;
+    const s = new Float64Array(NGr), w = new Float64Array(NGr), tem = new Uint8Array(NGr);
+    const peso = porArea(), soma = aditiva();
+    for (let m = 0; m < NM; m++) {
+      const g = grupoDe(m), v = VAL[m], ok = Number.isFinite(v) && (v !== 0 || est.metrica === 'caged');
+      if (peso) { s[g] += (ok ? v : 0) * peso[m]; w[g] += peso[m]; if (ok) tem[g] = 1; }
+      else if (ok) { s[g] += soma ? v : v * RURAL_KM2[m]; w[g] += RURAL_KM2[m]; tem[g] = 1; }
+    }
+    for (let m = 0; m < NM; m++) {
+      const g = grupoDe(m);
+      VAL[m] = !tem[g] ? NaN : soma ? s[g] : s[g] / w[g];
+    }
+  }
   function calcula(ano = est.ano) {
+    calculaBase(ano);
+    agrega();
+  }
+
+  function calculaBase(ano = est.ano) {
     VAL.fill(NaN);
     const mt = est.metrica;
     if (est.modo === 'pam') {
@@ -1325,7 +1371,8 @@
     ctx.fillStyle = COR.fundo; ctx.fillRect(0, 0, W, H);
     ctx.setTransform(dpr * vista.k, 0, 0, dpr * vista.k, dpr * vista.x, dpr * vista.y);
     const vis = [(0 - vista.x) / vista.k, (0 - vista.y) / vista.k, (W - vista.x) / vista.k, (H - vista.y) / vista.k];
-    const C = GEO.caixa, celulas = emCelulas() || emPontos();
+    const C = GEO.caixa, celulas = emCelulas() || emPontos(), costura = !celulas && agrupavel();
+    if (costura) ctx.lineWidth = 1.2 / vista.k;
     const ano = est.ano;
     for (let m = 0; m < NM; m++) {
       if (C[4 * m + 2] < vis[0] || C[4 * m] > vis[2] || C[4 * m + 3] < vis[1] || C[4 * m + 1] > vis[3]) continue;
@@ -1334,6 +1381,8 @@
       if (celulas) ctx.fillStyle = COR.semdado;
       else ctx.fillStyle = corDe(m);
       ctx.fill(GEO.p[m]);
+      // agrupado: o contorno na mesma cor fecha a costura de antialias entre vizinhos do grupo
+      if (costura) { ctx.strokeStyle = ctx.fillStyle; ctx.stroke(GEO.p[m]); }
     }
     ctx.globalAlpha = 1;
     if (est.mascara && !celulas) { ctx.fillStyle = COR.mascara; ctx.fill(MASC_TUDO, 'evenodd'); }
@@ -1371,7 +1420,33 @@
     if (hover >= 0 && hover !== est.mun) {
       ctx.strokeStyle = COR.foco; ctx.globalAlpha = 0.6; ctx.lineWidth = 1 / vista.k; ctx.stroke(GEO.p[hover]); ctx.globalAlpha = 1;
     }
+    desenhaRotulos();
     desenhou = true;
+  }
+
+  /* Rótulos dos municípios no zoom alto: no ponto da sede, os maiores primeiro, e
+     um rótulo só entra se não encostar em outro já posto. ROTULOS guarda as caixas
+     (em pixels de tela) do último quadro. */
+  const SEDE_X = M.mun.slon.map(l => projX(l) * W_ESC), SEDE_Y = M.mun.slat.map(l => merc(l) * W_ESC);
+  const POR_TAMANHO = [...Array(NM).keys()].sort((a, b) => M.mun.km2[b] - M.mun.km2[a]);
+  let ROTULOS = [];
+  function desenhaRotulos() {
+    ROTULOS = [];
+    if (vista.k < kMin * 5) return;   // ~3× o enquadramento do país: nível de região
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = '500 11.5px system-ui, -apple-system, "Segoe UI", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    for (const m of est.mun >= 0 ? [est.mun, ...POR_TAMANHO] : POR_TAMANHO) {   // o selecionado primeiro
+      if (m === est.mun && ROTULOS.length) continue;
+      const x = vista.x + SEDE_X[m] * vista.k, y = vista.y + SEDE_Y[m] * vista.k;
+      if (x < 0 || y < 0 || x > W || y > H) continue;
+      const w = ctx.measureText(M.mun.nome[m]).width, c = { nome: M.mun.nome[m], x0: x - w / 2 - 3, x1: x + w / 2 + 3, y0: y - 9, y1: y + 9 };
+      if (ROTULOS.some(r => !(c.x1 <= r.x0 || r.x1 <= c.x0 || c.y1 <= r.y0 || r.y1 <= c.y0))) continue;
+      ROTULOS.push(c);
+      ctx.lineWidth = 3; ctx.strokeStyle = COR.fundo; ctx.strokeText(c.nome, x, y);
+      ctx.fillStyle = COR.foco; ctx.fillText(c.nome, x, y);
+      if (ROTULOS.length >= 160) break;
+    }
   }
 
   /* Glebas e perdas: célula de 0,05° (~30 km²), só as que têm 5 ou mais glebas
@@ -1599,7 +1674,8 @@
     const t = $('tip');
     if (hover < 0 || arrasto) { t.style.display = 'none'; return; }
     const nota = notaAMC(hover);
-    t.innerHTML = `<b>${M.mun.nome[hover]}</b> · ${M.mun.uf[hover]}<br><span class="num">${textoValor(hover)}</span>`
+    const grupo = agrupavel() ? `<b>${nomeGrupo(hover)}</b> (${AGRUPA.find(([v]) => v === est.agrupa)[1].toLowerCase()})<br>` : '';
+    t.innerHTML = grupo + `${grupo ? '' : '<b>'}${M.mun.nome[hover]}${grupo ? '' : '</b>'} · ${M.mun.uf[hover]}<br><span class="num">${textoValor(hover)}</span>`
       + (nota ? `<br><span class="num" style="font-size:11px">${nota}</span>` : '');
     t.style.display = 'block';
     const r = t.getBoundingClientRect();
@@ -1748,6 +1824,8 @@
   for (const [id, k] of [['cred-fin', 'credFin'], ['cred-ativ', 'credAtiv'], ['cred-prog', 'credProg']])
     $(id).onchange = e => { est[k] = +e.target.value; atualiza(true); };
   $('metrica').onchange = e => { est.metrica = e.target.value; atualiza(true); };
+  $('agrupa').innerHTML = AGRUPA.map(([v, t]) => `<option value="${v}">${v ? 'Agrupar por ' + t.toLowerCase() : 'Cada município (sem agrupar)'}</option>`).join('');
+  $('agrupa').onchange = e => { est.agrupa = e.target.value; atualiza(true); };
   $('mostra-mascara').onchange = e => { est.mascara = e.target.checked; atualiza(false); };
   $('sobre-glebas').onchange = e => { est.glebas = e.target.checked; atualiza(true); };
 
@@ -1985,7 +2063,7 @@
     fctx.textBaseline = 'top';
     const un = unidadeFaixa();
     const rs = un.startsWith('R$');
-    let txt = `${nomeRecorte()}: ${rs ? 'R$ ' : ''}${atual ? curto(atual[1]) : '—'} ${rs ? un.slice(3) : un}`;
+    let txt = `${nomeRecorte()}${agrupavel() ? ' (soma dos municípios)' : ''}: ${rs ? 'R$ ' : ''}${atual ? curto(atual[1]) : '—'} ${rs ? un.slice(3) : un}`;
     // crédito com UF no recorte: o total da UF, de todas as fontes (com e sem município)
     const U = est.modo === 'cred' && est.uf && CRED_SOMA.has(est.metrica) && SOB.credrs?.meta.uf[est.uf];
     if (U) { const k = U.safra.indexOf(est.ano); if (k >= 0) txt += ` · todo o crédito da UF: R$ ${curto(U.valor[k])}`; }
@@ -2100,6 +2178,8 @@
     $('alt-glebas').style.display = est.modo === 'pam' && !est.disputa ? '' : 'none';
     $('uf').value = est.uf; $('regiao').value = valorRegiao();
     $('evento').value = est.evento; $('origem').value = est.origem;
+    $('agrupa').value = est.agrupa;
+    $('agrupa').disabled = est.agrupa ? false : !agrupavelSe();
     $('mostra-mascara').checked = est.mascara; $('sobre-glebas').checked = est.glebas;
     const [a0, a1] = anosDoModo();
     $('ano').min = a0; $('ano').max = a1; $('ano').step = est.modo === 'exp' ? 10 : 1;
@@ -2570,6 +2650,7 @@
     if (est.disputa) p.set('d', '1');
     if (est.disputa && est.desligadas.size) p.set('dx', [...est.desligadas].map(i => ITENS[i].slug).join(','));
     if (est.uf) p.set('uf', est.uf);
+    if (est.agrupa) p.set('ag', est.agrupa);
     if (est.bioma) p.set('bio', est.bioma);
     if (est.regiao) p.set('rg', est.regiao);
     if (est.mun >= 0) p.set('mun', M.mun.id[est.mun]);
@@ -2590,6 +2671,7 @@
     if (p.get('a')) est.ano = +p.get('a');
     if (p.get('m')) est.metrica = p.get('m');
     if (UFS.includes(p.get('uf'))) est.uf = p.get('uf');
+    if (AGRUPA.some(([v]) => v && v === p.get('ag'))) est.agrupa = p.get('ag');
     if (BIOMAS.includes(p.get('bio'))) est.bioma = p.get('bio');
     if (['semiarido', 'amazonia', ...REGIOES].includes(p.get('rg'))) est.regiao = p.get('rg');
     if (p.get('ev')) est.evento = +p.get('ev');
@@ -2620,7 +2702,7 @@
   /* gancho para os testes: só existe na cópia que testes/comum.ts injeta; chamado
      com os dados completos */
   const gancho = () => {
-    if (window.__testes) window.__testes({ get PONTOS() { return PONTOS; }, get CEL() { return CEL; }, CRV, noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
+    if (window.__testes) window.__testes({ voaPara, get ROTULOS() { return ROTULOS; }, get PONTOS() { return PONTOS; }, get CEL() { return CEL; }, CRV, noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
       carrega, garante, get CONT() { return CONT; }, get SOB() { return SOB; }, get CAD() { return CAD; }, MALHA });
   };
   if (pronto) gancho();

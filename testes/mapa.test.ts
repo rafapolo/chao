@@ -279,6 +279,44 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("agrupar por: a UF soma a área de soja dos municípios, a % da área rural é ponderada, e o tooltip nomeia o grupo", async () => {
+      const x = await abre(nav, "?c=soja&a=2024&m=area&ag=uf");
+      await quadro(x.p);
+      const r = await roda<any>(x.p, `
+        const sor = T.M.mun.id.indexOf('5107925'), NA = T.M.anos.prod[1] - T.M.ano0.prod + 1, a = 2024 - T.M.ano0.prod;
+        const s = T.serieItem(T.est.itens[0]); let mt = 0;
+        for (let m = 0; m < T.M.mun.id.length; m++) if (T.M.mun.uf[m] === 'MT') { const v = s.area[m * NA + a]; if (v > 0) mt += v; }
+        const outro = T.M.mun.id.indexOf('5103403');   // Cuiabá: mesmo valor que Sorriso
+        return { sor: T.VAL[sor], mt, cuiaba: T.VAL[outro] };`);
+      expect(Math.abs(r.sor / r.mt - 1)).toBeLessThan(1e-4);
+      expect(r.cuiaba).toBe(r.sor);
+      expect(x.p.url()).toContain("ag=uf");
+      await x.p.selectOption("#metrica", "pct");
+      const pct = await roda<number>(x.p, "return T.VAL[T.M.mun.id.indexOf('5107925')]");
+      expect(pct).toBeGreaterThan(5); expect(pct).toBeLessThan(40);   // soja / área rural de MT
+      await x.p.selectOption("#agrupa", "imediata");
+      const n = await roda<number>(x.p, "return new Set([...T.VAL].filter(v => v > 0)).size");
+      expect(n).toBeGreaterThan(100); expect(n).toBeLessThan(511);
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("rótulos das sedes aparecem só no zoom alto, sem se sobrepor", async () => {
+      const x = await abre(nav, "?c=soja&a=2024");
+      await quadro(x.p);
+      expect(await roda<number>(x.p, "return T.ROTULOS.length")).toBe(0);
+      await roda(x.p, "T.seleciona(T.M.mun.id.indexOf('3550308')); T.voaPara(T.GEO.caixa.slice(4 * T.est.mun, 4 * T.est.mun + 4), 6)");
+      await quadro(x.p); await quadro(x.p);
+      const rot = await roda<any[]>(x.p, "return T.ROTULOS");
+      expect(rot.length).toBeGreaterThan(5);
+      for (let i = 0; i < rot.length; i++) for (let j = i + 1; j < rot.length; j++) {
+        const [a, b] = [rot[i], rot[j]];
+        expect(a.x1 <= b.x0 || b.x1 <= a.x0 || a.y1 <= b.y0 || b.y1 <= a.y0).toBe(true);
+      }
+      expect(rot.map(r => r.nome)).toContain("São Paulo");
+      await fecha(x);
+    }, LENTO);
+
     test("lavoura principal: árvore de famílias liga e desliga, conta municípios e vai para a URL", async () => {
       const x = await abre(nav, "?c=soja&a=2020&d=1");
       await quadro(x.p);
