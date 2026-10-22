@@ -4,7 +4,7 @@ Orientação para agentes que trabalham neste repositório.
 
 ## O que é
 
-Uma página HTML autocontida, `index.html` (~26 MB), com o mapa do que se planta e se cria
+"Safra a Safra" é uma página HTML autocontida, `index.html` (~26 MB), com o mapa do que se planta e se cria
 em cada município do Brasil, de 1974 a 2025. Ela tem linha do tempo, filtros por cultura,
 medida, fonte e recorte, e uma ficha por município. A spec está em
 `docs/superpowers/specs/2026-10-21-bragro-design.md`.

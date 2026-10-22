@@ -2,7 +2,10 @@
 <html lang="pt-BR">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>O que se planta onde</title>
+<title>Safra a Safra</title>
+<meta name="description" content="O que o Brasil planta e cria, município a município, de 1974 a 2025: lavouras, rebanhos, satélite, crédito rural e perdas.">
+<meta name="theme-color" content="#121211">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23121211'/%3E%3Cpath d='M16 27.5V14.5' stroke='%23c3c2b7' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M16 16c0-6.2 3.6-9.8 10.2-9.8 0 6.4-3.7 9.8-10.2 9.8z' fill='%23b9a43f'/%3E%3Cpath d='M16 20.5c0-5.2-3-8.3-8.8-8.3 0 5.2 3.1 8.3 8.8 8.3z' fill='%2326bf9e'/%3E%3C/svg%3E">
 <style>
   /* JetBrains Mono (SIL OFL 1.1), subconjunto variável embutido — a mesma face de
      instrumento do rios-do-brasil: número, ano, rótulo, eixo. */
@@ -257,8 +260,17 @@
   #carregando.erro { color: var(--acento); padding: 24px; text-align: center; }
   .so-celular, .rotulo-celular { display: none; }
 
+  /* ---------- tela média (janela pela metade, ou zoom alto): tudo encolhe, nada some ---------- */
+  @media (min-width: 601px) and (max-width: 1000px) {
+    .painel { width: 280px; max-height: calc(100% - 146px); }
+    .painel-legenda { width: 232px; }
+    .ficha.aberta ~ .painel-legenda { right: 12px; }
+    .ficha { width: 340px; z-index: 4; }
+    .tempo { left: 12px; right: 12px; bottom: 54px; width: auto; margin: 0; }
+  }
+
   /* ---------- celular: o painel vira gaveta de baixo ---------- */
-  @media (max-width: 760px) {
+  @media (max-width: 600px) {
     .painel { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 62vh; border-radius: 14px 14px 0 0;
       transform: translateY(100%); transition: transform .25s ease; z-index: 6; }
     .painel.aberta { transform: none; }
@@ -305,9 +317,9 @@
 
 <aside class="painel" id="painel" aria-label="Controles do mapa">
   <header>
-    <h1>O que se planta onde</h1>
+    <h1>Safra a Safra</h1>
     <button class="recolhe" id="recolhe-painel" aria-expanded="true" aria-controls="painel" aria-label="Recolher os filtros"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 9L7 4.5 11.5 9"/></svg></button>
-    <p>Lavoura, rebanho, crédito e perda no Brasil, município a município, de 1974 a 2025.</p>
+    <p>O que o Brasil planta e cria, município a município, de 1974 a 2025.</p>
   </header>
   <div class="rolagem">
     <div class="secao">
@@ -860,15 +872,17 @@
     const c = GEO.caixa;
     BR = [Math.min(BR[0], c[4 * m]), Math.min(BR[1], c[4 * m + 1]), Math.max(BR[2], c[4 * m + 2]), Math.max(BR[3], c[4 * m + 3])];
   }
-  const celular = () => matchMedia('(max-width: 760px)').matches;
+  const celular = () => matchMedia('(max-width: 600px)').matches;
   function areaUtil() {
     // o retângulo que sobra entre painel, ficha e linha do tempo
     if (celular()) return { x0: 0, y0: 50, x1: W, y1: H - 96 };
     const fichaAberta = $('ficha').classList.contains('aberta');
     // a legenda flutua à direita, ao lado da ficha quando ela está aberta
-    const leg = $('painel-legenda').classList.contains('recolhida') ? 0 : 282;
-    const x0 = $('painel').classList.contains('recolhido') ? 12 : 354;
-    return { x0, y0: 12, x1: W - (fichaAberta ? 404 : 12) - leg, y1: H - ($('tempo').hidden ? 58 : 92) };
+    const leg = $('painel-legenda').classList.contains('recolhida') ? 0 : 1;
+    const medio = W <= 1000, recolhido = $('painel').classList.contains('recolhido');
+    const x0 = recolhido ? 12 : medio ? 304 : 354;
+    const direita = medio ? 12 + (leg ? 244 : 0) : (fichaAberta ? 404 : 12) + (leg ? 282 : 0);
+    return { x0, y0: 12, x1: W - direita, y1: H - ($('tempo').hidden ? 58 : medio ? 136 : 92) };
   }
   function enquadra(c = BR, margem = 1.06) {
     const u = areaUtil(), w = (c[2] - c[0]) * margem, h = (c[3] - c[1]) * margem;
