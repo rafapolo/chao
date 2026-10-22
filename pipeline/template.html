@@ -37,8 +37,14 @@
     /* divergente (satélite ÷ declarado): vermelho = satélite vê menos, azul = mais */
     --d0: #c23b3b; --d1: #d96a6a; --d2: #a37b78; --d3: #383835;
     --d4: #6d8fb8; --d5: #5598e7; --d6: #2a78d6;
-    /* categórica (disputa entre culturas): três vagas, validadas todos-os-pares */
+    /* categórica (séries da ficha): três vagas, validadas todos-os-pares */
     --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c0: #5a5a55;
+    /* lavoura principal: 11 culturas, uma cor fixa cada, a mesma nos dois temas.
+       Busca gulosa em OKLCH pelo maior ΔE mínimo; todos os pares passam o piso de
+       visão normal (pior 18,0), mas não o de daltonismo — com 11 cores nenhuma
+       paleta passa. A legenda clicável isola cada cultura e o tooltip dá o nome. */
+    --l1: #8bff70; --l2: #fdbe45; --l3: #61911c; --l4: #8e479d; --l5: #54e2e9; --l6: #f7aef0;
+    --l7: #9e511e; --l8: #1aa2eb; --l9: #e758c0; --l10: #035ede; --l11: #fd5b0b;
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -136,6 +142,40 @@
   .legenda .cat { display: grid; gap: 3px; }
   .legenda .cat div { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .legenda .cat i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+  /* ---------- legenda: painel à direita ---------- */
+  .painel-legenda {
+    position: fixed; top: 56px; right: 12px; width: 270px; max-height: calc(100% - 56px - 160px); z-index: 3;
+    background: var(--painel); border: 1px solid var(--linha); border-radius: 10px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .ficha.aberta ~ .painel-legenda { right: 404px; }
+  .painel-legenda .cab {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+    padding: 10px 14px; border: 0; background: none; cursor: pointer; text-align: left;
+    font-size: 12.5px; font-weight: 600; line-height: 1.3;
+  }
+  .painel-legenda .seta { color: var(--ink-3); transition: transform .15s; flex: none; }
+  .painel-legenda.recolhida .seta { transform: rotate(-90deg); }
+  .painel-legenda .corpo { overflow-y: auto; padding: 0 14px 12px; }
+  .painel-legenda.recolhida .corpo { display: none; }
+  .legenda .controles { display: flex; gap: 6px; padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--linha); }
+  .legenda .controles button {
+    flex: 1; padding: 5px 0; border: 1px solid var(--linha); border-radius: 4px; background: transparent; cursor: pointer;
+    font-family: "Mono", monospace; font-size: 10px; letter-spacing: .04em; color: var(--ink-2);
+  }
+  .legenda .controles button:hover { border-color: var(--ink-3); color: var(--ink); }
+  .legenda .item {
+    display: flex; align-items: center; gap: 8px; width: 100%; margin: 1px 0; padding: 4px; border: 0; border-radius: 4px;
+    background: none; cursor: pointer; text-align: left; transition: opacity .15s; line-height: 16px;
+  }
+  .legenda .item:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .legenda .item:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
+  .legenda .item i { width: 12px; height: 12px; border-radius: 50%; flex: none; transition: filter .15s; }
+  .legenda .item .rot { flex: 1; font-size: 12.5px; color: var(--ink); }
+  .legenda .item .n { font-family: "Mono", monospace; font-size: 10px; color: var(--ink-3); }
+  .legenda .item.desligada { opacity: .6; }
+  .legenda .item.desligada i { filter: grayscale(1); }
+  .legenda .item.desligada .rot { text-decoration: line-through; color: var(--ink-3); }
   .nota { margin-top: 10px; color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
   .nota b { color: var(--ink); font-weight: 600; }
   .aviso { color: var(--acento); }
@@ -178,6 +218,7 @@
   .kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12px; }
   .kv span:nth-child(even) { font-family: "Mono", monospace; color: var(--ink-2); text-align: right; }
   .ficha svg { display: block; width: 100%; overflow: visible; }
+  .ficha .sel-ficha { width: 100%; margin-bottom: 8px; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--linha); background: var(--fundo); }
   .ficha .vazio { color: var(--ink-3); font-size: 12px; }
   .ficha .fontes { margin-top: 18px; color: var(--ink-3); font-size: 11px; }
 
@@ -214,6 +255,8 @@
     .rotulo-celular { display: block; position: fixed; top: 10px; left: 10px; right: 120px; z-index: 2;
       font-size: 13px; font-weight: 600; line-height: 1.3; text-shadow: 0 1px 2px var(--fundo); }
     .barra { grid-template-columns: 90px 1fr auto; }
+    .painel-legenda { top: auto; right: auto; left: 8px; bottom: 96px; width: min(250px, 62vw); max-height: 42vh; }
+    .ficha.aberta ~ .painel-legenda { right: auto; }
   }
   @media (prefers-reduced-motion: reduce) { .painel { transition: none; } }
 </style>
@@ -235,7 +278,7 @@
       <input class="busca" id="busca-item" type="search" placeholder="Buscar: soja, café, bovinos…" autocomplete="off" aria-label="Buscar cultura">
       <div class="selecionados" id="selecionados"></div>
       <div class="lista-itens" id="lista-itens" role="group" aria-label="Culturas"></div>
-      <label class="alternar" id="alt-disputa"><input type="checkbox" id="disputa"> Disputa: quem ocupa mais área (até 3 culturas)</label>
+      <label class="alternar" id="alt-disputa"><input type="checkbox" id="disputa"> Lavoura principal: a cultura que ocupa mais área em cada município</label>
     </div>
     <div class="secao" id="sec-metrica">
       <div class="titulo">Medida</div>
@@ -255,8 +298,7 @@
       <label class="alternar" id="alt-glebas"><input type="checkbox" id="sobre-glebas"> Glebas financiadas por cima</label>
     </div>
     <div class="secao">
-      <div class="titulo" id="tit-legenda">Legenda</div>
-      <div class="legenda" id="legenda"></div>
+      <div class="titulo">Sobre os dados</div>
       <div class="nota" id="nota"></div>
     </div>
   </div>
@@ -284,6 +326,10 @@
   <button class="so-celular" id="abre-painel">Filtros</button>
   <button id="tema" aria-label="Alternar tema claro e escuro">◐</button>
 </div>
+<aside class="painel-legenda" id="painel-legenda" aria-label="Legenda">
+  <button class="cab" id="dobra-legenda" aria-expanded="true" aria-controls="corpo-legenda"><span id="tit-legenda">Legenda</span><span class="seta" aria-hidden="true">▾</span></button>
+  <div class="corpo" id="corpo-legenda"><div class="legenda" id="legenda"></div></div>
+</aside>
 <div class="tip" id="tip"></div>
 <div class="rotulo-celular" id="rotulo-celular" aria-hidden="true"></div>
 <div id="carregando">carregando dados…</div>
@@ -501,8 +547,19 @@
   const est = {
     modo: 'pam', itens: [SOJA], metrica: '', ano: 2024, uf: '', bioma: '', mun: -1,
     disputa: false, evento: -1, origem: 'natural', mascara: true, glebas: false,
+    desligadas: new Set(),   // lavoura principal: categorias tiradas da disputa (0 = outras)
   };
-  const DISPUTA_PADRAO = ['soja', 'milho', 'cana-de-acucar'].map(s => ITEM_POR_SLUG[s]).filter(i => i !== undefined);
+  /* Lavoura principal: as 11 culturas que mais vencem em município × ano de 1974 a
+     2024 (94% dos casos) ganham cor fixa; as outras competem cada uma por si e,
+     quando vencem, saem em cinza como "outras lavouras". Algodão soma as duas. */
+  const PRINCIPAIS = [
+    ['Soja', ['soja']], ['Milho', ['milho']], ['Cana-de-açúcar', ['cana-de-acucar']], ['Feijão', ['feijao']],
+    ['Arroz', ['arroz']], ['Mandioca', ['mandioca']], ['Café', ['cafe']], ['Banana', ['banana']],
+    ['Cacau', ['cacau']], ['Algodão', ['algodao-arboreo', 'algodao-herbaceo']], ['Laranja', ['laranja']],
+  ].map(([nome, slugs], k) => ({ nome, k: k + 1, slug: slugs[0], itens: slugs.map(s => ITEM_POR_SLUG[s]).filter(i => i !== undefined) }));
+  const CAT_DO_ITEM = new Int8Array(ITENS.length);
+  PRINCIPAIS.forEach(c => c.itens.forEach(i => { CAT_DO_ITEM[i] = c.k; }));
+  const CHAVE_CAT = k => k ? PRINCIPAIS[k - 1].slug : 'outras';
 
   function anosDoModo() {
     switch (est.modo) {
@@ -517,7 +574,7 @@
   function metricasDoModo() {
     const it = ITENS[est.itens[0]];
     if (est.modo === 'pam') {
-      if (est.disputa) return [['area', 'Área (cultura que vence)']];
+      if (est.disputa) return [['area', 'Área da cultura que vence']];
       if (!it || !it.area) return [['dens', 'Por km² rural'], ['q', 'Quantidade']]
         .concat(it && it.g !== 'R' ? [['v', 'Valor (R$ mil)']] : []);
       const ms = [['pct', '% da área rural'], ['area', 'Área (ha)'], ['q', 'Produção'], ['v', 'Valor (R$ mil)']];
@@ -534,7 +591,8 @@
 
   /* ---------- valores por município no ano ---------- */
   const VAL = new Float32Array(NM);
-  const CAT = new Int8Array(NM);   // disputa: 0 = outras, 1..3 = vaga
+  const CAT = new Int8Array(NM);   // lavoura principal: 0 = outras, 1..11 = PRINCIPAIS
+  const VENCE = new Int16Array(NM); // o item que venceu (para nomear a "outra" no tooltip)
   const classesDosItens = () => [...new Set(est.itens.map(i => ITENS[i].mb).filter(c => c !== undefined))];
   function itensDaClasse(c) { return ITENS.filter(it => it.mb === c && it.area).map(it => it.i); }
 
@@ -631,29 +689,35 @@
     }
   }
 
-  /* Disputa: em cada município, qual das culturas escolhidas (até 3) ocupa mais
-     área, contra a soma de todas as outras lavouras. VAL guarda a fração da área
-     rural que a vencedora ocupa — com menos de 1%, o município sai apagado. */
+  /* Lavoura principal: em cada município, a cultura que ocupa mais área no ano.
+     Concorrem as categorias ligadas na legenda (cada uma somando os seus itens) e,
+     se "outras" estiver ligada, cada lavoura fora da lista por si. VAL guarda a
+     fração da área rural que a vencedora ocupa — com menos de 1%, sai apagado. */
   const LAVOURAS = ITENS.filter(it => it.area).map(it => it.i);
+  const CONTAGEM = new Int32Array(PRINCIPAIS.length + 1);
   function calculaDisputa(ano) {
-    const a = ano - A0, sel = est.itens.slice(0, 3);
-    const todas = LAVOURAS.map(serieItem);
-    const TOT = new Float32Array(NM);
-    for (let m = 0; m < NM; m++) for (const s of todas) { const v = s.area[m * NA + a]; if (v > 0) TOT[m] += v; }
-    porAMC(TOT, ano);
-    const SEL = sel.map(i => {
-      const s = serieItem(i), x = new Float32Array(NM);
-      for (let m = 0; m < NM; m++) x[m] = s.area[m * NA + a] || 0;
-      return porAMC(x, ano);
-    });
+    const a = ano - A0, x = new Float32Array(NM), vm = new Float32Array(NM);
+    CAT.fill(0); VENCE.fill(-1);
+    const concorre = (vals, k, rep) => {
+      porAMC(vals, ano);
+      for (let m = 0; m < NM; m++) if (vals[m] > vm[m]) { vm[m] = vals[m]; CAT[m] = k; VENCE[m] = rep; }
+    };
+    for (const c of PRINCIPAIS) {
+      if (est.desligadas.has(c.k) || !c.itens.length) continue;
+      x.fill(0);
+      for (const i of c.itens) { const ar = serieItem(i).area; for (let m = 0; m < NM; m++) { const v = ar[m * NA + a]; if (v > 0) x[m] += v; } }
+      concorre(x, c.k, c.itens[0]);
+    }
+    if (!est.desligadas.has(0)) for (const i of LAVOURAS) {
+      if (CAT_DO_ITEM[i]) continue;
+      const ar = serieItem(i).area;
+      for (let m = 0; m < NM; m++) { const v = ar[m * NA + a]; x[m] = v > 0 ? v : 0; }
+      concorre(x, 0, i);
+    }
+    CONTAGEM.fill(0);
     for (let m = 0; m < NM; m++) {
-      const tot = TOT[m] || 0;
-      let melhor = 0, vm = 0, soma = 0;
-      SEL.forEach((x, k) => { const v = x[m] || 0; soma += v; if (v > vm) { vm = v; melhor = k + 1; } });
-      const outras = tot - soma;
-      if (outras > vm) { melhor = 0; vm = outras; }
-      CAT[m] = melhor;
-      VAL[m] = tot > 0 ? vm / (RURAL_KM2[m] * 100) * 100 : NaN;
+      VAL[m] = vm[m] > 0 ? vm[m] / (RURAL_KM2[m] * 100) * 100 : NaN;
+      if (VAL[m] >= 1 && noRecorte(m)) CONTAGEM[CAT[m]]++;
     }
   }
 
@@ -692,6 +756,7 @@
     COR = {
       s: [0, 1, 2, 3, 4, 5, 6].map(i => v('--s' + i)), b: [0, 1, 2, 3, 4, 5, 6].map(i => v('--b' + i)),
       d: [0, 1, 2, 3, 4, 5, 6].map(i => v('--d' + i)), c: [v('--c0'), v('--c1'), v('--c2'), v('--c3')],
+      l: [v('--c0'), ...PRINCIPAIS.map(c => v('--l' + c.k))],
       fundo: v('--fundo'), semdado: v('--semdado'), mascara: v('--mascara'), divisa: v('--divisa'),
       foco: v('--foco'), ink3: v('--ink-3'), linha: v('--linha'), acento: v('--acento'),
     };
@@ -701,7 +766,7 @@
     const v = VAL[m];
     if (est.modo === 'pam' && est.disputa) {
       if (!(v >= 1)) return COR.semdado;
-      return COR.c[CAT[m]];
+      return COR.l[CAT[m]];
     }
     if (est.modo === 'cmp') {
       if (v === -Infinity) return COR.d[0];
@@ -727,7 +792,9 @@
     // o retângulo que sobra entre painel, ficha e linha do tempo
     if (celular()) return { x0: 0, y0: 50, x1: W, y1: H - 96 };
     const fichaAberta = $('ficha').classList.contains('aberta');
-    return { x0: 354, y0: 12, x1: W - (fichaAberta ? 404 : 12), y1: H - 112 };
+    // a legenda flutua à direita, ao lado da ficha quando ela está aberta
+    const leg = $('painel-legenda').classList.contains('recolhida') ? 0 : 282;
+    return { x0: 354, y0: 12, x1: W - (fichaAberta ? 404 : 12) - leg, y1: H - 112 };
   }
   function enquadra(c = BR, margem = 1.06) {
     const u = areaUtil(), w = (c[2] - c[0]) * margem, h = (c[3] - c[1]) * margem;
@@ -921,8 +988,8 @@
   function textoValor(m) {
     const v = VAL[m], it = ITENS[est.itens[0]], mt = est.metrica;
     if (est.modo === 'pam' && est.disputa) {
-      if (!(v >= 1)) return 'menos de 1% da área rural com lavoura';
-      const nome = CAT[m] ? ITENS[est.itens[CAT[m] - 1]].nome : 'outras lavouras';
+      if (!(v >= 1)) return 'nenhuma cultura ligada passa de 1% da área rural';
+      const nome = CAT[m] ? PRINCIPAIS[CAT[m] - 1].nome : `${ITENS[VENCE[m]].nome} (outras lavouras)`;
       return `${nome} vence · ${fmt(v, 1)}% da área rural`;
     }
     if (est.modo === 'cmp') {
@@ -987,17 +1054,16 @@
   function itemValidoNoModo(it) {
     if (est.modo === 'sat' || est.modo === 'cmp' || est.modo === 'exp') return it.mb !== undefined && (est.modo !== 'cmp' || it.area);
     if (est.modo === 'gleba') return it.sicor !== undefined;
-    if (est.modo === 'pam' && est.disputa) return it.area;
     return true;
   }
   /* Somar itens só faz sentido com a mesma unidade: soja + milho em hectares sim,
      soja + bovinos não. Escolher um item de outra unidade troca a seleção. */
   function alternaItem(i, on) {
-    const lim = est.disputa ? 3 : 8;
+    const lim = 8;
     if (on) {
       const u = ITENS[i];
       const compat = est.itens.every(j => ITENS[j].area === u.area && ITENS[j].un === u.un);
-      if (!compat && !est.disputa) est.itens = [];
+      if (!compat) est.itens = [];
       est.itens = [...est.itens.filter(j => j !== i), i].slice(-lim);
     } else {
       est.itens = est.itens.filter(j => j !== i);
@@ -1010,8 +1076,7 @@
     el.innerHTML = '';
     est.itens.forEach((i, k) => {
       const b = document.createElement('button');
-      const chip = est.disputa ? `<span class="chip" style="background:${COR.c[k + 1]}"></span>` : '';
-      b.innerHTML = chip + ITENS[i].nome;
+      b.innerHTML = ITENS[i].nome;
       b.title = 'Tirar ' + ITENS[i].nome;
       b.onclick = () => alternaItem(i, false);
       el.append(b);
@@ -1023,14 +1088,7 @@
     const primeiro = $('lista-itens').querySelector('label input');
     if (primeiro && !primeiro.checked) primeiro.click();
   });
-  $('disputa').onchange = e => {
-    est.disputa = e.target.checked;
-    if (est.disputa) {
-      const lav = est.itens.filter(i => ITENS[i].area);
-      est.itens = (lav.length >= 2 ? lav : DISPUTA_PADRAO).slice(0, 3);
-    }
-    aoMudarSelecao();
-  };
+  $('disputa').onchange = e => { est.disputa = e.target.checked; aoMudarSelecao(); };
 
   $('uf').innerHTML = '<option value="">Brasil inteiro</option>' + UFS.map(u => `<option>${u}</option>`).join('');
   $('bioma').innerHTML = '<option value="">Todos os biomas</option>' + BIOMAS.map(b => `<option>${b}</option>`).join('');
@@ -1068,13 +1126,36 @@
   $('abre-painel').onclick = () => $('painel').classList.toggle('aberta');
 
   /* ---------- legenda e nota ---------- */
+  $('legenda').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.todas !== undefined) {
+      est.desligadas = b.dataset.todas === '1' ? new Set() : new Set([0, ...PRINCIPAIS.map(c => c.k)]);
+    } else if (b.dataset.cat !== undefined) {
+      const k = +b.dataset.cat;
+      est.desligadas.has(k) ? est.desligadas.delete(k) : est.desligadas.add(k);
+    } else return;
+    atualiza(false);
+  });
+  const dobraLegenda = recolhe => {
+    $('painel-legenda').classList.toggle('recolhida', recolhe);
+    $('dobra-legenda').setAttribute('aria-expanded', !recolhe);
+  };
+  $('dobra-legenda').onclick = () => dobraLegenda(!$('painel-legenda').classList.contains('recolhida'));
+  if (matchMedia('(max-width: 760px)').matches) dobraLegenda(true);
   function montaLegenda() {
     const el = $('legenda'), it = ITENS[est.itens[0]];
     let html = '';
     const rotQ = v => est.metrica === 'pct' ? fmt(v, v < 1 ? 2 : (v < 10 ? 1 : 0)) + '%' : curto(v);
     if (est.modo === 'pam' && est.disputa) {
-      html += '<div class="cat">' + est.itens.map((i, k) => `<div><i style="background:${COR.c[k + 1]}"></i>${ITENS[i].nome}</div>`).join('')
-        + `<div><i style="background:${COR.c[0]}"></i>Outras lavouras somadas</div></div>`;
+      const cats = [...PRINCIPAIS.map(c => [c.k, c.nome]), [0, 'Outras lavouras']];
+      html += `<div class="controles"><button data-todas="1">Todas</button><button data-todas="0">Nenhuma</button></div>`
+        + cats.map(([k, nome]) => {
+          const off = est.desligadas.has(k);
+          return `<button class="item${off ? ' desligada' : ''}" data-cat="${k}" aria-pressed="${!off}">`
+            + `<i style="background:${COR.l[k]}"></i><span class="rot">${nome}</span>`
+            + `<span class="n">${off ? '—' : CONTAGEM[k].toLocaleString('pt-BR')}</span></button>`;
+        }).join('');
     } else if (est.modo === 'cmp') {
       html += `<div class="faixa">${COR.d.map(c => `<span style="background:${c}"></span>`).join('')}</div>
         <div class="rotulos"><span>satélite vê ½</span><span>igual</span><span>vê 2×</span></div>`;
@@ -1096,13 +1177,13 @@
   function tituloLegenda() {
     const it = ITENS[est.itens[0]], nomes = est.itens.map(i => ITENS[i].nome).join(' + ');
     const mt = [...$('metrica').options].find(o => o.value === est.metrica)?.text || '';
-    if (est.modo === 'pam' && est.disputa) return 'Quem ocupa mais área';
+    if (est.modo === 'pam' && est.disputa) return 'Lavoura principal · municípios';
     if (est.modo === 'perda') return 'Perdas · ' + (est.evento >= 0 ? M.eventos[est.evento] : 'todos os eventos');
     if (est.modo === 'gs') return 'Garantia-Safra · ' + mt;
     return nomes + ' · ' + mt;
   }
   const NOTAS = {
-    pam: () => `Área plantada e produção <b>declaradas</b> ao IBGE (Produção Agrícola e da Pecuária Municipal). A área rural de cada município exclui setor censitário urbano de 2010, mancha urbana, terra indígena e UC de proteção integral. De 1974 a 1987 a área é a <b>colhida</b>: a PAM só pergunta a plantada desde 1988. Município que ainda não existia recebe a parte do território de origem: o total do grupo comparável (AMC) repartido pela área rural. Valor só a partir de 1994 (antes, em moeda da época); produção das lavouras permanentes só a partir de 2001, quando o IBGE trocou a unidade das frutas.`,
+    pam: () => (est.disputa ? `<b>Lavoura principal:</b> cada município na cor da cultura que ocupa mais área no ano. As 11 culturas que mais vencem de 1974 a 2024 têm cor própria; as demais saem em cinza, e o tooltip diz qual é. Clique numa cultura da legenda para tirá-la da disputa e ver a que vem por baixo. A contagem é de municípios no recorte. ` : '') + `Área plantada e produção <b>declaradas</b> ao IBGE (Produção Agrícola e da Pecuária Municipal). A área rural de cada município exclui setor censitário urbano de 2010, mancha urbana, terra indígena e UC de proteção integral. De 1974 a 1987 a área é a <b>colhida</b>: a PAM só pergunta a plantada desde 1988. Município que ainda não existia recebe a parte do território de origem: o total do grupo comparável (AMC) repartido pela área rural. Valor só a partir de 1994 (antes, em moeda da época); produção das lavouras permanentes só a partir de 2001, quando o IBGE trocou a unidade das frutas.`,
     sat: () => `Área vista pelo <b>satélite</b> (MapBiomas, coleção 11, pixel de 30 m). O satélite separa soja, cana, arroz, algodão, café, citros e dendê; milho, feijão, trigo e o resto entram juntos em "outras temporárias" ou "outras perenes".` + aviso(),
     cmp: () => `Razão entre a área vista pelo satélite e a declarada ao IBGE, para a mesma classe. Laranja, limão e tangerina são comparados juntos com "citros"; culturas sem classe própria, contra a soma das outras. Municípios com menos de 50 ha declarados ficam de fora. Divergência grande costuma ser safrinha (o milho de 2ª safra ocupa a terra da soja), área declarada desatualizada ou classe que o satélite confunde.` + aviso(),
     exp: () => `Área que <b>virou</b> a classe da cultura na década (1990→2000, 2000→2010, 2010→2020), pela transição do MapBiomas. Use a origem para separar o que veio de floresta, de cerrado ou de pastagem.` + aviso(),
@@ -1201,6 +1282,7 @@
     $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: 'safra ' + a + '/' + String(a + 1).slice(2), perda: 'safra ' + a + '/' + String(a + 1).slice(2), gs: 'pagamento' }[est.modo];
     calcula();
     if (est.modo === 'gleba' || est.modo === 'perda' || est.glebas) CEL = celulasAtuais();
+    if (est.modo === 'pam' && est.disputa) montaLegenda();   // a contagem muda a cada ano
     desenhaFaixa(); pede(); gravaUrl();
     if (est.mun >= 0) montaFicha();
   }
@@ -1254,6 +1336,8 @@
     const comItens = !['perda', 'gs'].includes(est.modo);
     $('sec-itens').style.display = comItens ? '' : 'none';
     $('alt-disputa').style.display = est.modo === 'pam' ? '' : 'none';
+    const principal = est.modo === 'pam' && est.disputa;
+    for (const id of ['busca-item', 'selecionados', 'lista-itens']) $(id).style.display = principal ? 'none' : '';
     $('disputa').checked = est.disputa;
     $('ctl-evento').style.display = est.modo === 'perda' ? '' : 'none';
     $('ctl-origem').style.display = est.modo === 'exp' ? '' : 'none';
@@ -1313,6 +1397,7 @@
     return svg;
   }
 
+  let itemFicha = -1;   // cultura escolhida no select da série; -1 = a do mapa
   function montaFicha() {
     const m = est.mun, f = $('ficha');
     if (m < 0) return;
@@ -1344,8 +1429,16 @@
       h += `<div class="nota">${lav.length} lavouras, ${curto(tot)} ha somados — ${fmt(tot / (rural * 100) * 100, 1)}% da área rural (a soma passa de 100% onde há duas safras no ano).</div>`;
     } else h += '<div class="vazio">Nenhuma lavoura declarada.</div>';
 
-    // série: declarado × satélite da cultura escolhida
-    const it = ITENS[est.itens[0]];
+    // série: declarado × satélite. O select troca a cultura só aqui, sem mexer no mapa;
+    // sem escolha, segue a cultura do mapa (ou a que vence, em lavoura principal)
+    const comArea = LAVOURAS.map(i => {
+      const ar = serieItem(i).area; let t = 0;
+      for (let y = 0; y < NA; y++) { const v = ar[m * NA + y]; if (v > 0) t += v; }
+      return [i, t];
+    }).filter(([, t]) => t > 0).sort((x, y) => y[1] - x[1]).map(([i]) => i);
+    const doMapa = est.modo === 'pam' && est.disputa && VENCE[m] >= 0 ? VENCE[m] : est.itens[0];
+    const iSerie = [itemFicha, doMapa].find(i => comArea.includes(i)) ?? comArea[0];
+    const it = ITENS[iSerie];
     if (it && it.area) {
       const s = serieItem(it.i), pts = [], ptsSat = [];
       for (let y = A0; y < M.anos.prod[1]; y++) pts.push([y, s.area[m * NA + y - A0]]);
@@ -1355,7 +1448,10 @@
         for (let y = A0MB; y <= M.anos.mb[1]; y++) ptsSat.push([y, sc[m * NAMB + y - A0MB]]);
         series.push({ nome: M.mb[it.mb] + ' visto do satélite', cor: COR.c[1], pts: ptsSat, tracejado: true });
       }
-      h += `<h3>${it.nome}: área, ${A0}–${M.anos.mb[1]}</h3>` + serieSvg(series, A0, M.anos.mb[1], 'ha');
+      h += `<h3>Série histórica: área, ${A0}–${M.anos.mb[1]}</h3>
+        <select class="sel-ficha" id="serie-item" aria-label="Cultura da série histórica">${comArea.map(i =>
+          `<option value="${i}" ${i === iSerie ? 'selected' : ''}>${ITENS[i].nome}</option>`).join('')}</select>`
+        + serieSvg(series, A0, M.anos.mb[1], 'ha');
     }
 
     // composição pelo satélite
@@ -1449,6 +1545,8 @@
     h += `<div class="fontes">Fontes: IBGE (PAM, PPM, malha 2022, setores 2010) · MapBiomas coleção 11 · Banco Central (SICOR, Proagro) · CGU (Garantia-Safra) · Serviço Florestal Brasileiro (SICAR) · FUNAI · MMA (CNUC).</div>`;
     f.innerHTML = h;
     f.querySelector('.fechar').onclick = () => seleciona(-1);
+    const sel = f.querySelector('#serie-item');
+    if (sel) sel.onchange = e => { itemFicha = +e.target.value; montaFicha(); };
   }
 
   /* ---------- URL ---------- */
@@ -1459,6 +1557,7 @@
     p.set('a', est.ano);
     if (est.metrica !== metricasDoModo()[0][0]) p.set('m', est.metrica);
     if (est.disputa) p.set('d', '1');
+    if (est.disputa && est.desligadas.size) p.set('dx', [...est.desligadas].map(CHAVE_CAT).join(','));
     if (est.uf) p.set('uf', est.uf);
     if (est.bioma) p.set('bio', est.bioma);
     if (est.mun >= 0) p.set('mun', M.mun.id[est.mun]);
@@ -1472,6 +1571,10 @@
     const cs = (p.get('c') || '').split(',').map(s => ITEM_POR_SLUG[s]).filter(i => i !== undefined);
     if (cs.length) est.itens = cs;
     if (p.get('d') === '1') est.disputa = true;
+    for (const ch of (p.get('dx') || '').split(',')) {
+      const k = ch === 'outras' ? 0 : PRINCIPAIS.find(c => c.slug === ch)?.k;
+      if (k !== undefined) est.desligadas.add(k);
+    }
     if (p.get('a')) est.ano = +p.get('a');
     if (p.get('m')) est.metrica = p.get('m');
     if (UFS.includes(p.get('uf'))) est.uf = p.get('uf');

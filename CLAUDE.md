@@ -42,7 +42,7 @@ python3 baixa_malha.py && python3 baixa_producao.py && python3 baixa_mapbiomas.p
 python3 monta_pagina.py      # parquet -> blocos binários -> ../index.html (+ testes/fixture.json)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
-bun test                                   # 24 testes (8 × 3 motores), ~30 s; BRAGRO_MOTORES=chromium para um só
+bun test                                   # 30 testes (10 × 3 motores), ~40 s; BRAGRO_MOTORES=chromium para um só
 ```
 
 Dependências Python: `polars`, `numpy`, `shapely`. Cada `baixa_*.py` imprime a própria
@@ -104,6 +104,16 @@ O orçamento da spec é ≤ 25 MB, e **a página passa um pouco: 25,7 MB** (2026
   exige o raster de 30 m do MapBiomas, que ficou fora da v1.
 - **Área urbana:** a máscara usa o setor censitário urbano de 2010, que segue o perímetro
   legal da cidade. Por isso dá 105 mil km², mais que a mancha urbanizada.
+
+## Lavoura principal
+
+- 11 culturas têm cor fixa (`--l1`…`--l11`, `PRINCIPAIS` no template): as que mais vencem em
+  município × ano de 1974 a 2024, 94% dos casos. As outras competem uma a uma e, quando
+  vencem, saem em cinza.
+- A paleta saiu de uma busca gulosa em OKLCH. Todos os pares passam o piso de visão normal
+  (ΔE ≥ 18), mas não o de daltonismo: com 11 cores nenhuma paleta passa. A legenda
+  clicável e o tooltip com o nome compensam.
+- Estado na URL: `d=1` liga o modo e `dx=soja,milho,outras` lista as culturas desligadas.
 
 ## Testes
 

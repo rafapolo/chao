@@ -80,7 +80,45 @@ for (const motor of ESCOLHIDOS) {
       }
       await x.p.click('[data-modo="pam"]');
       await x.p.check("#disputa");
-      expect(await x.p.locator("#legenda .cat div").count()).toBe(4);   // 3 culturas + outras
+      expect(await x.p.locator("#legenda .item").count()).toBe(12);   // 11 culturas + outras
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("lavoura principal: legenda liga e desliga culturas, conta municípios e vai para a URL", async () => {
+      const x = await abre(nav, "?c=soja&a=2020&d=1");
+      await quadro(x.p);
+      const conta = async (k: number) => Number((await x.p.locator(`#legenda [data-cat="${k}"] .n`).textContent())!.replace(/\D/g, ""));
+      const soja = await conta(1), milho = await conta(2);
+      expect(soja).toBeGreaterThan(500);
+      const antes = await digital(x.p);
+      await x.p.click('#legenda [data-cat="1"]');
+      await quadro(x.p);
+      expect(await x.p.locator('#legenda [data-cat="1"]').getAttribute("aria-pressed")).toBe("false");
+      expect(await conta(2)).toBeGreaterThan(milho);           // sem soja, o milho herda municípios
+      expect(await digital(x.p)).not.toBe(antes);
+      expect(x.p.url()).toContain("dx=soja");
+      await x.p.click('#legenda [data-todas="0"]');
+      await quadro(x.p);
+      expect(await x.p.locator("#legenda .item.desligada").count()).toBe(12);
+      await x.p.click('#legenda [data-todas="1"]');
+      await quadro(x.p);
+      expect(await x.p.locator("#legenda .item.desligada").count()).toBe(0);
+      expect(await conta(1)).toBe(soja);
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("ficha: o select da série histórica troca a cultura sem mexer no mapa", async () => {
+      const x = await abre(nav, "?c=soja&a=2020&mun=5107925");
+      await quadro(x.p);
+      const sel = x.p.locator("#serie-item");
+      expect(await sel.locator("option:checked").textContent()).toBe("Soja");
+      const mapa = await digital(x.p);
+      const milho = await sel.locator("option", { hasText: /^Milho$/ }).getAttribute("value");
+      await sel.selectOption(milho!);
+      expect(await x.p.locator("#serie-item option:checked").textContent()).toBe("Milho");
+      expect(await digital(x.p)).toBe(mapa);
       expect(x.erros).toEqual([]);
       await fecha(x);
     }, LENTO);

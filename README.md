@@ -10,8 +10,9 @@ no arquivo.
   rebanhos, leite, ovos e aquicultura, como o IBGE registra (PAM e PPM, 1974–2025). A
   porcentagem é sobre a **área rural** do município: o que sobra depois de tirar a área
   urbana, as terras indígenas e as unidades de conservação de proteção integral.
-- **Disputa:** escolha até três culturas e veja qual ocupa mais área em cada município
-  (soja × milho × cana, por exemplo), contra todas as outras lavouras somadas.
+- **Lavoura principal:** cada município na cor da cultura que ocupa mais área. As 11
+  culturas que mais vencem têm cor própria. Na legenda, à direita, cada cultura liga e
+  desliga (ou todas de uma vez): tire a soja e veja o que vem por baixo.
 - **Satélite:** a mesma pergunta respondida pelo MapBiomas (coleção 11, 1985–2025). Ele separa
   soja, cana, arroz, algodão, café, citros e dendê.
 - **Satélite × declarado:** onde o que se vê do alto diverge do que foi declarado.
@@ -24,7 +25,7 @@ no arquivo.
 - **Garantia-Safra:** agricultores familiares do semiárido pagos a cada ano.
 
 A ficha de cada município junta:
-- a série histórica da cultura, declarada e vista do satélite;
+- a série histórica de qualquer lavoura do município (escolhida num select), declarada e vista do satélite;
 - o que o satélite vê no município;
 - de onde veio a lavoura nova;
 - os rebanhos;
