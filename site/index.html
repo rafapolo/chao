@@ -432,6 +432,7 @@
 <script id="b-terra" type="text/plain" data-etapa="sob-demanda" data-src="dados/terra.cf637784043e.bin"></script>
 <script id="b-fogo" type="text/plain" data-etapa="sob-demanda" data-src="dados/fogo.a1228cf72b72.bin"></script>
 <script id="b-clima" type="text/plain" data-etapa="sob-demanda" data-src="dados/clima.fd9f419205c4.bin"></script>
+<script id="b-calend" type="text/plain" data-etapa="sob-demanda" data-src="dados/calend.3f9f62bad159.bin"></script>
 <script id="b-mercado" type="text/plain" data-etapa="sob-demanda" data-src="dados/mercado.eb9a42af0b78.bin"></script>
 <script id="b-emis" type="text/plain" data-etapa="sob-demanda" data-src="dados/emis.0bc9b97fda67.bin"></script>
 <script id="b-gente" type="text/plain" data-etapa="sob-demanda" data-src="dados/gente.8cf7a5c876b4.bin"></script>
@@ -713,6 +714,7 @@
     { id: 'pam', nome: 'Declarado', sub: 'IBGE · 1974–2025', sec: 'Produção' },
     { id: 'sat', nome: 'Satélite', sub: 'MapBiomas · 1985–2025', sec: 'Produção' },
     { id: 'cmp', nome: 'Satélite × declarado', sub: '1985–2024', sec: 'Produção' },
+    { id: 'cal', nome: 'Calendário', sub: 'plantio e colheita · SICOR', sec: 'Produção', blocos: ['calend'] },
     { id: 'exp', nome: 'Expansão', sub: 'de onde veio · por década', sec: 'Terra' },
     { id: 'desm', nome: 'Desmatamento', sub: 'PRODES, DETER, IBAMA', sec: 'Terra', blocos: ['terra'] },
     { id: 'emis', nome: 'Emissões', sub: 'SEEG · 1990–2024', sec: 'Terra', blocos: ['emis'] },
@@ -756,6 +758,7 @@
         return b ? b.safras : [2012, 2025];
       }
       case 'econ': return SOB.econ?.meta.anos || [1999, 2021];
+      case 'cal': return [2012, 2025];
       case 'expo': case 'emis': case 'trab': case 'social':
         return SOB[SERIES[est.modo].bloco]?.meta.series[est.metrica]?.anos || [2000, 2024];
       case 'desm': {
@@ -791,6 +794,8 @@
     if (est.modo === 'gleba') return [['area', 'Área das glebas (ha)'], ['n', 'Número de glebas']];
     if (est.modo === 'perda') return [['area', 'Área com perda (ha)'], ['n', 'Número de perdas']];
     if (SERIES[est.modo]) return SERIES[est.modo].medidas.map(([k, n]) => [k, n]);
+    if (est.modo === 'cal') return [['mes', 'Mês típico do plantio'], ['ciclo', 'Ciclo: do plantio ao fim da colheita (dias)'],
+      ['safrinha', '% plantado de janeiro a abril (2ª safra)']];
     if (est.modo === 'cred') return CRED_MEDIDAS;
     if (est.modo === 'desm') return [['km2', 'km² desmatados no ano (PRODES)'], ['pct', '% do município desmatado no ano'],
       ['grade', 'Desmatamento na grade de 0,1° (km²)'], ['acum', 'Desmatado acumulado (km²)'], ['deter', 'Alertas DETER: desmatamento (km²)'],
@@ -951,6 +956,7 @@
     if (est.modo === 'cred') return calculaCredito(ano);
     if (est.modo === 'desm' || est.modo === 'fogo') return calculaTerra(ano);
     if (est.modo === 'clima') return calculaClima(ano);
+    if (est.modo === 'cal') return calculaCalendario();
     if (SERIES[est.modo]) {
       const B = SOB[SERIES[est.modo].bloco], k = est.metrica;
       if (!B || !B.meta.series[k]) return;
@@ -1048,6 +1054,35 @@
         : mt === 'secos' ? A.ca_secos[r] : mt === 'temp' ? A.ca_temp[r] / 10 : A.ca_tmax[r] / 10;
     }
   }
+
+  /* Calendário: das operações de custeio com data, por município e cultura (todas
+     as safras juntas). O mês típico é a média circular dos meses de plantio, para
+     que dezembro e janeiro fiquem vizinhos; VAL guarda 1–12 (fracionário). */
+  function calculaCalendario() {
+    const B = SOB.calend?.A;
+    CRV.fill(0);
+    if (!B) return;
+    const prods = produtosSicor(), mt = est.metrica;
+    const sx = new Float64Array(NM), sy = new Float64Array(NM), cic = new Float64Array(NM), saf = new Float64Array(NM);
+    for (let r = 0; r < B.p.length; r++) {
+      if (B.f[r] !== 0 || !prods.has(B.p[r])) continue;
+      const m = B.m[r], n = B.n[r], ang = (B.mes[r] - 1) / 12 * 2 * Math.PI;
+      sx[m] += n * Math.cos(ang); sy[m] += n * Math.sin(ang); CRV[m] += n;
+      cic[m] += n * B.ciclo[r];
+      if (B.mes[r] <= 4) saf[m] += n;
+    }
+    for (let m = 0; m < NM; m++) {
+      if (!CRV[m]) continue;
+      if (mt === 'mes') { let a = Math.atan2(sy[m], sx[m]); if (a < 0) a += 2 * Math.PI; VAL[m] = a / (2 * Math.PI) * 12 + 1; if (VAL[m] >= 12.5) VAL[m] -= 12; }
+      else if (mt === 'ciclo') VAL[m] = cic[m] / CRV[m];
+      else VAL[m] = saf[m] / CRV[m] * 100 || 1e-6;
+    }
+  }
+  /* Escala cíclica de 12 meses: matiz girando em OKLCH, mesma luminosidade e croma,
+     para que nenhum mês pese mais que outro; dezembro encosta em janeiro. */
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  let CICLICA = [];
+  const corMes = v => CICLICA[(Math.round(v) - 1 + 12) % 12];
 
   function calculaCredito(ano) {
     const B = SOB.credrs?.A, mt = est.metrica;
@@ -1179,6 +1214,7 @@
       foco: v('--foco'), ink3: v('--ink-3'), linha: v('--linha'), acento: v('--acento'),
     };
     lerTons();
+    CICLICA = MESES.map((_, i) => oklchHex(0.7, 0.12, (i / 12) * 2 * Math.PI + 0.6));
   }
   /* Tons da família: a lavoura maior fica com a cor da família, e as outras se
      alternam mais claras e mais escuras em OKLCH (mesmo matiz), cortando o croma até
@@ -1225,6 +1261,7 @@
       return COR.i[VENCE[m]] || COR.f[CAT[m]];
     }
     if (DIVERGENTE()) return Number.isFinite(v) ? COR.d[classe(v)] : COR.semdado;
+    if (est.modo === 'cal' && est.metrica === 'mes') return v > 0 ? corMes(v) : COR.semdado;
     if (est.modo === 'cmp') {
       if (v === -Infinity) return COR.d[0];
       if (!Number.isFinite(v)) return COR.semdado;
@@ -1496,6 +1533,13 @@
       if (!Number.isFinite(v)) return 'menos de 50 ha declarados';
       return `satélite vê ${fmt(Math.pow(2, v), 2)}× o declarado`;
     }
+    if (est.modo === 'cal') {
+      if (!(v > 0)) return 'sem custeio com data para a cultura';
+      const n = `${fmt(CRV[m])} operações`;
+      if (mt === 'mes') return `planta em ${MESES[(Math.round(v) - 1 + 12) % 12]} · ${n}`;
+      if (mt === 'ciclo') return `${fmt(v)} dias · ${n}`;
+      return `${fmt(v, 0)}% plantado de jan a abr · ${n}`;
+    }
     if (est.modo === 'clima') {
       if (emPontos()) return 'estações do INMET: os pontos no mapa';
       if (!Number.isFinite(v)) return 'sem registro';
@@ -1576,6 +1620,7 @@
     desm: '<path d="M9 2.5l4 6H5zM9 6.5l5 7H4zM9 13.5V16.5"/><path d="M13.5 15.5l3-3M15 11l1.8 1.8"/>',
     clima: '<path d="M5.5 11.5a3 3 0 0 1 .3-6 4 4 0 0 1 7.6.9 2.6 2.6 0 0 1-.2 5.1z"/><path d="M7 14.2l-.6 1.6M10 14.2l-.6 1.6M13 14.2l-.6 1.6"/><circle cx="14" cy="3.6" r="1.6"/>',
     fogo: '<path d="M9 16.5c-3 0-5-2-5-4.8 0-3 2.2-4.6 3-7.7 1.6 1.2 2.4 2.8 2.3 4.6 1-.6 1.7-1.6 1.9-2.8 1.6 1.4 2.8 3.4 2.8 5.9 0 2.8-2 4.8-5 4.8z"/>',
+    cal: '<rect x="2.5" y="3.5" width="13" height="12" rx="1.5"/><path d="M2.5 7h13M6 2v3M12 2v3M5.5 10h2M10.5 10h2M5.5 12.8h2"/>',
     expo: '<path d="M2 12.5h14l-2 3.5H4zM4.5 12.5V8h9v4.5M7 8V5h4v3M9 2.5V5"/>',
     emis: '<path d="M4.5 13a3 3 0 0 1 .4-6 4.3 4.3 0 0 1 8.2 1A2.6 2.6 0 0 1 13 13z"/><path d="M7 10.5h1.6M10 9.7v1.6"/>',
     trab: '<path d="M3 15.5V9l6-4 6 4v6.5zM7 15.5v-4h4v4"/>',
@@ -1633,6 +1678,7 @@
     }
   }
   function itemValidoNoModo(it) {
+    if (est.modo === 'cal') return it.sicor !== undefined;
     if (est.modo === 'sat' || est.modo === 'cmp' || est.modo === 'exp') return it.mb !== undefined && (est.modo !== 'cmp' || it.area);
     if (est.modo === 'gleba') return it.sicor !== undefined;
     return true;
@@ -1791,6 +1837,9 @@
           }).join('') + '</div>';
           return h + '</div>';
         }).join('') + '</div>';
+    } else if (est.modo === 'cal' && est.metrica === 'mes') {
+      html += `<div class="faixa">${CICLICA.map(c => `<span style="background:${c}"></span>`).join('')}</div>
+        <div class="rotulos">${['jan', 'abr', 'jul', 'out', 'dez'].map(t => `<span>${t}</span>`).join('')}</div>`;
     } else if (DIVERGENTE()) {
       html += `<div class="faixa">${COR.d.map(c => `<span style="background:${c}"></span>`).join('')}</div>
         <div class="rotulos">${est.modo === 'clima' ? '<span>mais seco</span><span>normal</span><span>mais chuvoso</span>'
@@ -1834,6 +1883,7 @@
     if (est.modo === 'fogo') return 'Fogo · ' + mt;
     if (est.modo === 'clima') return 'Clima · ' + mt;
     if (SERIES[est.modo]) return SERIES[est.modo].titulo + ' · ' + mt;
+    if (est.modo === 'cal') return 'Calendário · ' + nomes + ' · ' + mt;
     return nomes + ' · ' + mt;
   }
   const NOTAS = {
@@ -1845,6 +1895,7 @@
     perda: () => `Área com <b>perda comprovada</b> no Proagro, o seguro do crédito rural, por safra e evento, na grade de 0,05°. A seca responde por 59% da área com perda de 2012 a 2025. Células com menos de ${M.min_celula} perdas não aparecem.`,
     cred: () => `Crédito rural contratado no <b>SICOR</b> (Banco Central), por safra. <b>Só o crédito com município</b>: o SICOR põe o município apenas nas operações de recurso controlado ou equalizado (poupança rural equalizada, BNDES/Finame, fundos constitucionais, LCA equalizada, Funcafé, Pronaf, Pronamp). A LCA livre e os recursos livres não têm município: na safra 2023/24 foram R$ 136 bi com município de R$ 422 bi no país (com uma UF no recorte, a faixa mostra o total dela). Combinação de município, safra, finalidade, atividade e programa com menos de ${M.min_celula} operações não aparece (8% do valor), e o que vem de tomador só onde há ${M.min_celula} ou mais. <b>ESTBAN</b>: saldo de financiamentos rurais nas agências, em dezembro; no espelho faltam os anos ímpares desde 2003, e a queda de 2020 não aparece no SICOR. <b>BNDES</b>: desembolso ao setor agropecuário.`,
     desm: () => `<b>PRODES</b> (INPE): área de vegetação nativa suprimida por ano (de agosto a julho), em todos os biomas; de 2017 em diante pelo incremento municipal, antes pela diferença do acumulado. A grade soma os polígonos em células de 0,1° (~120 km²). <b>DETER</b>: alertas diários (Amazônia desde 2016, Cerrado desde 2018, Pantanal e não-floresta desde 2023), separados em desmatamento e degradação; cicatriz de queimada fica no modo Fogo. <b>IBAMA</b>: embargos e autos de infração de flora não cancelados, pelo ano da lavratura; a área embargada vem sem unidade declarada na fonte (tratada como ha). Nome de embargado ou autuado não entra.`,
+    cal: () => `Quando se planta e se colhe: as datas de início do plantio e de fim da colheita que o produtor declara no <b>custeio agrícola</b> do SICOR, todas as safras de 2012 a 2025 juntas. O mês típico é a média circular dos meses de plantio (dezembro e janeiro ficam vizinhos), numa escala de cores que gira com o ano. O milho plantado de janeiro a abril é a <b>2ª safra</b> (safrinha), depois da soja: é o que faz a área declarada passar da área vista pelo satélite. Só o crédito com município, e só o município com ${M.min_celula} ou mais operações datadas da cultura.`,
     expo: () => `<b>Trase</b>: a exportação de soja (2004–2020, em equivalente de grão) e de carne bovina (2015–2017) ligada ao <b>município onde foi produzida</b>, com a exposição da soja ao desmatamento (área desmatada atribuída à soja exportada). <b>Comex Stat</b>: exportação de produtos do agro (capítulos 01–24 do SH, mais couro, celulose e algodão) e importação de fertilizantes e defensivos, pelo <b>domicílio fiscal da empresa</b>: a soja de Sorriso pode sair por Rondonópolis ou por São Paulo. Compare as duas.`,
     emis: () => `Emissões de gases de efeito estufa por município, em tCO₂e (GWP-AR5), estimadas pelo <b>SEEG</b> (Observatório do Clima): agropecuária (fermentação entérica do gado, solos e adubo, dejetos, arroz irrigado) e mudança de uso da terra (desmatamento e queima de vegetação), com a remoção por vegetação secundária e áreas protegidas.`,
     trab: () => `<b>RAIS</b>: empregos formais da agropecuária (subsetor IBGE 25) em 31 de dezembro; o emprego informal, a maior parte do trabalho no campo, não aparece. <b>CAGED</b>: admissões menos desligamentos na seção A da CNAE, de 2020 em diante (vermelho: fechou vagas). <b>CNEFE</b>: endereços de estabelecimentos agropecuários no Censo 2022. <b>CAFIR</b>: imóveis rurais ativos no cadastro da Receita, na data mais recente (a área do cadastro fica de fora: não fecha em nenhuma unidade).`,
@@ -1880,7 +1931,7 @@
       }
       else {
         calcula(a);
-        const absoluto = ['pct', 'dens', 'rend', 'porcab', 'vpa', 'vha', 'vakm'].includes(est.metrica) || CRED_PCT.has(est.metrica)
+        const absoluto = ['pct', 'dens', 'rend', 'porcab', 'vpa', 'vha', 'vakm'].includes(est.metrica) || CRED_PCT.has(est.metrica) || est.modo === 'cal'
           || (est.modo === 'fogo' && est.metrica === 'dens')
           || est.modo === 'cmp' || est.disputa;
         for (let m = 0; m < NM; m++) {
@@ -1907,7 +1958,7 @@
     if (est.modo === 'sat') return VAL[m] * RURAL_KM2[m];
     if (est.modo === 'cmp') { let s = 0; for (const c of classesDosItens()) s += serieClasse(c)[m * NAMB + a - A0MB]; return s; }
     if (est.modo === 'exp') return VAL[m] * M.mun.km2[m];
-    if (['cred', 'econ', 'desm', 'fogo'].includes(est.modo)) return CRV[m];
+    if (['cred', 'econ', 'desm', 'fogo', 'cal'].includes(est.modo)) return CRV[m];
     if (est.modo === 'gs') return est.metrica === 'vpa' ? VAL[m] * GS_N[m] : VAL[m] * CAD.A.car_imoveis[m] / 100;
     return VAL[m];
   }
@@ -1948,6 +1999,7 @@
     if (est.modo === 'desm') return { emb: 'embargos', autos: 'autos', embha: 'ha', multas: 'R$' }[est.metrica] || 'km²';
     if (est.modo === 'fogo') return est.metrica === 'queim' ? 'km²' : 'focos';
     if (medidaSerie()) return medidaSerie()[2];
+    if (est.modo === 'cal') return 'operações de custeio com data';
     if (est.modo === 'clima') return DIVERGENTE() ? '% da média (média do recorte)' : est.metrica.startsWith('des') ? 'reconhecimentos (média)'
       : est.metrica === 'secos' ? 'dias (média do recorte)' : ['temp', 'tmax'].includes(est.metrica) ? '°C (média do recorte)' : 'mm (média do recorte)';
     if (est.modo === 'perda' || est.modo === 'gleba') return est.metrica === 'n' ? (est.modo === 'gleba' ? 'glebas' : 'perdas') : 'ha';
@@ -1969,7 +2021,7 @@
     $('ano-txt').textContent = $('chip-ano').textContent = est.modo === 'exp' ? `${a - 10}→${a}` : a;
     const safra = 'safra ' + a + '/' + String(a + 1).slice(2);
     $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
-      clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', expo: 'ano', emis: 'ano', social: 'ano',
+      clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', expo: 'ano', emis: 'ano', social: 'ano', cal: 'safras 2012–2025',
       trab: est.metrica === 'cnefe' ? 'Censo 2022' : est.metrica === 'cafir' ? 'retrato atual' : 'ano', desm: ['emb', 'embha', 'autos', 'multas', 'deter', 'degr'].includes(est.metrica) ? 'ano' : 'ago→jul (PRODES)', fogo: 'ano',
       cred: est.metrica === 'estban' ? 'dezembro' : est.metrica === 'bndes' ? 'ano' : safra }[est.modo];
     calcula();
@@ -2105,9 +2157,41 @@
   /* Crédito e economia na ficha: pedem os blocos da 3ª etapa ao abrir a ficha */
   /* Os blocos da 3ª etapa não são baixados só porque a ficha abriu: cada seção
      aparece se o bloco já veio (pelo modo, ou pelo botão no fim da ficha). */
-  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo', 'clima', 'mercado', 'emis', 'gente'];
+  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo', 'clima', 'calend', 'mercado', 'emis', 'gente'];
   const NOME_EXTRA = { credrs: 'crédito', econ: 'economia', terra: 'desmatamento e terra', fogo: 'fogo', clima: 'clima',
-    mercado: 'exportação', emis: 'emissões', gente: 'trabalho e famílias' };
+    mercado: 'exportação', emis: 'emissões', gente: 'trabalho e famílias', calend: 'calendário' };
+  /* Calendário na ficha: uma linha por cultura (as 6 com mais operações datadas),
+     12 colunas de mês; a opacidade de cada célula é a parte das operações que
+     planta (cor cheia) ou colhe (contorno) naquele mês. */
+  function fichaCalendario(m) {
+    const B = SOB.calend?.A;
+    if (!B) return '';
+    const por = new Map();
+    for (let r = 0; r < B.p.length; r++) {
+      if (B.m[r] !== m) continue;
+      const e = por.get(B.p[r]) || { pl: new Float64Array(12), co: new Float64Array(12), n: 0 };
+      (B.f[r] ? e.co : e.pl)[B.mes[r] - 1] += B.n[r];
+      if (!B.f[r]) e.n += B.n[r];
+      por.set(B.p[r], e);
+    }
+    const lista = [...por].sort((x, y) => y[1].n - x[1].n).slice(0, 6);
+    if (!lista.length) return '';
+    const L = 96, cw = (340 - L) / 12, rh = 18;
+    let svg = `<svg class="gantt" viewBox="0 0 340 ${lista.length * rh + 18}" role="img" aria-label="Meses de plantio e colheita">`;
+    MESES.forEach((mm, i) => { svg += `<text x="${L + i * cw + cw / 2}" y="10" font-size="9.5" fill="${COR.ink3}" text-anchor="middle" font-family="Mono, monospace">${mm[0].toUpperCase()}</text>`; });
+    lista.forEach(([p, e], k) => {
+      const y = 16 + k * rh, mp = Math.max(...e.pl), mc = Math.max(...e.co);
+      svg += `<text x="0" y="${y + 12}" font-size="11" fill="${COR.ink3}">${M.sicor[p].toLowerCase().split(' (')[0].slice(0, 15)}</text>`;
+      for (let i = 0; i < 12; i++) {
+        const x = L + i * cw + 1;
+        svg += `<rect x="${x}" y="${y + 2}" width="${cw - 2}" height="${rh - 4}" rx="2" fill="${COR.semdado}"/>`;
+        if (e.pl[i]) svg += `<rect x="${x}" y="${y + 2}" width="${cw - 2}" height="${rh - 4}" rx="2" fill="${COR.c[3]}" opacity="${(0.15 + 0.85 * e.pl[i] / mp).toFixed(2)}"/>`;
+        if (mc && e.co[i] / mc > 0.15) svg += `<rect x="${x + 1}" y="${y + 3}" width="${cw - 4}" height="${rh - 6}" rx="2" fill="none" stroke="${COR.c[2]}" stroke-width="1.6" opacity="${(0.3 + 0.7 * e.co[i] / mc).toFixed(2)}"/>`;
+      }
+    });
+    svg += '</svg>';
+    return `<h3>Calendário de plantio e colheita</h3>${svg}<div class="legenda"><div class="cat"><div><i style="background:${COR.c[3]}"></i>plantio</div><div><i style="border:1.6px solid ${COR.c[2]}"></i>colheita</div></div></div><div class="nota">Pelas datas declaradas no custeio do SICOR, 2012–2025.</div>`;
+  }
   /* séries genéricas na ficha: o valor do ano (ou o mais recente antes dele) */
   function fichaSeries(m, a) {
     let h = '';
@@ -2444,7 +2528,7 @@
         gsPts.map(([y, v]) => barra(String(y), v, maxG, fmt(v), y === a ? COR.acento : COR.ink3)).join('') + '</div>';
     }
 
-    h += fichaDinheiro(m, a) + fichaTerra(m, a) + fichaClima(m, a) + fichaSeries(m, a);
+    h += fichaCalendario(m) + fichaDinheiro(m, a) + fichaTerra(m, a) + fichaClima(m, a) + fichaSeries(m, a);
     const faltam = EXTRAS.filter(id => !SOB[id]);
     if (faltam.length) h += `<button class="carrega-extras" id="carrega-extras">${PROMESSAS.has(faltam[0]) ? 'carregando…' : 'Mostrar também: ' + faltam.map(id => NOME_EXTRA[id]).join(', ')}</button>`;
 

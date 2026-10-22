@@ -261,6 +261,24 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("calendário: soja em Sorriso planta em outubro, escala cíclica, safrinha do milho e faixa de 12 meses na ficha", async () => {
+      const f = FIXTURE.calendario;
+      const x = await abre(nav, `?f=cal&c=soja&mun=${f.mun}`);
+      await x.p.waitForFunction(() => (window as any).__T.SOB.calend, null, { timeout: 60_000 });
+      await quadro(x.p);
+      const v = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
+      expect(Math.round(v)).toBe(f.mes_moda);
+      expect(await x.p.locator("#legenda .faixa span").count()).toBe(12);
+      for (const mt of ["ciclo", "safrinha"]) {
+        await x.p.selectOption("#metrica", mt);
+        expect(await x.p.locator("#tit-legenda").textContent(), mt).toContain("Calendário");
+      }
+      expect(await x.p.locator("#ficha").textContent()).toContain("Calendário de plantio e colheita");
+      expect(await x.p.locator("#ficha svg.gantt").count()).toBe(1);
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
     test("lavoura principal: árvore de famílias liga e desliga, conta municípios e vai para a URL", async () => {
       const x = await abre(nav, "?c=soja&a=2020&d=1");
       await quadro(x.p);

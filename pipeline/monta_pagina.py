@@ -589,6 +589,20 @@ bcl.meta = {"anos": [int(cla["ano"].min()), int(cla["ano"].max())], "anos_est": 
                          for i, n, la, lo in EST.iter_rows()],
             "desastres": GRUPOS_DES, "ano_desastres": int(pl.read_parquet(D / "desastres.parquet")["ano"].max())}
 
+# ---------- calendário agrícola (3ª etapa) ----------
+print("calendário")
+cal = idx_mun(pl.read_parquet(D / "calendario.parquet")).filter(pl.col("produto").is_in(list(SIDX)))
+tot_cal = cal.filter(pl.col("fase") == "plantio").group_by(["m", "produto"]).agg(pl.col("operacoes").sum().alias("tot"))
+# privacidade: município × produto com menos de MIN_CELULA operações datadas não entra
+cal = cal.join(tot_cal.filter(pl.col("tot") >= MIN_CELULA), on=["m", "produto"]).with_columns(
+    pl.col("produto").replace_strict(SIDX, return_dtype=pl.Int32).alias("p"),
+    (pl.col("fase") == "colheita").cast(pl.Int32).alias("f")).sort(["p", "m", "f", "mes"])
+bca = Bloco()
+bca.add("p", cal["p"], "u16"); bca.add("m", dif(cal["m"]), "u16"); bca.add("f", cal["f"], "u8")
+bca.add("mes", cal["mes"], "u8"); bca.add("n", cal["operacoes"], "u32")
+bca.add("ciclo", (cal["ciclo_dias"].fill_null(0) / cal["operacoes"]).round(0), "u16")   # média de dias do grupo
+bca.meta = {"delta": ["m"]}
+
 # ---------- séries genéricas município × ano (3ª etapa) ----------
 def series(bloco, df, cols, ano0=1970, inteiro=()):
     """Uma série por coluna: K_m, K_a (ano − ano0) e K_v (escala log, ou i32 cru nas
@@ -709,6 +723,9 @@ fix["series"] = {
     "rais": {"mun": "5107925", "ano": 2020, "v": float(tbm.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2020))["vinculos"][0])},
     "caged": {"ano": 2023, "v": float(tbm.filter(pl.col("ano") == 2023)["saldo"].sum())},
 }
+sc_ = cal.filter((pl.col("id_municipio") == "5107925") & (pl.col("produto") == "SOJA") & (pl.col("f") == 0))
+fix["calendario"] = {"mun": "5107925", "mes_moda": int(sc_.sort(["operacoes", "mes"], descending=[True, False])["mes"][0]),
+                     "n": int(sc_["operacoes"].sum())}
 fix["pib"] = {"mun": "5107925", "ano": 2021,
               "va_agro": float(pb.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2021))["va_agro"][0])}
 (RAIZ / "testes" / "fixture.json").write_text(json.dumps(fix, ensure_ascii=False, indent=1))
@@ -718,7 +735,7 @@ print("blocos")
 tpl = (S / "template.html").read_text().replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
 BLOCOS = [("MALHA", "malha", bm), ("PROD", "prod", bp), ("PRODQV", "prodqv", bq), ("MAPB", "mapb", bb),
           ("CRED", "cred", bc), ("CAD", "cad", bk), ("CONTORNOS", "contornos", bt), ("CREDRS", "credrs", br),
-          ("ECON", "econ", be), ("TERRA", "terra", bd), ("FOGO", "fogo", bf), ("CLIMA", "clima", bcl),
+          ("ECON", "econ", be), ("TERRA", "terra", bd), ("FOGO", "fogo", bf), ("CLIMA", "clima", bcl), ("CALEND", "calend", bca),
           ("MERCADO", "mercado", bx), ("EMIS", "emis", bs), ("GENTE", "gente", bg)]
 GZ = {nome: comprime(nome, bloco) for _, nome, bloco in BLOCOS}
 
