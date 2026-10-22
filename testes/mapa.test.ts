@@ -80,31 +80,50 @@ for (const motor of ESCOLHIDOS) {
       }
       await x.p.click('[data-modo="pam"]');
       await x.p.check("#disputa");
-      expect(await x.p.locator("#legenda .item").count()).toBe(12);   // 11 culturas + outras
+      expect(await x.p.locator("#legenda .fam").count()).toBe(10);   // famílias de lavoura
       expect(x.erros).toEqual([]);
       await fecha(x);
     }, LENTO);
 
-    test("lavoura principal: legenda liga e desliga culturas, conta municípios e vai para a URL", async () => {
+    test("lavoura principal: árvore de famílias liga e desliga, conta municípios e vai para a URL", async () => {
       const x = await abre(nav, "?c=soja&a=2020&d=1");
       await quadro(x.p);
-      const conta = async (k: number) => Number((await x.p.locator(`#legenda [data-cat="${k}"] .n`).textContent())!.replace(/\D/g, ""));
-      const soja = await conta(1), milho = await conta(2);
-      expect(soja).toBeGreaterThan(500);
+      expect(await x.p.locator("#legenda .fam").count()).toBe(10);
+      const conta = async (sel: string) => Number((await x.p.locator(`#legenda ${sel} .n`).textContent())!.replace(/\D/g, "") || 0);
+      // a soja é oleaginosa (família 1); os cereais (0) herdam municípios quando ela sai
+      const oleo = await conta('[data-fam="1"]'), cereais = await conta('[data-fam="0"]');
+      expect(oleo).toBeGreaterThan(500);
+      await x.p.click('#legenda [data-abre="1"]');
+      expect(await x.p.locator('#legenda .filhos [data-item]').count()).toBeGreaterThan(3);
+      const soja = await x.p.locator('#legenda .filhos [data-item]').first();
+      expect(await soja.locator(".rot").textContent()).toBe("Soja");
       const antes = await digital(x.p);
-      await x.p.click('#legenda [data-cat="1"]');
+      await soja.click();
       await quadro(x.p);
-      expect(await x.p.locator('#legenda [data-cat="1"]').getAttribute("aria-pressed")).toBe("false");
-      expect(await conta(2)).toBeGreaterThan(milho);           // sem soja, o milho herda municípios
-      expect(await digital(x.p)).not.toBe(antes);
       expect(x.p.url()).toContain("dx=soja");
+      expect(await x.p.locator('#legenda [data-fam="1"]').getAttribute("class")).toContain("parcial");
+      expect(await conta('[data-fam="0"]')).toBeGreaterThan(cereais);
+      expect(await digital(x.p)).not.toBe(antes);
       await x.p.click('#legenda [data-todas="0"]');
       await quadro(x.p);
-      expect(await x.p.locator("#legenda .item.desligada").count()).toBe(12);
+      expect(await x.p.locator('#legenda [data-fam].desligada').count()).toBe(10);
       await x.p.click('#legenda [data-todas="1"]');
       await quadro(x.p);
-      expect(await x.p.locator("#legenda .item.desligada").count()).toBe(0);
-      expect(await conta(1)).toBe(soja);
+      expect(await x.p.locator("#legenda .desligada, #legenda .parcial").count()).toBe(0);
+      expect(await conta('[data-fam="1"]')).toBe(oleo);
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("sobre os dados abre num diálogo, e cada fonte tem ícone", async () => {
+      const x = await abre(nav, "?c=soja&a=2020");
+      expect(await x.p.locator("#modos button svg").count()).toBe(7);
+      expect(await x.p.locator("#sobre").isVisible()).toBe(false);
+      await x.p.click("#abre-sobre");
+      expect(await x.p.locator("#sobre").isVisible()).toBe(true);
+      expect((await x.p.locator("#sobre #nota").textContent())!.length).toBeGreaterThan(100);
+      await x.p.click("#sobre .fechar");
+      expect(await x.p.locator("#sobre").isVisible()).toBe(false);
       expect(x.erros).toEqual([]);
       await fecha(x);
     }, LENTO);
@@ -157,7 +176,7 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
-    test("celular: painel vira gaveta e não há rolagem horizontal", async () => {
+    test("celular: filtros e legenda viram folhas, uma por vez, sem rolagem horizontal", async () => {
       const x = await abre(nav, "?c=soja&a=2024", { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: motor !== "firefox" });
       const p = x.p;
       expect(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -167,6 +186,17 @@ for (const motor of ESCOLHIDOS) {
       await p.waitForTimeout(400);
       expect(await fora()).toBe(false);
       expect(await p.locator("#rotulo-celular").textContent()).toContain("Soja");
+      // a legenda é outra folha: abrir uma fecha a outra
+      const legFora = () => p.evaluate(() => document.getElementById("painel-legenda")!.getBoundingClientRect().top >= innerHeight - 2);
+      expect(await legFora()).toBe(true);
+      await p.click("#abre-legenda");
+      await p.waitForTimeout(400);
+      expect(await legFora()).toBe(false);
+      expect(await fora()).toBe(true);
+      await p.click("#dobra-legenda");
+      await p.waitForTimeout(400);
+      expect(await legFora()).toBe(true);
+      expect(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await fecha(x);
     }, LENTO);
   });

@@ -10,9 +10,10 @@ no arquivo.
   rebanhos, leite, ovos e aquicultura, como o IBGE registra (PAM e PPM, 1974–2025). A
   porcentagem é sobre a **área rural** do município: o que sobra depois de tirar a área
   urbana, as terras indígenas e as unidades de conservação de proteção integral.
-- **Lavoura principal:** cada município na cor da cultura que ocupa mais área. As 11
-  culturas que mais vencem têm cor própria. Na legenda, à direita, cada cultura liga e
-  desliga (ou todas de uma vez): tire a soja e veja o que vem por baixo.
+- **Lavoura principal:** cada município na cor da família de lavouras que ocupa mais área:
+  cereais, oleaginosas, cana, feijões, raízes, frutas… A legenda, à direita, é uma árvore:
+  abra uma família para ver as lavouras dela e ligue ou desligue cada uma (ou todas de uma
+  vez). Tire a soja e veja o que vem por baixo.
 - **Satélite:** a mesma pergunta respondida pelo MapBiomas (coleção 11, 1985–2025). Ele separa
   soja, cana, arroz, algodão, café, citros e dendê.
 - **Satélite × declarado:** onde o que se vê do alto diverge do que foi declarado.

@@ -190,6 +190,9 @@ def rotulo(cru):
     curto = {"Café Total": "Café", "Cana-de-açúcar": "Cana-de-açúcar", "Suíno - total": "Suínos",
              "Galináceos - total": "Galináceos", "Bovino": "Bovinos", "Bubalino": "Bubalinos",
              "Equino": "Equinos", "Caprino": "Caprinos", "Ovino": "Ovinos"}.get(curto, curto)
+    # as duas borrachas viram o mesmo nome sem o parêntese (e o mesmo slug na URL)
+    curto = {"Borracha (látex coagulado)": "Borracha coagulada",
+             "Borracha (látex líquido)": "Borracha líquida"}.get(nome, curto)
     if g in "TP":
         un = "mil frutos" if "*" in nome else "t"
     elif g == "R":
@@ -225,6 +228,37 @@ for it in ITENS:
         it["mb"] = MB_CLASSES.index(MB_DE.get(nome, "Outras perenes"))
     elif it["cru"] == "R|Bovino":
         it["mb"] = MB_CLASSES.index("Pastagem")
+
+# famílias de lavoura: a legenda em árvore da "lavoura principal" e a cor do mapa.
+# Toda lavoura (T|, P|) cai em exatamente uma; a ordem é a das cores --f1…--f10.
+FAMILIAS = [
+    ("Cereais", ["Milho (em grão)", "Arroz (em casca)", "Trigo (em grão)", "Sorgo (em grão)", "Aveia (em grão)",
+                 "Cevada (em grão)", "Triticale (em grão)", "Centeio (em grão)"]),
+    ("Oleaginosas", ["Soja (em grão)", "Mamona (baga)", "Amendoim (em casca)", "Dendê (cacho de coco)",
+                     "Girassol (em grão)", "Linho (semente)", "Tungue (fruto seco)", "Azeitona"]),
+    ("Cana-de-açúcar", ["Cana-de-açúcar"]),
+    ("Feijões", ["Feijão (em grão)", "Fava (em grão)", "Ervilha (em grão)"]),
+    ("Raízes e tubérculos", ["Mandioca", "Batata-inglesa", "Batata-doce"]),
+    ("Café, cacau e estimulantes", ["Café (em grão) Total", "Cacau (em amêndoa)", "Fumo (em folha)",
+                                    "Erva-mate (folha verde)", "Guaraná (semente)", "Chá-da-índia (folha verde)"]),
+    ("Fibras", ["Algodão herbáceo (em caroço)", "Algodão arbóreo (em caroço)", "Sisal ou agave (fibra)",
+                "Malva (fibra)", "Juta (fibra)", "Rami (fibra)"]),
+    ("Frutas e castanhas", ["Laranja", "Banana (cacho)", "Castanha de caju", "Coco-da-baía*", "Melancia", "Uva",
+                            "Caju", "Manga", "Abacaxi*", "Tangerina", "Limão", "Açaí", "Maracujá", "Maçã", "Mamão",
+                            "Pêssego", "Abacate", "Melão", "Goiaba", "Caqui", "Noz (fruto seco)", "Figo", "Pera",
+                            "Marmelo"]),
+    ("Hortaliças e temperos", ["Cebola", "Tomate", "Alho", "Pimenta-do-reino", "Urucum (semente)", "Palmito"]),
+    ("Borracha e forragem", ["Borracha (látex coagulado)", "Borracha (látex líquido)", "Cana para forragem",
+                             "Alfafa fenada"]),
+]
+FAM_DE = {n: f for f, (_, ns) in enumerate(FAMILIAS) for n in ns}
+for it in ITENS:
+    if it["g"] in "TP":
+        it["fam"] = FAM_DE[it["cru"][2:]]   # KeyError = lavoura nova sem família: inclua acima
+FAM_META = [{"nome": nome, "itens": sorted((i for i, it in enumerate(ITENS) if it.get("fam") == f),
+                                           key=lambda i: -(tot.filter(pl.col("item") == ITENS[i]["cru"])["area"][0] or 0))}
+            for f, (nome, _) in enumerate(FAMILIAS)]
+assert sum(len(f["itens"]) for f in FAM_META) == sum(it["g"] in "TP" for it in ITENS)
 
 print("produção")
 prod = prod.with_columns(pl.col("item").replace_strict(IIDX, return_dtype=pl.Int32).alias("i")) \
@@ -346,7 +380,7 @@ meta = {
         "lon": mun["lon"].round(3).to_list(), "lat": mun["lat"].round(3).to_list(),
         "inst": inst_arr.tolist(),
     },
-    "itens": ITENS, "mb": MB_CLASSES, "origens": ORIGENS, "sicor": SICOR, "eventos": EVENTOS,
+    "itens": ITENS, "familias": FAM_META, "mb": MB_CLASSES, "origens": ORIGENS, "sicor": SICOR, "eventos": EVENTOS,
     "sicar": SICAR_COLS,
     "anos": {"prod": anos_prod, "mb": anos_mb, "safra": safras, "gsafra": anos_gs,
              "trans": [2000, 2010, 2020]},

@@ -42,7 +42,7 @@ python3 baixa_malha.py && python3 baixa_producao.py && python3 baixa_mapbiomas.p
 python3 monta_pagina.py      # parquet -> blocos binários -> ../index.html (+ testes/fixture.json)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
-bun test                                   # 30 testes (10 × 3 motores), ~40 s; BRAGRO_MOTORES=chromium para um só
+bun test                                   # 33 testes (11 × 3 motores), ~45 s; BRAGRO_MOTORES=chromium para um só
 ```
 
 Dependências Python: `polars`, `numpy`, `shapely`. Cada `baixa_*.py` imprime a própria
@@ -107,13 +107,18 @@ O orçamento da spec é ≤ 25 MB, e **a página passa um pouco: 25,7 MB** (2026
 
 ## Lavoura principal
 
-- 11 culturas têm cor fixa (`--l1`…`--l11`, `PRINCIPAIS` no template): as que mais vencem em
-  município × ano de 1974 a 2024, 94% dos casos. As outras competem uma a uma e, quando
-  vencem, saem em cinza.
-- A paleta saiu de uma busca gulosa em OKLCH. Todos os pares passam o piso de visão normal
-  (ΔE ≥ 18), mas não o de daltonismo: com 11 cores nenhuma paleta passa. A legenda
-  clicável e o tooltip com o nome compensam.
-- Estado na URL: `d=1` liga o modo e `dx=soja,milho,outras` lista as culturas desligadas.
+- Cada uma das 69 lavouras pertence a uma de 10 famílias (`FAMILIAS` em `monta_pagina.py`:
+  cereais, oleaginosas, cana, feijões, raízes, café/cacau/estimulantes, fibras, frutas,
+  hortaliças, borracha e forragem). Lavoura nova na PAM sem família quebra a montagem de
+  propósito (`KeyError`).
+- O município sai na cor da família que soma mais área entre as lavouras ligadas. A legenda
+  à direita é uma árvore: a família abre, e família e lavoura ligam e desligam.
+- Cores `--f1`…`--f10`: sóbrias (L 0,49–0,72, C ≤ 0,13), de um recozimento em OKLCH que
+  maximiza o menor ΔE. Todos os pares passam o piso de visão normal (15,3); o de daltonismo
+  não, e com 10 cores nenhuma paleta passa. O tooltip nomeia a família e a maior lavoura.
+- Estado na URL: `d=1` liga o modo e `dx=soja,milho` lista as lavouras desligadas.
+- "Sobre os dados" é um diálogo (botão `sobre` no alto, como no swissviz). No celular,
+  filtros e legenda são folhas de baixo, uma por vez, e o zoom vira uma pílula.
 
 ## Testes
 
