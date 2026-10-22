@@ -32,17 +32,27 @@ Este repositório não guarda dado: `pipeline/dados/` fica fora do git.
 | `baixa_mapbiomas.py` | `br_mapbiomas_estatisticas.*` | `mapbiomas`, `transicao`, `bioma` |
 | `baixa_credito.py` | `br_bcb_sicor` (glebas, operação, empreendimento, Proagro) | `glebas_*`, `proagro_*` |
 | `baixa_cadastros.py` | `br_cgu_garantia_safra`, `br_sfb_sicar` | `gsafra`, `sicar` |
+| `baixa_regioes.py` | `br_geobr_mapas` (UF, região, país, bioma, semiárido, Amazônia Legal, sedes) + diretório | `regioes`, `divisao`, `sedes` |
+| `baixa_dinheiro.py` | SICOR completo, `br_bcb_estban`, `br_bndes_desembolsos`, `br_bcb_scrdata`, `br_ibge_pib` | `credito_*`, `estban`, `bndes`, `scr`, `pib` |
+| `baixa_terra.py` | PRODES, DETER, queimadas, IBAMA (embargos, autos), INCRA | `prodes_*`, `deter_mun`, `fogo_*`, `ibama_mun`, `fundiario` |
+| `baixa_clima.py` | `br_inpe_sisam`, `br_inmet_bdmep`, `br_sedec_desastres` | `clima_ano`, `clima_normal`, `estacoes`, `desastres` |
+| `baixa_mercado_gente.py` | Trase, Comex, SEEG, RAIS, CAGED, CadÚnico, Seguro-Defeso, população, CAFIR, CNEFE | `trase*`, `logistica`, `comex`, `seeg`, `trabalho`, `social`, `imoveis` |
+| `baixa_calendario.py` | SICOR (datas de plantio e colheita) | `calendario` |
+
+`baixa_producao.py` também traz a PEVS (itens `E|` extração e `S|` silvicultura) e vacas
+ordenhadas e ovinos tosquiados da PPM. As armadilhas medidas estão no docstring de cada script
+e em `../rodado/docs/context/gotchas/`.
 
 ## Comandos
 
 ```bash
 cd pipeline
-python3 baixa_malha.py && python3 baixa_producao.py && python3 baixa_mapbiomas.py \
-  && python3 baixa_credito.py && python3 baixa_cadastros.py    # ~2 min no total
+for s in malha producao mapbiomas credito cadastros regioes dinheiro terra clima mercado_gente calendario; do
+  python3 baixa_$s.py || break; done                          # ~3 min no total
 python3 monta_pagina.py      # parquet -> blocos -> ../index.html (arquivo único) e ../site/ (GitHub Pages)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
-bun test                                   # 39 testes (13 × 3 motores, 2 deles sobre site/), ~60 s; BRAGRO_MOTORES=chromium para um só
+bun test                                   # 81 testes (27 × 3 motores, 2 deles sobre site/), ~2 min; BRAGRO_MOTORES=chromium para um só
 ```
 
 Dependências Python: `polars`, `numpy`, `shapely`. Cada `baixa_*.py` imprime a própria
@@ -73,10 +83,16 @@ Formato de cada bloco: `u32 tamanho | cabeçalho JSON | arrays`.
   com o hash do conteúdo no nome. Dado que não muda mantém o nome, e o navegador não baixa
   de novo quando só o HTML muda. A montagem apaga de `site/dados/` os `.bin` de hashes
   antigos.
-- A página carrega em duas etapas nas duas saídas. A primeira traz malha e área da produção
+- A página carrega em três etapas nas duas saídas. A primeira traz malha e área da produção
   (6,5 MB na web) e desenha. A segunda traz quantidade e valor, MapBiomas, crédito e
-  cadastros (12,3 MB). Até ela chegar, as outras fontes e medidas ficam desligadas; um
+  cadastros (13,7 MB). Até ela chegar, as outras fontes e medidas ficam desligadas; um
   estado de URL que precise delas espera tudo antes de desenhar.
+- A terceira etapa (`data-etapa="sob-demanda"`: contornos, credrs, econ, terra, fogo, clima,
+  calend, mercado, emis, gente; 8,1 MB) só é pedida quando um modo a usa (`blocos:` em
+  `MODOS`), por `carrega(id)` com cache de promessa e `garante([ids])`. A ficha não baixa
+  bloco: mostra o que já veio e oferece o botão "Mostrar também".
+- Modo novo de série município × ano: uma entrada em `SERIES` (bloco, medidas, unidade) e,
+  no pipeline, `series(bloco, df, {chave: coluna})`. Não precisa de código de cálculo.
 - Medido em 2026-10-22: o GitHub Pages já comprime o HTML em gzip, então o base64 embutido
   custaria 19,4 MB transferidos, contra 18,8 MB em `.bin`. O Brotli ganharia só 7% e pediria
   um decodificador em wasm, porque o `DecompressionStream` não abre Brotli em todo
@@ -84,7 +100,9 @@ Formato de cada bloco: `u32 tamanho | cabeçalho JSON | arrays`.
 - A saída é determinística (toda ordenação desempata até o fim). Sem isso o hash muda a
   cada montagem e o cache se perde.
 
-O orçamento da spec é ≤ 25 MB, e **a página passa um pouco: 25,7 MB** (2026-10-21). A produção sozinha leva 16 MB. Se precisar cortar, os candidatos são os itens menores de origem animal (casulos, lã, ovos de codorna).
+O orçamento da spec é ≤ 25 MB, e **o `index.html` passa: 37,6 MB** (2026-10-22, com todos os
+dados do tema). No `site/`, a primeira etapa segue com 6,7 MB. Se precisar cortar o arquivo
+único, o candidato é deixar a 3ª etapa só no `site/`.
 
 ## Armadilhas dos dados (medidas em 2026-10-21)
 
@@ -106,7 +124,11 @@ O orçamento da spec é ≤ 25 MB, e **a página passa um pouco: 25,7 MB** (2026
   financiada.
 - **Privacidade:** célula da grade com menos de 5 glebas ou perdas não é embutida (cai ~35% da
   área de glebas). O mesmo corte vale para o agregado por município × produto × safra (glebas)
-  e município × evento × safra (perdas). Há teste que confere os quatro.
+  e município × evento × safra (perdas). Também vale para o crédito em R$ (combinação com
+  menos de 5 operações; tomadores só com 5 ou mais; instituição por município), o calendário
+  (município × cultura) e o Seguro-Defeso (5 pescadores). Há teste que confere.
+- **SICOR em R$:** só o crédito de recurso controlado ou equalizado tem município (R$ 136 de
+  422 bi em 2023/24). O mapa mostra essa parte, e a UF mostra o total.
 - **Desmembramentos:** 1.624 municípios foram instalados depois de 1974. Antes de existir, o
   filho não tem dado, e o pai traz o território inteiro da época, desenhado menor na malha
   atual.
