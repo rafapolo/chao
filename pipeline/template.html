@@ -93,6 +93,7 @@
   }
   .modos button:hover { border-color: var(--ink-3); }
   .modos button[aria-pressed="true"] { border-color: var(--acento); background: color-mix(in srgb, var(--acento) 14%, transparent); }
+  .modos button:disabled { opacity: .45; cursor: progress; }
   .modos button small { display: block; color: var(--ink-3); font-size: 10.5px; }
 
   .busca { width: 100%; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--linha); background: var(--fundo); }
@@ -390,6 +391,7 @@
 
 <script id="b-malha" type="text/plain">/*__MALHA__*/</script>
 <script id="b-prod" type="text/plain">/*__PROD__*/</script>
+<script id="b-prodqv" type="text/plain">/*__PRODQV__*/</script>
 <script id="b-mapb" type="text/plain">/*__MAPB__*/</script>
 <script id="b-cred" type="text/plain">/*__CRED__*/</script>
 <script id="b-cad" type="text/plain">/*__CAD__*/</script>
@@ -404,12 +406,22 @@
   const TIPOS = { u8: [Uint8Array, 1], i8: [Int8Array, 1], u16: [Uint16Array, 2], i16: [Int16Array, 2],
                   u32: [Uint32Array, 4], i32: [Int32Array, 4] };
   async function bloco(id) {
-    const t = $(id).textContent.trim();
-    if (!t || t.startsWith('/*')) throw new Error('bloco vazio: ' + id);
-    const s = atob(t);
-    const bin = new Uint8Array(s.length);
-    for (let i = 0; i < s.length; i++) bin[i] = s.charCodeAt(i);
-    const fluxo = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const el = $(id), src = el.dataset.src;
+    let fonte;
+    if (src) {
+      // versão web: o bloco é um arquivo gzip com o hash do conteúdo no nome
+      const r = await fetch(src);
+      if (!r.ok) throw new Error(`${src}: HTTP ${r.status}`);
+      fonte = r.body;
+    } else {
+      const t = el.textContent.trim();
+      if (!t || t.startsWith('/*')) throw new Error('bloco vazio: ' + id);
+      const s = atob(t);
+      const bin = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) bin[i] = s.charCodeAt(i);
+      fonte = new Blob([bin]).stream();
+    }
+    const fluxo = fonte.pipeThrough(new DecompressionStream('gzip'));
     const buf = await new Response(fluxo).arrayBuffer();
     const u8 = new Uint8Array(buf);
     const n = new DataView(buf).getUint32(0, true);
@@ -439,15 +451,21 @@
     $('carregando').classList.add('erro');
     return;
   }
-  let MALHA, PROD, MAPB, CRED, CAD;
-  try {
-    [MALHA, PROD, MAPB, CRED, CAD] = await Promise.all(
-      ['b-malha', 'b-prod', 'b-mapb', 'b-cred', 'b-cad'].map(bloco));
-  } catch (e) {
-    $('carregando').textContent = 'Não foi possível abrir os dados embutidos na página (' + e.message + '). Nada foi desenhado pela metade.';
+  /* Duas etapas. A malha e a área da produção (~6,5 MB na versão web) desenham o
+     primeiro mapa; quantidade e valor, satélite, crédito e cadastros (~13 MB)
+     chegam por trás. Até lá as fontes e medidas que dependem deles ficam
+     desligadas, e um estado inicial que precise deles (pela URL) espera tudo. */
+  const falha = e => {
+    $('carregando').textContent = 'Não foi possível abrir os dados do mapa (' + e.message + '). Nada foi desenhado pela metade.';
     $('carregando').classList.add('erro');
-    return;
-  }
+  };
+  let MALHA, PROD, PRODQV = null, MAPB = null, CRED = null, CAD = null, pronto = false;
+  try {
+    [MALHA, PROD] = await Promise.all(['b-malha', 'b-prod'].map(bloco));
+  } catch (e) { return falha(e); }
+  // a segunda etapa só começa depois da primeira, para não dividir a banda com ela
+  const segunda = Promise.all(['b-prodqv', 'b-mapb', 'b-cred', 'b-cad'].map(bloco));
+  segunda.catch(() => {});
   const M = MALHA.meta;
   const NM = M.mun.id.length;
   const ITENS = M.itens;
@@ -564,18 +582,24 @@
   function serieItem(i) {
     if (cacheItem.has(i)) return cacheItem.get(i);
     const area = new Float32Array(NM * NA).fill(NaN), q = new Float32Array(NM * NA).fill(NaN), v = new Float32Array(NM * NA).fill(NaN);
+    const QV = PRODQV && PRODQV.A;
     for (let r = iniItem[i]; r < iniItem[i + 1]; r++) {
       const k = PA.m[r] * NA + PA.a[r];
-      area[k] = LUT[PA.area[r]]; q[k] = LUT[PA.q[r]]; v[k] = LUT[PA.v[r]];
+      area[k] = LUT[PA.area[r]];
+      if (QV) { q[k] = LUT[QV.q[r]]; v[k] = LUT[QV.v[r]]; }
     }
     const s = { area, q, v };
     cacheItem.set(i, s);
     return s;
   }
 
-  const BA = MAPB.A, A0MB = M.ano0.mb, NAMB = M.anos.mb[1] - A0MB + 1;
+  const A0MB = M.ano0.mb, NAMB = M.anos.mb[1] - A0MB + 1;
+  let BA = null;
   const iniClasse = new Uint32Array(M.mb.length + 1);
-  for (let r = 0, c = 0; c <= M.mb.length; c++) { while (r < BA.c.length && BA.c[r] < c) r++; iniClasse[c] = r; }
+  function iniciaMapb() {
+    BA = MAPB.A;
+    for (let r = 0, c = 0; c <= M.mb.length; c++) { while (r < BA.c.length && BA.c[r] < c) r++; iniClasse[c] = r; }
+  }
   const cacheClasse = new Map();
   function serieClasse(c) {
     if (cacheClasse.has(c)) return cacheClasse.get(c);
@@ -1123,7 +1147,7 @@
     const b = document.createElement('button');
     b.dataset.modo = md.id;
     b.innerHTML = `<svg viewBox="0 0 18 18" aria-hidden="true">${ICONES[md.id]}</svg>${md.nome}<small>${md.sub}</small>`;
-    b.onclick = () => { est.modo = md.id; aoMudarModo(); };
+    b.onclick = () => { if (b.disabled) return; est.modo = md.id; aoMudarModo(); };
     modosEl.append(b);
   });
 
@@ -1141,7 +1165,7 @@
       }
       const l = document.createElement('label');
       const marcado = est.itens.includes(it.i);
-      l.innerHTML = `<input type="checkbox" ${marcado ? 'checked' : ''}> ${it.nome}`;
+      l.innerHTML = `<input type="checkbox" ${marcado ? 'checked' : ''} ${!pronto && !it.area ? 'disabled title="carregando…"' : ''}> ${it.nome}`;
       l.querySelector('input').onchange = ev => alternaItem(it.i, ev.target.checked);
       el.append(l);
     }
@@ -1457,11 +1481,17 @@
   function aoMudarSelecao() {
     const ms = metricasDoModo();
     if (!ms.some(([v]) => v === est.metrica)) est.metrica = ms[0][0];
-    $('metrica').innerHTML = ms.map(([v, t]) => `<option value="${v}" ${v === est.metrica ? 'selected' : ''}>${t}</option>`).join('');
+    const espera = v => !pronto && ['q', 'v', 'rend', 'dens'].includes(v);
+    $('metrica').innerHTML = ms.map(([v, t]) => `<option value="${v}" ${v === est.metrica ? 'selected' : ''} ${espera(v) ? 'disabled' : ''}>${t}${espera(v) ? ' (carregando…)' : ''}</option>`).join('');
     atualiza(true);
   }
   function atualiza(escala) {
-    modosEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.modo === est.modo));
+    modosEl.querySelectorAll('button').forEach(b => {
+      b.setAttribute('aria-pressed', b.dataset.modo === est.modo);
+      b.disabled = !pronto && b.dataset.modo !== 'pam';
+      b.title = b.disabled ? 'carregando…' : '';
+    });
+    $('sobre-glebas').disabled = !pronto;
     const comItens = !['perda', 'gs'].includes(est.modo);
     $('sec-itens').style.display = comItens ? '' : 'none';
     $('alt-disputa').style.display = est.modo === 'pam' ? '' : 'none';
@@ -1572,7 +1602,7 @@
       const s = serieItem(it.i), pts = [], ptsSat = [];
       for (let y = A0; y < M.anos.prod[1]; y++) pts.push([y, s.area[m * NA + y - A0]]);
       const series = [{ nome: it.nome + ' declarado (IBGE)', cor: COR.acento, pts }];
-      if (it.mb !== undefined) {
+      if (it.mb !== undefined && BA) {
         const sc = serieClasse(it.mb);
         for (let y = A0MB; y <= M.anos.mb[1]; y++) ptsSat.push([y, sc[m * NAMB + y - A0MB]]);
         series.push({ nome: M.mb[it.mb] + ' visto do satélite', cor: COR.c[1], pts: ptsSat, tracejado: true });
@@ -1584,6 +1614,8 @@
     }
 
     // composição pelo satélite
+    if (!pronto) h += '<div class="vazio" style="margin-top:14px">Carregando satélite, crédito, perdas e cadastros…</div>';
+    else {
     const aM = Math.min(Math.max(a, A0MB), M.anos.mb[1]);
     const comp = M.mb.map((nome, c) => [nome, serieClasse(c)[m * NAMB + aM - A0MB]]).filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1]);
     if (comp.length) {
@@ -1671,6 +1703,7 @@
         <span>Pousio</span><span>${curto(car('pousio'))} ha</span></div>
         <div class="nota">Área declarada pelo próprio dono e não conferida; imóveis se sobrepõem, então a soma pode passar da área do município.</div>`;
     }
+    }
     h += `<div class="fontes">Fontes: IBGE (PAM, PPM, malha 2022, setores 2010) · MapBiomas coleção 11 · Banco Central (SICOR, Proagro) · CGU (Garantia-Safra) · Serviço Florestal Brasileiro (SICAR) · FUNAI · MMA (CNUC).</div>`;
     f.innerHTML = h;
     f.querySelector('.fechar').onclick = () => seleciona(-1);
@@ -1714,6 +1747,14 @@
   /* ---------- início ---------- */
   lerCores();
   const munUrl = leUrl();
+  function completa([qv, mb, cr, ca]) {
+    PRODQV = qv; MAPB = mb; CRED = cr; CAD = ca; pronto = true;
+    cacheItem.clear();
+    iniciaMapb();
+  }
+  const precisaTudo = est.modo !== 'pam' || est.glebas || ['q', 'v', 'rend', 'dens'].includes(est.metrica)
+    || est.itens.some(i => !ITENS[i].area);
+  if (precisaTudo) { try { completa(await segunda); } catch (e) { return falha(e); } }
   redimensiona();
   enquadraRecorte();
   aoMudarSelecao();
@@ -1721,8 +1762,18 @@
   addEventListener('resize', () => { redimensiona(); enquadraRecorte(); desenhaFaixa(); });
   $('carregando').remove();
   pede();
-  /* gancho para os testes: só existe na cópia que testes/comum.ts injeta */
-  if (window.__testes) window.__testes({ est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2 });
+  /* gancho para os testes: só existe na cópia que testes/comum.ts injeta; chamado
+     com os dados completos */
+  const gancho = () => {
+    if (window.__testes) window.__testes({ est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2 });
+  };
+  if (pronto) gancho();
+  else segunda.then(blocos => {
+    completa(blocos);
+    atualiza(true);
+    if (est.mun >= 0) montaFicha();
+    gancho();
+  }, e => console.error('segunda etapa dos dados:', e));
   /* ---------- fim ---------- */
 })();
 </script>

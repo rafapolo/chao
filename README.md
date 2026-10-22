@@ -49,8 +49,9 @@ A ficha de cada município junta:
   `index.html?c=soja&a=2010&mun=5107925` abre a soja de 2010 com a ficha de Sorriso (MT), e
   `index.html?a=1985&d=1` abre a lavoura principal de 1985.
 
-Para servir localmente, em vez de abrir o arquivo: `bunx serve .` ou
-`python3 -m http.server`, na pasta do repositório.
+A versão para a web fica em `site/`: uma página leve que baixa os dados aos poucos. O
+mapa aparece com 6,5 MB, e o resto chega por trás. Para vê-la localmente:
+`bunx serve site`.
 
 ## Fontes
 

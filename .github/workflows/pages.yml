@@ -1,0 +1,28 @@
+# Publica site/ no GitHub Pages. Não há build aqui: os dados vêm do espelho do
+# rodado no beelink, e site/ já sai pronto de pipeline/monta_pagina.py.
+name: pages
+on:
+  push:
+    branches: [main]
+    paths: [site/**]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  publica:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

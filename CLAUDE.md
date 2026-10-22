@@ -39,10 +39,10 @@ Este repositório não guarda dado: `pipeline/dados/` fica fora do git.
 cd pipeline
 python3 baixa_malha.py && python3 baixa_producao.py && python3 baixa_mapbiomas.py \
   && python3 baixa_credito.py && python3 baixa_cadastros.py    # ~2 min no total
-python3 monta_pagina.py      # parquet -> blocos binários -> ../index.html (+ testes/fixture.json)
+python3 monta_pagina.py      # parquet -> blocos -> ../index.html (arquivo único) e ../site/ (GitHub Pages)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
-bun test                                   # 33 testes (11 × 3 motores), ~45 s; BRAGRO_MOTORES=chromium para um só
+bun test                                   # 39 testes (13 × 3 motores, 2 deles sobre site/), ~60 s; BRAGRO_MOTORES=chromium para um só
 ```
 
 Dependências Python: `polars`, `numpy`, `shapely`. Cada `baixa_*.py` imprime a própria
@@ -63,6 +63,26 @@ Formato de cada bloco: `u32 tamanho | cabeçalho JSON | arrays`.
 - **Diferenças:** município e ano da produção e do MapBiomas vão em diferença com a linha
   anterior; o JS faz a soma acumulada.
 - Os valores ficam absolutos, porque em diferença o gzip piora (medido).
+
+## Duas saídas: `index.html` e `site/`
+
+- `index.html`: arquivo único com os blocos em base64; abre por `file://` e é o que a suíte
+  principal testa.
+- `site/`: a versão do GitHub Pages, publicada por `.github/workflows/pages.yml` (sem build
+  no CI: o workflow só envia a pasta). HTML de ~140 kB e um `.bin` (gzip cru) por bloco,
+  com o hash do conteúdo no nome. Dado que não muda mantém o nome, e o navegador não baixa
+  de novo quando só o HTML muda. A montagem apaga de `site/dados/` os `.bin` de hashes
+  antigos.
+- A página carrega em duas etapas nas duas saídas. A primeira traz malha e área da produção
+  (6,5 MB na web) e desenha. A segunda traz quantidade e valor, MapBiomas, crédito e
+  cadastros (12,3 MB). Até ela chegar, as outras fontes e medidas ficam desligadas; um
+  estado de URL que precise delas espera tudo antes de desenhar.
+- Medido em 2026-10-22: o GitHub Pages já comprime o HTML em gzip, então o base64 embutido
+  custaria 19,4 MB transferidos, contra 18,8 MB em `.bin`. O Brotli ganharia só 7% e pediria
+  um decodificador em wasm, porque o `DecompressionStream` não abre Brotli em todo
+  navegador. O ganho real está nas duas etapas e no cache por hash.
+- A saída é determinística (toda ordenação desempata até o fim). Sem isso o hash muda a
+  cada montagem e o cache se perde.
 
 O orçamento da spec é ≤ 25 MB, e **a página passa um pouco: 25,7 MB** (2026-10-21). A produção sozinha leva 16 MB. Se precisar cortar, os candidatos são os itens menores de origem animal (casulos, lã, ovos de codorna).
 

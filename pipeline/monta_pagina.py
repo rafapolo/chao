@@ -17,6 +17,7 @@ o teste de privacidade em testes/mapa.test.ts confere os quatro.
 """
 import base64
 import gzip
+import hashlib
 import json
 import re
 import unicodedata
@@ -36,6 +37,9 @@ PASSO = 0.05         # grade das glebas, em graus (o mesmo de baixa_credito.py)
 MIN_CELULA = 5
 ANO0_PROD, ANO0_MB = 1974, 1985
 
+
+# Toda ordenação desempata até o fim: a saída tem que ser a mesma byte a byte para
+# os mesmos dados, ou o hash no nome dos blocos de site/ muda e o cache se perde.
 
 # ---------- codificação ----------
 class Bloco:
@@ -67,12 +71,12 @@ def log16(v):
     return out  # 0 = sem dado; código c > 0 decodifica como exp((c − 1)/K) − 1
 
 
-def embute(nome, bloco):
+def comprime(nome, bloco):
     cru = bloco.bytes()
-    gz = gzip.compress(cru, 9)
-    b64 = base64.b64encode(gz).decode()
-    print(f"  {nome:8s} {len(cru) / 1e6:6.1f} MB -> gz {len(gz) / 1e6:5.1f} -> b64 {len(b64) / 1e6:5.1f}")
-    return b64
+    # mtime=0: o mesmo dado dá os mesmos bytes, e o nome com hash não muda à toa
+    gz = gzip.compress(cru, 9, mtime=0)
+    print(f"  {nome:9s} {len(cru) / 1e6:6.1f} MB -> gz {len(gz) / 1e6:5.1f}")
+    return gz
 
 
 def norm(s):
@@ -209,7 +213,7 @@ tot = (prod.group_by("item").agg(pl.col("area").sum(), pl.col("quantidade").sum(
 ordem_g = {"T": 0, "P": 1, "R": 2, "A": 3, "Q": 4}
 itens_cru = sorted(tot["item"].to_list(),
                    key=lambda c: (ordem_g[c[0]], -(tot.filter(pl.col("item") == c)["area"][0] or 0),
-                                  -(tot.filter(pl.col("item") == c)["quantidade"][0] or 0)))
+                                  -(tot.filter(pl.col("item") == c)["quantidade"][0] or 0), c))
 ITENS = [rotulo(c) for c in itens_cru]
 IIDX = {it["cru"]: i for i, it in enumerate(ITENS)}
 
@@ -275,9 +279,13 @@ def dif(a):
 bp.add("i", prod["i"], "u8")
 bp.add("m", dif(prod["m"]), "u16")
 bp.add("a", dif(prod["ano"] - ANO0_PROD), "u16")
-for col, nome in [("area", "area"), ("quantidade", "q"), ("valor", "v")]:
-    bp.add(nome, log16(prod[col].to_numpy()), "u16")
+bp.add("area", log16(prod["area"].to_numpy()), "u16")
 bp.meta = {"delta": ["m", "a"]}
+# quantidade e valor num bloco à parte, nas mesmas linhas: o primeiro mapa só
+# precisa da área, e na versão web esses ~9 MB chegam depois dele
+bq = Bloco()
+for col, nome in [("quantidade", "q"), ("valor", "v")]:
+    bq.add(nome, log16(prod[col].to_numpy()), "u16")
 # primeiro ano com dado = ano de instalação aproximado (antes dele: "não existia")
 inst = prod.filter(pl.col("item").str.starts_with("R|")).group_by("m").agg(pl.col("ano").min())
 inst_arr = np.full(NMUN, ANO0_PROD, dtype=np.int32)
@@ -313,7 +321,8 @@ gc = pl.read_parquet(D / "glebas_celula.parquet").filter(pl.col("glebas") >= MIN
 # financiado sozinho num município identificaria a propriedade do mesmo jeito
 gm = idx_mun(pl.read_parquet(D / "glebas_mun.parquet")).filter(pl.col("glebas") >= MIN_CELULA)
 SICOR = (pl.concat([gc.select("produto", "glebas"), gm.select("produto", "glebas")])
-         .group_by("produto").agg(pl.col("glebas").sum()).sort("glebas", descending=True)["produto"].to_list())
+         .group_by("produto").agg(pl.col("glebas").sum())
+         .sort(["glebas", "produto"], descending=[True, False])["produto"].to_list())
 SIDX = {p: i for i, p in enumerate(SICOR)}
 # ligação item da PAM -> produto do SICOR, pela primeira palavra normalizada
 for it in ITENS:
@@ -335,14 +344,14 @@ pm_ag = (pm.group_by(["m", "evento", "safra"]).agg(pl.col("perdas").sum(), pl.co
          .filter(pl.col("perdas") >= MIN_CELULA))
 
 bc = Bloco()
-gc = gc.with_columns(pl.col("produto").replace_strict(SIDX, return_dtype=pl.Int32).alias("p")).sort(["p", "safra"])
+gc = gc.with_columns(pl.col("produto").replace_strict(SIDX, return_dtype=pl.Int32).alias("p")).sort(["p", "safra", "i", "j"])
 bc.add("g_i", gc["i"], "i16"); bc.add("g_j", gc["j"], "i16")
 bc.add("g_p", gc["p"], "u16"); bc.add("g_s", gc["safra"] - 2000, "u8")
 bc.add("g_n", gc["glebas"].clip(upper_bound=65535), "u16"); bc.add("g_area", log16(gc["area_ha"].to_numpy()), "u16")
 gm = gm.with_columns(pl.col("produto").replace_strict(SIDX, return_dtype=pl.Int32).alias("p")).sort(["m", "p", "safra"])
 bc.add("gm_m", gm["m"], "u16"); bc.add("gm_p", gm["p"], "u16"); bc.add("gm_s", gm["safra"] - 2000, "u8")
 bc.add("gm_n", gm["glebas"].clip(upper_bound=65535), "u16"); bc.add("gm_area", log16(gm["area_ha"].to_numpy()), "u16")
-pc = pc.with_columns(pl.col("evento").replace_strict(EIDX, return_dtype=pl.Int32).alias("e")).sort(["e", "safra"])
+pc = pc.with_columns(pl.col("evento").replace_strict(EIDX, return_dtype=pl.Int32).alias("e")).sort(["e", "safra", "i", "j"])
 bc.add("p_i", pc["i"], "i16"); bc.add("p_j", pc["j"], "i16")
 bc.add("p_e", pc["e"], "u8"); bc.add("p_s", pc["safra"] - 2000, "u8")
 bc.add("p_n", pc["perdas"].clip(upper_bound=65535), "u16"); bc.add("p_area", log16(pc["area_ha"].to_numpy()), "u16")
@@ -397,12 +406,44 @@ for mid, cru in [("5107925", "T|Soja (em grão)"), ("3543402", "T|Cana-de-açúc
 (RAIZ / "testes" / "fixture.json").write_text(json.dumps(fix, ensure_ascii=False, indent=1))
 
 # ---------- página ----------
-print("embutindo")
-tpl = (S / "template.html").read_text()
-pagina = tpl.replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
-for marca, nome, bloco in [("MALHA", "malha", bm), ("PROD", "produção", bp), ("MAPB", "mapbiomas", bb),
-                           ("CRED", "crédito", bc), ("CAD", "cadastros", bk)]:
-    pagina = pagina.replace(f"/*__{marca}__*/", embute(nome, bloco))
+print("blocos")
+tpl = (S / "template.html").read_text().replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
+BLOCOS = [("MALHA", "malha", bm), ("PROD", "prod", bp), ("PRODQV", "prodqv", bq), ("MAPB", "mapb", bb),
+          ("CRED", "cred", bc), ("CAD", "cad", bk)]
+GZ = {nome: comprime(nome, bloco) for _, nome, bloco in BLOCOS}
+
+# 1. index.html: arquivo único, abre por file:// (os blocos em base64 dentro dele)
+pagina = tpl
+for marca, nome, _ in BLOCOS:
+    pagina = pagina.replace(f"/*__{marca}__*/", base64.b64encode(GZ[nome]).decode())
 out = RAIZ / "index.html"
 out.write_text(pagina)
 print(f"{out} — {out.stat().st_size / 1e6:.1f} MB")
+
+# 2. site/: a versão do GitHub Pages (publicada por .github/workflows/pages.yml). HTML leve e um arquivo gzip por bloco, com o
+# hash do conteúdo no nome: dado que não mudou mantém o nome (e o cache do
+# navegador), e só a primeira etapa (malha + área) é baixada antes do mapa.
+# O GitHub Pages não comprime .bin de novo nem serve Content-Encoding pré-pronto,
+# então o navegador baixa o gzip cru e o abre com DecompressionStream.
+WEB = RAIZ / "site"
+(WEB / "dados").mkdir(parents=True, exist_ok=True)
+web, nomes = tpl, set()
+for marca, nome, _ in BLOCOS:
+    arq = f"{nome}.{hashlib.sha256(GZ[nome]).hexdigest()[:12]}.bin"
+    nomes.add(arq)
+    if not (WEB / "dados" / arq).exists():
+        (WEB / "dados" / arq).write_bytes(GZ[nome])
+    web = web.replace(f'<script id="b-{nome}" type="text/plain">/*__{marca}__*/</script>',
+                      f'<script id="b-{nome}" type="text/plain" data-src="dados/{arq}"></script>')
+assert "/*__" not in web, "marcador sem bloco na versão web"
+(WEB / "index.html").write_text(web)
+(WEB / ".nojekyll").write_text("")
+(WEB / "favicon.svg").write_text((RAIZ / "favicon.svg").read_text())
+# blocos de montagens anteriores: gerados por este script, saem quando o hash muda
+for velho in (WEB / "dados").glob("*.bin"):
+    if velho.name not in nomes:
+        velho.unlink()
+tam = {a: (WEB / "dados" / a).stat().st_size for a in nomes}
+primeira = sum(v for a, v in tam.items() if a.split(".")[0] in ("malha", "prod"))
+print(f"{WEB}/ — html {(WEB / 'index.html').stat().st_size / 1e3:.0f} kB, dados {sum(tam.values()) / 1e6:.1f} MB "
+      f"(primeira etapa {primeira / 1e6:.1f} MB)")
