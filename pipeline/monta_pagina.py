@@ -226,12 +226,18 @@ print(f"    {outros.height} contornos, {p:,} vértices".replace(",", "."))
 # ---------- catálogo de itens ----------
 prod = idx_mun(pl.read_parquet(D / "producao.parquet"))
 GRUPOS = {"T": "Lavoura temporária", "P": "Lavoura permanente", "R": "Rebanho",
-          "A": "Origem animal", "Q": "Aquicultura"}
+          "A": "Origem animal", "Q": "Aquicultura", "E": "Extração vegetal", "S": "Silvicultura"}
 UNID_A = {"Leite": "mil litros", "Ovos de codorna": "mil dúzias", "Ovos de galinha": "mil dúzias"}
 
 
 def rotulo(cru):
     g, nome = cru.split("|", 1)
+    if g in "ES":
+        # PEVS: o nome leva a fonte, porque açaí, palmito, erva-mate, lenha e carvão
+        # existem também na PAM ou nas duas tabelas da PEVS (e o slug da URL é o nome)
+        un = "m³" if any(w in nome for w in ("Lenha", "Madeira", "madeira")) else "t"
+        sufixo = " · extração" if g == "E" else " · silvicultura"
+        return {"cru": cru, "nome": nome + sufixo, "grupo": GRUPOS[g], "g": g, "un": un, "area": False}
     curto = re.sub(r"\s*\(.*?\)\s*", " ", nome).replace("*", "").strip()
     curto = {"Café Total": "Café", "Cana-de-açúcar": "Cana-de-açúcar", "Suíno - total": "Suínos",
              "Galináceos - total": "Galináceos", "Bovino": "Bovinos", "Bubalino": "Bubalinos",
@@ -252,12 +258,18 @@ def rotulo(cru):
 
 tot = (prod.group_by("item").agg(pl.col("area").sum(), pl.col("quantidade").sum())
        .sort(["area", "quantidade"], descending=True))
-ordem_g = {"T": 0, "P": 1, "R": 2, "A": 3, "Q": 4}
+ordem_g = {"T": 0, "P": 1, "R": 2, "A": 3, "Q": 4, "E": 5, "S": 6}
 itens_cru = sorted(tot["item"].to_list(),
                    key=lambda c: (ordem_g[c[0]], -(tot.filter(pl.col("item") == c)["area"][0] or 0),
                                   -(tot.filter(pl.col("item") == c)["quantidade"][0] or 0), c))
 ITENS = [rotulo(c) for c in itens_cru]
 IIDX = {it["cru"]: i for i, it in enumerate(ITENS)}
+assert len(ITENS) < 256, "o índice do item vai em u8"
+# rendimento por cabeça: o produto de origem animal e o rebanho que o produz
+POR_CABECA = {"A|Leite": ("R|Vacas ordenhadas", "litros por vaca ordenhada", 1000),
+              "A|Lã": ("R|Ovinos tosquiados", "kg por ovino tosquiado", 1)}
+for cru, (reb, txt, fator) in POR_CABECA.items():
+    ITENS[IIDX[cru]]["porcab"] = {"reb": IIDX[reb], "txt": txt, "fator": fator}
 
 # correspondência com o MapBiomas (classe de satélite que vê a cultura)
 MB_CLASSES = ["Soja", "Cana", "Arroz", "Algodão", "Outras temporárias", "Café", "Citros", "Dendê",
@@ -446,6 +458,19 @@ fix = {}
 for mid, cru in [("5107925", "T|Soja (em grão)"), ("3543402", "T|Cana-de-açúcar")]:
     r = prod.filter((pl.col("id_municipio") == mid) & (pl.col("item") == cru) & (pl.col("ano") == 2024))
     fix[mid] = {"item": IIDX[cru], "ano": 2024, "area": float(r["area"][0])}
+# leite por vaca em Castro (PR), a bacia leiteira; açaí extraído no maior
+# município; Garantia-Safra pago em 2020 no país
+def q_de(mid, cru, ano):
+    r = prod.filter((pl.col("id_municipio") == mid) & (pl.col("item") == cru) & (pl.col("ano") == ano))
+    return float(r["quantidade"][0])
+fix["leite_castro"] = {"mun": "4104907", "ano": 2024,
+                       "porcab": q_de("4104907", "A|Leite", 2024) * 1000 / q_de("4104907", "R|Vacas ordenhadas", 2024)}
+acai = (prod.filter((pl.col("item") == "E|Açaí (fruto)") & (pl.col("ano") == 2024))
+        .sort(["quantidade", "id_municipio"], descending=[True, False]).row(0, named=True))
+fix["acai_ext"] = {"mun": acai["id_municipio"], "ano": 2024, "q": acai["quantidade"], "slug": "acai-fruto-extracao"}
+fix["gs_2020"] = {"valor": float(gs.filter(pl.col("ano") == 2020)["valor"].sum()),
+                  "agricultores": int(gs.filter(pl.col("ano") == 2020)["agricultores"].sum())}
+fix["semiarido"] = int(div["semiarido"].sum())
 (RAIZ / "testes" / "fixture.json").write_text(json.dumps(fix, ensure_ascii=False, indent=1))
 
 # ---------- página ----------

@@ -55,7 +55,7 @@ for (const motor of ESCOLHIDOS) {
 
     test("os números batem com a PAM (fixture gerada pelo pipeline)", async () => {
       const x = await abre(nav, "?c=soja&a=2024");
-      for (const [mid, f] of Object.entries<any>(FIXTURE)) {
+      for (const [mid, f] of Object.entries<any>(FIXTURE).filter(([k]) => /^\d{7}$/.test(k))) {
         const v = await roda<number>(x.p, `
           const m = T.M.mun.id.indexOf(${JSON.stringify(mid)});
           const NA = T.M.anos.prod[1] - T.M.ano0.prod + 1;
@@ -94,6 +94,51 @@ for (const motor of ESCOLHIDOS) {
         return a.then(c => ({ igual: a === b, n: c.meta.regioes.length }));`);
       expect(r.igual).toBe(true);
       expect(r.n).toBeGreaterThan(5);
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("leite por vaca ordenhada em Castro bate com a PPM", async () => {
+      const x = await abre(nav, "?c=leite&m=porcab&a=2024");
+      const f = FIXTURE.leite_castro;
+      const v = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
+      expect(Math.abs(v / f.porcab - 1)).toBeLessThan(0.01);
+      expect(await x.p.locator("#metrica option:checked").textContent()).toContain("por vaca ordenhada");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("extração vegetal (PEVS): o açaí extraído tem slug próprio e aparece na ficha ao lado do plantado", async () => {
+      const f = FIXTURE.acai_ext;
+      const x = await abre(nav, `?c=${f.slug}&m=q&a=2024&mun=${f.mun}`);
+      const r = await roda<any>(x.p, `return { item: T.ITENS[T.est.itens[0]].nome, v: T.VAL[T.M.mun.id.indexOf('${f.mun}')] }`);
+      expect(r.item).toBe("Açaí (fruto) · extração");
+      expect(Math.abs(r.v / f.q - 1)).toBeLessThan(0.005);
+      expect(await x.p.locator("#ficha").textContent()).toContain("Extração vegetal e silvicultura");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("Garantia-Safra em R$: pago e por agricultor, somando o que a CGU pagou", async () => {
+      const x = await abre(nav, "?f=gs&m=v&a=2020");
+      const tot = await roda<number>(x.p, "let s = 0; for (const v of T.VAL) if (v > 0) s += v; return s;");
+      expect(Math.abs(tot / FIXTURE.gs_2020.valor - 1)).toBeLessThan(0.005);
+      await x.p.selectOption("#metrica", "vpa");
+      const media = await roda<number>(x.p, "const v = [...T.VAL].filter(v => v > 0); return v.reduce((a, b) => a + b, 0) / v.length;");
+      expect(media).toBeGreaterThan(100);
+      expect(media).toBeLessThan(5000);
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("recorte por região especial: semiárido e Amazônia Legal, com contorno", async () => {
+      const x = await abre(nav, "?c=soja&a=2020&rg=semiarido");
+      const n = await roda<number>(x.p, "let n = 0; for (let m = 0; m < T.M.mun.id.length; m++) if (T.noRecorte(m)) n++; return n;");
+      expect(n).toBe(FIXTURE.semiarido);
+      await x.p.selectOption("#regiao", "amazonia");
+      expect(x.p.url()).toContain("rg=amazonia");
+      await x.p.waitForFunction(() => (window as any).__T.CONT, null, { timeout: 30_000 });
+      expect(await x.p.locator("#regiao optgroup").count()).toBeGreaterThanOrEqual(3);
       expect(x.erros).toEqual([]);
       await fecha(x);
     }, LENTO);

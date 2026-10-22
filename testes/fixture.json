@@ -8,5 +8,21 @@
   "item": 2,
   "ano": 2024,
   "area": 37104.0
- }
+ },
+ "leite_castro": {
+  "mun": "4104907",
+  "ano": 2024,
+  "porcab": 10298.620117789636
+ },
+ "acai_ext": {
+  "mun": "1504000",
+  "ano": 2024,
+  "q": 50000.0,
+  "slug": "acai-fruto-extracao"
+ },
+ "gs_2020": {
+  "valor": 325871640.0,
+  "agricultores": 443285
+ },
+ "semiarido": 1262
 }

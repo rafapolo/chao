@@ -250,6 +250,16 @@
   .ficha .sel-ficha { width: 100%; margin-bottom: 8px; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--linha); background: var(--fundo); }
   .ficha .vazio { color: var(--ink-3); font-size: 12px; }
   .ficha .fontes { margin-top: 18px; color: var(--ink-3); font-size: 11px; }
+  .ficha details { border-top: 1px solid var(--linha); margin-top: 12px; }
+  .ficha summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-family: "Mono", monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3);
+    padding: 10px 0 6px; min-height: 32px; }
+  .ficha summary::-webkit-details-marker { display: none; }
+  .ficha summary::after { content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg); transition: transform .15s; margin-right: 3px; }
+  .ficha details:not([open]) summary::after { transform: rotate(-45deg); }
+  .ficha summary:hover { color: var(--ink); }
+  .ficha summary:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
 
   /* ---------- tooltip, controles de zoom, avisos ---------- */
   .tip { position: fixed; z-index: 5; pointer-events: none; background: var(--painel); border: 1px solid var(--linha);
@@ -313,6 +323,7 @@
     .nota { font-size: 12.5px; }
     .sobre { padding: 22px 18px 16px; }
     .barra { grid-template-columns: 90px 1fr auto; }
+    .ficha summary { font-size: 12px; min-height: 40px; }
   }
   @media (prefers-reduced-motion: reduce) { .painel { transition: none; } }
 </style>
@@ -348,7 +359,7 @@
       <div class="titulo">Recorte</div>
       <div class="linha-ctl">
         <select id="uf" aria-label="Estado"></select>
-        <select id="bioma" aria-label="Bioma"></select>
+        <select id="regiao" aria-label="Bioma ou região"></select>
       </div>
       <div class="linha-ctl"><input class="busca" id="busca-mun" type="search" placeholder="Ir para município…" autocomplete="off" aria-label="Buscar município" list="lista-mun"></div>
       <datalist id="lista-mun"></datalist>
@@ -393,9 +404,9 @@
 <div class="rotulo-celular" id="rotulo-celular" aria-hidden="true"></div>
 <div id="carregando">carregando dados…</div>
 
-<script id="b-malha" type="text/plain" data-src="dados/malha.f6c145790d22.bin"></script>
-<script id="b-prod" type="text/plain" data-src="dados/prod.85fe8d3b5b95.bin"></script>
-<script id="b-prodqv" type="text/plain" data-src="dados/prodqv.79985b2cacf4.bin"></script>
+<script id="b-malha" type="text/plain" data-src="dados/malha.90cbb5cd7547.bin"></script>
+<script id="b-prod" type="text/plain" data-src="dados/prod.35547fee29de.bin"></script>
+<script id="b-prodqv" type="text/plain" data-src="dados/prodqv.eba874568462.bin"></script>
 <script id="b-mapb" type="text/plain" data-src="dados/mapb.16bafbae7911.bin"></script>
 <script id="b-cred" type="text/plain" data-src="dados/cred.4ee17c9598a3.bin"></script>
 <script id="b-cad" type="text/plain" data-src="dados/cad.563efcf6a65a.bin"></script>
@@ -584,7 +595,7 @@
   // os blocos sob demanda que o estado atual pede
   function blocosDoEstado() {
     const ids = [...(MODOS.find(md => md.id === est.modo)?.blocos || [])];
-    if (est.bioma) ids.push('contornos');
+    if (est.bioma || est.regiao) ids.push('contornos');
     return [...new Set(ids)];
   }
 
@@ -677,7 +688,7 @@
   const BIOMAS = [...new Set(M.mun.bioma.filter(b => b && b !== '0'))].sort();
   const SOJA = ITEM_POR_SLUG['soja'] ?? 0;
   const est = {
-    modo: 'pam', itens: [SOJA], metrica: '', ano: 2024, uf: '', bioma: '', mun: -1,
+    modo: 'pam', itens: [SOJA], metrica: '', ano: 2024, uf: '', bioma: '', regiao: '', mun: -1,
     disputa: false, evento: -1, origem: 'natural', mascara: true, glebas: false,
     desligadas: new Set(),   // lavoura principal: lavouras tiradas da disputa (índice do item)
     abertas: new Set(),      // famílias abertas na árvore da legenda
@@ -701,7 +712,8 @@
     if (est.modo === 'pam') {
       if (est.disputa) return [['area', 'Área da cultura que vence']];
       if (!it || !it.area) return [['dens', 'Por km² rural'], ['q', 'Quantidade']]
-        .concat(it && it.g !== 'R' ? [['v', 'Valor (R$ mil)']] : []);
+        .concat(it && it.g !== 'R' ? [['v', 'Valor (R$ mil)']] : [])
+        .concat(it?.porcab && est.itens.length === 1 ? [['porcab', it.porcab.txt[0].toUpperCase() + it.porcab.txt.slice(1)]] : []);
       const ms = [['pct', '% da área rural'], ['area', 'Área (ha)'], ['q', 'Produção'], ['v', 'Valor (R$ mil)']];
       if (est.itens.length === 1) ms.push(['rend', 'Rendimento (por ha)']);
       return ms;
@@ -711,11 +723,12 @@
     if (est.modo === 'exp') return [['pct', '% da área do município'], ['area', 'Área convertida (ha)']];
     if (est.modo === 'gleba') return [['area', 'Área das glebas (ha)'], ['n', 'Número de glebas']];
     if (est.modo === 'perda') return [['area', 'Área com perda (ha)'], ['n', 'Número de perdas']];
-    if (est.modo === 'gs') return [['n', 'Agricultores pagos'], ['pct', '% dos imóveis do CAR']];
+    if (est.modo === 'gs') return [['n', 'Agricultores pagos'], ['v', 'R$ pagos'], ['vpa', 'R$ por agricultor'], ['pct', '% dos imóveis do CAR']];
   }
 
   /* ---------- valores por município no ano ---------- */
   const VAL = new Float32Array(NM);
+  const GS_N = new Float32Array(NM);   // agricultores pagos no ano, para a faixa somar R$ por agricultor
   const CAT = new Int8Array(NM);   // lavoura principal: a família que vence (-1 = nenhuma)
   const VENCE = new Int16Array(NM); // a maior lavoura dentro da família que vence
   const classesDosItens = () => [...new Set(est.itens.map(i => ITENS[i].mb).filter(c => c !== undefined))];
@@ -739,6 +752,15 @@
     if (est.modo === 'pam') {
       if (est.disputa) return calculaDisputa(ano);
       const it = ITENS[est.itens[0]];
+      if (mt === 'porcab') {
+        // produto ÷ rebanho que o produz (leite ÷ vacas ordenhadas), os dois repartidos por AMC
+        const pc = it.porcab, a = ano - A0, s = serieItem(it.i).q, r = serieItem(pc.reb).q;
+        const q = new Float32Array(NM), n = new Float32Array(NM);
+        for (let m = 0; m < NM; m++) { q[m] = s[m * NA + a]; n[m] = r[m * NA + a]; }
+        porAMC(q, ano); porAMC(n, ano);
+        for (let m = 0; m < NM; m++) VAL[m] = q[m] > 0 && n[m] > 0 ? q[m] * pc.fator / n[m] : NaN;
+        return;
+      }
       if (mt === 'rend') {
         const s = serieItem(est.itens[0]), a = ano - A0;
         const ar = new Float32Array(NM), q = new Float32Array(NM);
@@ -806,10 +828,12 @@
     }
     if (est.modo === 'gs') {
       const s = ano - 2000, G = CAD.A, imov = CAD.A.car_imoveis;
+      GS_N.fill(0);
       for (let r = 0; r < G.gs_m.length; r++) {
         if (G.gs_a[r] !== s) continue;
-        const m = G.gs_m[r];
-        VAL[m] = mt === 'pct' ? (imov[m] > 0 ? G.gs_n[r] / imov[m] * 100 : NaN) : G.gs_n[r];
+        const m = G.gs_m[r], n = G.gs_n[r], v = LUT[G.gs_v[r]];
+        GS_N[m] = n;
+        VAL[m] = mt === 'pct' ? (imov[m] > 0 ? n / imov[m] * 100 : NaN) : mt === 'v' ? v : mt === 'vpa' ? (n > 0 ? v / n : NaN) : n;
       }
     }
   }
@@ -980,7 +1004,11 @@
 
   /* Recorte (UF, bioma): o que fica fora é desenhado apagado, não escondido —
      o contexto vizinho continua legível. */
-  const noRecorte = m => (!est.uf || M.mun.uf[m] === est.uf) && (!est.bioma || M.mun.bioma[m] === est.bioma);
+  const REGIOES = M.divisoes.regiao, DV_REG = MALHA.A.dv_regiao;
+  const naRegiao = m => !est.regiao || (est.regiao === 'semiarido' ? MALHA.A.semiarido[m] === 1
+    : est.regiao === 'amazonia' ? MALHA.A.amazonia[m] === 1 : REGIOES[DV_REG[m]] === est.regiao);
+  const noRecorte = m => (!est.uf || M.mun.uf[m] === est.uf) && (!est.bioma || M.mun.bioma[m] === est.bioma) && naRegiao(m);
+  const nomeRecorte = () => est.uf || est.bioma || ({ semiarido: 'Semiárido', amazonia: 'Amazônia Legal' })[est.regiao] || est.regiao || 'Brasil';
 
   let desenhou = false, pedido = false;
   function pede() { if (!pedido) { pedido = true; requestAnimationFrame(desenha); } }
@@ -1015,6 +1043,9 @@
       ctx.lineWidth = 1.6 / vista.k; ctx.strokeStyle = COR.foco; ctx.setLineDash([4 / vista.k, 3 / vista.k]);
       if (est.modo === 'gs' && CONT.semiarido) for (const p of Object.values(CONT.semiarido)) ctx.stroke(p);
       if (est.bioma && CONT.bioma?.[est.bioma]) ctx.stroke(CONT.bioma[est.bioma]);
+      const rg = est.regiao === 'semiarido' ? CONT.semiarido?.['Semiárido'] : est.regiao === 'amazonia'
+        ? CONT.amazonia_legal?.['Amazônia Legal'] : CONT.regiao?.[est.regiao];
+      if (rg && !(est.modo === 'gs' && est.regiao === 'semiarido')) ctx.stroke(rg);
       ctx.setLineDash([]);
     }
     if (celulas || (est.glebas && est.modo === 'pam')) desenhaCelulas();
@@ -1149,7 +1180,7 @@
     enquadra([cx - r, cy - r, cx + r, cy + r], 1);
   }
   function enquadraRecorte() {
-    if (!est.uf && !est.bioma) return enquadra();
+    if (!est.uf && !est.bioma && !est.regiao) return enquadra();
     let c = [Infinity, Infinity, -Infinity, -Infinity];
     for (let m = 0; m < NM; m++) if (noRecorte(m)) {
       const g = GEO.caixa;
@@ -1170,6 +1201,9 @@
       return `satélite vê ${fmt(Math.pow(2, v), 2)}× o declarado`;
     }
     if (!(v > 0)) return 'sem registro';
+    if (est.modo === 'gs' && mt === 'v') return 'R$ ' + curto(v) + ' pagos';
+    if (est.modo === 'gs' && mt === 'vpa') return 'R$ ' + fmt(v) + ' por agricultor';
+    if (mt === 'porcab') return fmt(v) + ' ' + it.porcab.txt;
     const un = {
       pct: '% ', area: ' ha', q: ' ' + (it?.un || ''), v: ' mil R$', dens: ' ' + (it?.un || '') + '/km²',
       rend: ' ' + (it?.un || '') + '/ha', n: est.modo === 'gs' ? ' agricultores' : est.modo === 'gleba' ? ' glebas' : ' perdas',
@@ -1279,9 +1313,19 @@
   $('disputa').onchange = e => { est.disputa = e.target.checked; aoMudarSelecao(); };
 
   $('uf').innerHTML = '<option value="">Brasil inteiro</option>' + UFS.map(u => `<option>${u}</option>`).join('');
-  $('bioma').innerHTML = '<option value="">Todos os biomas</option>' + BIOMAS.map(b => `<option>${b}</option>`).join('');
+  /* bioma, região do IBGE ou região especial: um recorte só, em grupos */
+  $('regiao').innerHTML = '<option value="">Todo o território</option>'
+    + `<optgroup label="Biomas">${BIOMAS.map(b => `<option value="bio:${b}">${b}</option>`).join('')}</optgroup>`
+    + `<optgroup label="Regiões">${REGIOES.map(r => `<option value="${r}">${r}</option>`).join('')}</optgroup>`
+    + '<optgroup label="Regiões especiais"><option value="amazonia">Amazônia Legal</option><option value="semiarido">Semiárido</option></optgroup>';
+  const valorRegiao = () => est.bioma ? 'bio:' + est.bioma : est.regiao;
   $('uf').onchange = e => { est.uf = e.target.value; enquadraRecorte(); atualiza(false); };
-  $('bioma').onchange = e => { est.bioma = e.target.value; enquadraRecorte(); atualiza(false); };
+  $('regiao').onchange = e => {
+    const v = e.target.value;
+    est.bioma = v.startsWith('bio:') ? v.slice(4) : '';
+    est.regiao = v.startsWith('bio:') ? '' : v;
+    enquadraRecorte(); atualiza(false);
+  };
   $('evento').innerHTML = '<option value="-1">Todos os eventos</option>' + M.eventos.map((e, i) => `<option value="${i}">${e}</option>`).join('');
   $('evento').onchange = e => { est.evento = +e.target.value; atualiza(true); };
   $('origem').innerHTML = [['natural', 'Vinda de vegetação natural'], ['floresta', 'Vinda de floresta'], ['savana', 'Vinda de savana (cerrado)'],
@@ -1357,7 +1401,7 @@
   function montaLegenda() {
     const el = $('legenda'), it = ITENS[est.itens[0]];
     let html = '';
-    const rotQ = v => est.metrica === 'pct' ? fmt(v, v < 1 ? 2 : (v < 10 ? 1 : 0)) + '%' : curto(v);
+    const rotQ = v => est.metrica === 'pct' ? fmt(v, v < 1 ? 2 : (v < 10 ? 1 : 0)) + '%' : (est.modo === 'gs' && est.metrica !== 'n' ? 'R$ ' : '') + curto(v);
     if (est.modo === 'pam' && est.disputa) {
       const n = v => v.toLocaleString('pt-BR');
       html += `<div class="controles"><button data-todas="1">Todas</button><button data-todas="0">Nenhuma</button></div><div class="arvore" role="tree">`
@@ -1430,7 +1474,7 @@
       if (est.modo === 'gleba' || est.modo === 'perda') { for (const v of celulasAtuais(a).values()) s += v; }
       else {
         calcula(a);
-        const absoluto = est.metrica === 'pct' || est.metrica === 'dens' || est.metrica === 'rend' || est.modo === 'cmp' || est.disputa;
+        const absoluto = ['pct', 'dens', 'rend', 'porcab', 'vpa'].includes(est.metrica) || est.modo === 'cmp' || est.disputa;
         for (let m = 0; m < NM; m++) {
           if (!noRecorte(m)) continue;
           let v = VAL[m];
@@ -1446,6 +1490,7 @@
      não se somam, então nesses modos ela mostra a área por trás delas. */
   function valorAbsoluto(m, a) {
     if (est.modo === 'pam') {
+      if (est.metrica === 'porcab') return serieItem(est.itens[0]).q[m * NA + a - A0];
       if (!ITENS[est.itens[0]].area) return VAL[m] * RURAL_KM2[m];
       let s = 0;
       for (const i of (est.disputa ? LAVOURAS : est.itens)) { const v = serieItem(i).area[m * NA + a - A0]; if (v > 0) s += v; }
@@ -1454,7 +1499,7 @@
     if (est.modo === 'sat') return VAL[m] * RURAL_KM2[m];
     if (est.modo === 'cmp') { let s = 0; for (const c of classesDosItens()) s += serieClasse(c)[m * NAMB + a - A0MB]; return s; }
     if (est.modo === 'exp') return VAL[m] * M.mun.km2[m];
-    if (est.modo === 'gs') return VAL[m] * CAD.A.car_imoveis[m] / 100;
+    if (est.modo === 'gs') return est.metrica === 'vpa' ? VAL[m] * GS_N[m] : VAL[m] * CAD.A.car_imoveis[m] / 100;
     return VAL[m];
   }
   function desenhaFaixa() {
@@ -1479,13 +1524,13 @@
     fctx.font = '10.5px Mono, monospace';
     fctx.textBaseline = 'top';
     const un = unidadeFaixa();
-    fctx.fillText(`${est.uf || est.bioma || 'Brasil'}: ${atual ? curto(atual[1]) : '—'} ${un}`, 0, 0);
+    fctx.fillText(`${nomeRecorte()}: ${atual ? curto(atual[1]) : '—'} ${un}`, 0, 0);
   }
   function unidadeFaixa() {
     const it = ITENS[est.itens[0]];
-    if (est.modo === 'gs') return 'agricultores';
+    if (est.modo === 'gs') return ['v', 'vpa'].includes(est.metrica) ? 'R$' : 'agricultores';
     if (est.modo === 'perda' || est.modo === 'gleba') return est.metrica === 'n' ? (est.modo === 'gleba' ? 'glebas' : 'perdas') : 'ha';
-    if (est.modo === 'pam' && it && !it.area) return est.metrica === 'v' ? 'mil R$' : it.un;
+    if (est.modo === 'pam' && it && !it.area) return est.metrica === 'v' ? 'mil R$' : it.un;   // por cabeça: a faixa soma o produto (leite, lã)
     if (est.modo === 'pam' && (est.metrica === 'q')) return it.un;
     if (est.modo === 'pam' && est.metrica === 'v') return 'mil R$';
     return 'ha';
@@ -1550,7 +1595,7 @@
   function aoMudarSelecao() {
     const ms = metricasDoModo();
     if (!ms.some(([v]) => v === est.metrica)) est.metrica = ms[0][0];
-    const espera = v => !pronto && ['q', 'v', 'rend', 'dens'].includes(v);
+    const espera = v => !pronto && ['q', 'v', 'rend', 'dens', 'porcab'].includes(v);
     $('metrica').innerHTML = ms.map(([v, t]) => `<option value="${v}" ${v === est.metrica ? 'selected' : ''} ${espera(v) ? 'disabled' : ''}>${t}${espera(v) ? ' (carregando…)' : ''}</option>`).join('');
     atualiza(true);
   }
@@ -1572,7 +1617,7 @@
     $('ctl-evento').style.display = est.modo === 'perda' ? '' : 'none';
     $('ctl-origem').style.display = est.modo === 'exp' ? '' : 'none';
     $('alt-glebas').style.display = est.modo === 'pam' && !est.disputa ? '' : 'none';
-    $('uf').value = est.uf; $('bioma').value = est.bioma;
+    $('uf').value = est.uf; $('regiao').value = valorRegiao();
     $('evento').value = est.evento; $('origem').value = est.origem;
     $('mostra-mascara').checked = est.mascara; $('sobre-glebas').checked = est.glebas;
     const [a0, a1] = anosDoModo();
@@ -1628,6 +1673,21 @@
   }
 
   let itemFicha = -1;   // cultura escolhida no select da série; -1 = a do mapa
+  /* Seções da ficha recolhíveis: cada <h3> vira o resumo de um <details> com o que
+     vem até o próximo. Quem foi fechado continua fechado de um município a outro
+     (a chave é o título sem números). */
+  const FECHADAS = new Set();
+  function recolhiveis(f) {
+    for (const h3 of [...f.querySelectorAll(':scope > h3')]) {
+      const d = document.createElement('details'), s = document.createElement('summary');
+      const chave = h3.textContent.replace(/[\d/–→,.]+/g, '').trim();
+      s.innerHTML = h3.innerHTML; d.append(s);
+      d.open = !FECHADAS.has(chave);
+      d.ontoggle = () => { d.open ? FECHADAS.delete(chave) : FECHADAS.add(chave); };
+      while (h3.nextSibling && !(h3.nextSibling.nodeName === 'H3' || h3.nextSibling.classList?.contains('fontes'))) d.append(h3.nextSibling);
+      h3.replaceWith(d);
+    }
+  }
   function montaFicha() {
     const m = est.mun, f = $('ficha');
     if (m < 0) return;
@@ -1721,6 +1781,23 @@
       const max = reb[0][1];
       h += `<h3>Rebanhos em ${Math.min(a, M.anos.prod[1])}</h3><div class="barras">` +
         reb.slice(0, 5).map(([x, v]) => barra(x.nome, v, max, `${curto(v)} cab.`, COR.ink3)).join('') + '</div>';
+      const aR = Math.min(a, M.anos.prod[1]) - A0, porCab = ITENS.filter(x => x.porcab).map(x => {
+        const q = serieItem(x.i).q[m * NA + aR], n = serieItem(x.porcab.reb).q[m * NA + aR];
+        return q > 0 && n > 0 ? `<span>${x.nome}</span><span>${fmt(q * x.porcab.fator / n)} ${x.porcab.txt}</span>` : '';
+      }).join('');
+      if (porCab) h += `<div class="kv" style="margin-top:6px">${porCab}</div>`;
+    }
+
+    // extração vegetal e silvicultura (PEVS): o açaí extraído ao lado do plantado
+    const aE = Math.min(a, M.anos.prod[1] - 1);
+    const pevs = ITENS.filter(x => x.g === 'E' || x.g === 'S').map(x => [x, serieItem(x.i).q[m * NA + aE - A0]])
+      .filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1]);
+    if (pevs.length) {
+      h += `<h3>Extração vegetal e silvicultura em ${aE}</h3><div class="barras">` +
+        pevs.slice(0, 8).map(([x, v]) => barra(x.nome, v, pevs[0][1], `${curto(v)} ${x.un}`, x.g === 'E' ? COR.c[3] : COR.ink3)).join('') + '</div>';
+      const plantadas = pevs.map(([x]) => x.nome.split(' (')[0].split(' · ')[0])
+        .filter(n => LAVOURAS.some(i => ITENS[i].nome === n && serieItem(i).area[m * NA + aE - A0] > 0));
+      if (plantadas.length) h += `<div class="nota">Também plantado aqui (PAM): ${[...new Set(plantadas)].join(', ')}. Extração é coleta na mata nativa; o declarado na PAM é cultivo.</div>`;
     }
 
     // crédito: glebas de todas as safras
@@ -1777,6 +1854,7 @@
     }
     h += `<div class="fontes">Fontes: IBGE (PAM, PPM, malha 2022, setores 2010) · MapBiomas coleção 11 · Banco Central (SICOR, Proagro) · CGU (Garantia-Safra) · Serviço Florestal Brasileiro (SICAR) · FUNAI · MMA (CNUC).</div>`;
     f.innerHTML = h;
+    recolhiveis(f);
     f.querySelector('.fechar').onclick = () => seleciona(-1);
     const sel = f.querySelector('#serie-item');
     if (sel) sel.onchange = e => { itemFicha = +e.target.value; montaFicha(); };
@@ -1793,6 +1871,7 @@
     if (est.disputa && est.desligadas.size) p.set('dx', [...est.desligadas].map(i => ITENS[i].slug).join(','));
     if (est.uf) p.set('uf', est.uf);
     if (est.bioma) p.set('bio', est.bioma);
+    if (est.regiao) p.set('rg', est.regiao);
     if (est.mun >= 0) p.set('mun', M.mun.id[est.mun]);
     if (est.evento >= 0) p.set('ev', est.evento);
     if (est.origem !== 'natural') p.set('o', est.origem);
@@ -1809,6 +1888,7 @@
     if (p.get('m')) est.metrica = p.get('m');
     if (UFS.includes(p.get('uf'))) est.uf = p.get('uf');
     if (BIOMAS.includes(p.get('bio'))) est.bioma = p.get('bio');
+    if (['semiarido', 'amazonia', ...REGIOES].includes(p.get('rg'))) est.regiao = p.get('rg');
     if (p.get('ev')) est.evento = +p.get('ev');
     if (p.get('o')) est.origem = p.get('o');
     const mid = p.get('mun');
@@ -1823,7 +1903,7 @@
     cacheItem.clear();
     iniciaMapb();
   }
-  const precisaTudo = est.modo !== 'pam' || est.glebas || ['q', 'v', 'rend', 'dens'].includes(est.metrica)
+  const precisaTudo = est.modo !== 'pam' || est.glebas || ['q', 'v', 'rend', 'dens', 'porcab'].includes(est.metrica)
     || est.itens.some(i => !ITENS[i].area);
   if (precisaTudo) { try { completa(await segunda); } catch (e) { return falha(e); } }
   redimensiona();
@@ -1836,7 +1916,7 @@
   /* gancho para os testes: só existe na cópia que testes/comum.ts injeta; chamado
      com os dados completos */
   const gancho = () => {
-    if (window.__testes) window.__testes({ est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
+    if (window.__testes) window.__testes({ noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
       carrega, garante, get CONT() { return CONT; }, get SOB() { return SOB; }, get CAD() { return CAD; }, MALHA });
   };
   if (pronto) gancho();

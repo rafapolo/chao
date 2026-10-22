@@ -15,7 +15,20 @@ As armadilhas da PAM medidas em 2026-10-21 são tratadas aqui:
     1988 — de 1974 a 1987 a PAM só tem área colhida, que entra no lugar (soja 1987:
     9,1 M ha colhidos; 1988: 10,5 M plantados). A página avisa.
 Na PPM, "Galináceos - galinhas" e "Suíno - matrizes" são subconjuntos dos totais
-e ficam de fora pelo mesmo motivo.
+e ficam de fora pelo mesmo motivo. Vacas ordenhadas e ovinos tosquiados
+(`producao_pecuaria`) entram como rebanho à parte: são o denominador do leite por
+vaca e da lã por ovino, não somam com bovinos e ovinos.
+
+PEVS (medida em 2026-10-22): não tem área, só quantidade e valor (R$ mil, com o
+mesmo corte de 1994: o açaí vale R$ 775 mil em 1993 e R$ 46 mi em 1994).
+  - Extração vegetal (E|): os produtos com menos de MIN_LINHAS linhas na série
+    viram "Outros" do mesmo tipo (t); "árvores abatidas" (mil árvores) e "nó de
+    pinho" ficam de fora; as duas borrachas de hévea e os dois produtos da
+    carnaúba (cera, pó) somam, porque têm a mesma unidade e o mesmo extrativista.
+  - Silvicultura (S|): as espécies (eucalipto, pinus, outras) só existem de 2013
+    em diante; somam no tipo (carvão, lenha, madeira para celulose, madeira para
+    outros usos). Antes de 2013 a tabela só traz casca de acácia, folha de
+    eucalipto e resina.
 """
 import polars as pl
 
@@ -29,6 +42,12 @@ REBANHOS_FORA = ("Galináceos - galinhas", "Suíno - matrizes de suínos")
 aqui_princ = ", ".join(f"'{p}'" for p in AQUI_PRINCIPAIS)
 aqui_fora = ", ".join(f"'{p}'" for p in AQUI_FORA)
 reb_fora = ", ".join(f"'{p}'" for p in REBANHOS_FORA)
+MIN_LINHAS = 1000
+EXTRACAO_JUNTA = """CASE
+    WHEN produto LIKE 'Hevea%' THEN 'Borracha de hévea'
+    WHEN produto LIKE 'Carnaúba (%' THEN 'Carnaúba (cera e pó)'
+    WHEN produto = 'Carnaúba' THEN 'Carnaúba (fibra)'
+    ELSE produto END"""
 
 df = roda("producao", f"""
 COPY (
@@ -59,6 +78,31 @@ COPY (
   FROM br_ibge_ppm.producao_aquicultura
   WHERE quantidade > 0 AND produto NOT IN ({aqui_fora})
   GROUP BY ALL
+  UNION ALL
+  SELECT 'R|Vacas ordenhadas', ano, id_municipio, NULL, vacas_ordenhadas::DOUBLE, NULL
+  FROM br_ibge_ppm.producao_pecuaria WHERE vacas_ordenhadas > 0
+  UNION ALL
+  SELECT 'R|Ovinos tosquiados', ano, id_municipio, NULL, ovinos_tosquiados::DOUBLE, NULL
+  FROM br_ibge_ppm.producao_pecuaria WHERE ovinos_tosquiados > 0
+  UNION ALL
+  SELECT 'E|' || nome, ano, id_municipio, NULL, sum(quantidade)::DOUBLE,
+         sum(CASE WHEN ano >= 1994 THEN valor END)
+  FROM (
+    SELECT e.*, CASE WHEN (n.linhas < {MIN_LINHAS} OR e.produto IN ('Outros', 'Outras')) AND e.unidade = 'Toneladas' THEN 'Outros (' || lower(coalesce(e.tipo_produto, 'diversos')) || ')'
+                     ELSE {EXTRACAO_JUNTA} END nome
+    FROM br_ibge_pevs.producao_extracao_vegetal e
+    JOIN (SELECT {EXTRACAO_JUNTA} j, count(*) linhas FROM br_ibge_pevs.producao_extracao_vegetal GROUP BY 1) n
+      ON n.j = {EXTRACAO_JUNTA.replace('produto', 'e.produto')}
+    WHERE e.quantidade > 0 AND e.unidade <> 'Mil árvores' AND e.produto NOT LIKE '%nó de pinho%')
+  GROUP BY ALL
+  UNION ALL
+  SELECT 'S|' || CASE
+           WHEN subtipo_produto LIKE '%papel e celulose' THEN 'Madeira para celulose'
+           WHEN subtipo_produto LIKE '%outras finalidades' THEN 'Madeira para outros usos'
+           ELSE coalesce(tipo_produto, produto) END,
+         ano, id_municipio, NULL, sum(quantidade)::DOUBLE, sum(CASE WHEN ano >= 1994 THEN valor END)
+  FROM br_ibge_pevs.producao_silvicultura WHERE quantidade > 0
+  GROUP BY ALL
 ) TO '{{saida}}' (FORMAT parquet);
 """)
 
@@ -72,9 +116,13 @@ checks = [
     ("P|Café (em grão) Total", 2024, "area", 1.9e6, "ha"),
     ("R|Bovino", 2024, "quantidade", 238e6, "cabeças"),
     ("A|Leite", 2024, "quantidade", 35.7e6, "mil litros"),
+    ("R|Vacas ordenhadas", 2024, "quantidade", 15.1e6, "cabeças"),
+    ("E|Açaí (fruto)", 2024, "quantidade", 0.247e6, "t"),
+    ("S|Madeira para celulose", 2024, "quantidade", 122e6, "m³"),   # medido no espelho em 2026-10-22; madeira em tora toda: 188 M m³
 ]
 for item, ano, col, ref, un in checks:
     v = total(item, ano, col)
     print(f"{item} {ano}: {v / 1e6:.1f} M {un} (ref ~{ref / 1e6:.1f} M)")
     assert 0.8 * ref < v < 1.2 * ref, f"{item} fora da ordem de grandeza"
 print(f"itens: {df['item'].n_unique()}, anos {df['ano'].min()}–{df['ano'].max()}")
+print("PEVS:", sorted(df.filter(pl.col("item").str.contains(r"^[ES]\|"))["item"].unique().to_list()))
