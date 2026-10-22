@@ -52,6 +52,7 @@ for (const motor of ESCOLHIDOS) {
       expect(pedidos.slice(0, 2).sort()).toEqual(["malha", "prod"]);
       expect(pedidos.sort()).toEqual(["cad", "cred", "malha", "mapb", "prod", "prodqv"]);
       // 3ª etapa: os contornos só vêm quando um modo pede (Garantia-Safra desenha o semiárido)
+      await p.click('#modos .grupo-modos[data-sec="Clima e fogo"]');
       await p.click('[data-modo="gs"]');
       await p.waitForFunction(() => (window as any).__T.CONT, null, { timeout: 60_000 });
       expect(pedidos).toContain("contornos");

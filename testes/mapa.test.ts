@@ -72,13 +72,15 @@ for (const motor of ESCOLHIDOS) {
 
     test("todas as fontes desenham sem erro, e a legenda acompanha", async () => {
       const x = await abre(nav, "?c=soja&a=2020");
-      for (const modo of await x.p.locator("#modos button").evaluateAll(bs => bs.map(b => (b as HTMLElement).dataset.modo!))) {
+      for (const [modo, sec] of await x.p.locator("#modos button[data-modo]").evaluateAll(bs => bs.map(b => [(b as HTMLElement).dataset.modo!, (b as HTMLElement).dataset.sec!]))) {
+        await x.p.click(`#modos .grupo-modos[data-sec="${sec}"]`);
         await x.p.click(`[data-modo="${modo}"]`);
         await x.p.waitForFunction(() => document.getElementById("rotulo-carga")!.hidden, null, { timeout: 30_000 });
         await quadro(x.p);
         expect(await x.p.locator("#nota").textContent(), modo).not.toBe("");
         expect(await x.p.locator("#legenda .extra").count(), modo).toBe(1);
       }
+      await x.p.click('#modos .grupo-modos[data-sec="Produção"]');
       await x.p.click('[data-modo="pam"]');
       await x.p.check("#disputa");
       expect(await x.p.locator("#legenda .fam").count()).toBe(10);   // famílias de lavoura
@@ -90,6 +92,12 @@ for (const motor of ESCOLHIDOS) {
       const x = await abre(nav, "?c=soja&a=2020");
       const secoes = await x.p.locator("#modos .grupo-modos").allTextContents();
       expect(secoes).toEqual(expect.arrayContaining(["Produção", "Terra", "Dinheiro", "Clima e fogo"]));
+      // a aba mostra só as fontes dela; trocar de aba não troca o modo
+      expect(await x.p.locator('[data-modo="gs"]').isVisible()).toBe(false);
+      await x.p.click('#modos .grupo-modos[data-sec="Clima e fogo"]');
+      expect(await x.p.locator('[data-modo="gs"]').isVisible()).toBe(true);
+      expect(await x.p.locator('[data-modo="pam"]').isVisible()).toBe(false);
+      expect(x.p.url()).not.toContain("f=");
       const r = await roda<any>(x.p, `
         const a = T.carrega('contornos'), b = T.carrega('contornos');
         return a.then(c => ({ igual: a === b, n: c.meta.regioes.length }));`);
@@ -182,6 +190,35 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("desmatamento: PRODES de Novo Progresso bate, a grade desenha células e a ficha traz a fiscalização", async () => {
+      const f = FIXTURE.prodes;
+      const x = await abre(nav, `?f=desm&a=${f.ano}&mun=${f.mun}`);
+      await x.p.waitForFunction(() => (window as any).__T.SOB.terra, null, { timeout: 60_000 });
+      await quadro(x.p);
+      const v = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
+      expect(Math.abs(v / f.km2 - 1)).toBeLessThan(0.005);
+      await x.p.selectOption("#metrica", "grade");
+      await quadro(x.p);
+      expect(await roda<number>(x.p, "return T.CEL.size")).toBeGreaterThan(1000);
+      for (const mt of ["deter", "emb", "autos", "multas", "acum"]) {
+        await x.p.selectOption("#metrica", mt);
+        expect(await x.p.locator("#tit-legenda").textContent(), mt).toContain("Desmatamento");
+      }
+      expect(await x.p.locator("#ficha").textContent()).toContain("Desmatamento e fiscalização");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("fogo: focos do satélite de referência somam o total do INPE e a ficha dá o mês de pico", async () => {
+      const x = await abre(nav, `?f=fogo&a=${FIXTURE.fogo.ano}&mun=5107925`);
+      await x.p.waitForFunction(() => (window as any).__T.SOB.fogo, null, { timeout: 60_000 });
+      const tot = await roda<number>(x.p, "let s = 0; for (const v of T.VAL) if (v > 0) s += v; return s;");
+      expect(tot).toBe(FIXTURE.fogo.focos);
+      expect(await x.p.locator("#ficha").textContent()).toContain("mês de pico");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
     test("lavoura principal: árvore de famílias liga e desliga, conta municípios e vai para a URL", async () => {
       const x = await abre(nav, "?c=soja&a=2020&d=1");
       await quadro(x.p);
@@ -214,7 +251,7 @@ for (const motor of ESCOLHIDOS) {
 
     test("sobre em diálogo, ícone por fonte, linha do tempo e painel recolhíveis", async () => {
       const x = await abre(nav, "?c=soja&a=2020");
-      expect(await x.p.locator("#modos button svg").count()).toBe(await x.p.locator("#modos button").count());
+      expect(await x.p.locator("#modos button[data-modo] svg").count()).toBe(await x.p.locator("#modos button[data-modo]").count());
       expect(await x.p.locator("#sobre").isVisible()).toBe(false);
       await x.p.click("#abre-sobre");
       expect(await x.p.locator("#sobre").isVisible()).toBe(true);

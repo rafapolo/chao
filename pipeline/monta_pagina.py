@@ -504,6 +504,65 @@ for c in ("pib", "va", "va_agro"):
     be.add(c, log16(pb[c].to_numpy()), "u16")
 be.meta = {"anos": [int(pb["ano"].min()), int(pb["ano"].max())]}
 
+# ---------- terra e fogo (3ª etapa) ----------
+PASSO_TERRA = 0.1   # o de baixa_terra.py
+
+
+def grade(bloco, pre, df, col):
+    """Células por ano, ordenadas por ano, linha e coluna, com ano, j e i em diferença."""
+    df = df.sort(["ano", "j", "i"])
+    bloco.add(pre + "a", dif(df["ano"] - 2000), "u16")
+    bloco.add(pre + "j", dif(df["j"]), "u16")
+    bloco.add(pre + "i", dif(df["i"]), "u16")
+    bloco.add(pre + "v", log16(df[col].to_numpy()), "u16")
+    return [pre + "a", pre + "j", pre + "i"]
+
+
+print("terra")
+CLASSES_DETER = ["desmatamento", "degradação", "queimada", "mineração"]
+bd = Bloco()
+pmu = idx_mun(pl.read_parquet(D / "prodes_mun.parquet")).sort(["m", "ano"])
+bd.add("pr_m", pmu["m"], "u16"); bd.add("pr_a", pmu["ano"] - 2000, "u8")
+bd.add("pr_inc", log16(pmu["incremento"].to_numpy()), "u16"); bd.add("pr_acum", log16(pmu["acumulado"].to_numpy()), "u16")
+delta = grade(bd, "pc_", pl.read_parquet(D / "prodes_celula.parquet"), "area_km2")
+dtm = idx_mun(pl.read_parquet(D / "deter_mun.parquet")).filter(pl.col("classe") != "queimada").sort(["m", "ano", "classe"])
+bd.add("dt_m", dtm["m"], "u16"); bd.add("dt_a", dtm["ano"] - 2000, "u8")
+bd.add("dt_c", dtm["classe"].replace_strict({c: i for i, c in enumerate(CLASSES_DETER)}, return_dtype=pl.Int32), "u8")
+bd.add("dt_n", dtm["avisos"], "u32"); bd.add("dt_v", log16(dtm["area_km2"].to_numpy()), "u16")
+ibm = idx_mun(pl.read_parquet(D / "ibama_mun.parquet")).sort(["m", "ano"])
+bd.add("ib_m", ibm["m"], "u16"); bd.add("ib_a", ibm["ano"] - 1990, "u8")
+for c in ("embargos", "autos_flora"):
+    bd.add("ib_" + c, ibm[c].fill_null(0), "u32")
+for c in ("area_embargada", "multas_flora"):
+    bd.add("ib_" + c, log16(ibm[c].to_numpy()), "u16")
+fdu = idx_mun(pl.read_parquet(D / "fundiario.parquet"))
+FUND_COLS = ["assentamentos", "familias", "area_assentamentos", "parcelas_sigef", "area_sigef", "parcelas_snci", "area_snci"]
+for c in FUND_COLS:
+    arr = np.zeros(NMUN)
+    arr[fdu["m"].to_numpy()] = fdu[c].fill_null(0).to_numpy()
+    bd.add("fu_" + c, np.round(arr), "u32")
+bd.meta = {"delta": delta, "passo": PASSO_TERRA, "deter": CLASSES_DETER, "fund": FUND_COLS,
+           "anos": {"prodes": [int(pmu["ano"].min()), int(pmu["ano"].max())],
+                    "acum": [int(pmu.filter(pl.col("acumulado").is_not_null())["ano"].min()),
+                             int(pmu.filter(pl.col("acumulado").is_not_null())["ano"].max())],
+                    "deter": [int(dtm["ano"].min()), int(dtm["ano"].max())],
+                    "ibama": [2000, int(ibm["ano"].max())]}}
+
+print("fogo")
+bf = Bloco()
+fmu = idx_mun(pl.read_parquet(D / "fogo_mun.parquet"))
+fano = fmu.group_by(["m", "ano"]).agg(pl.col("focos").sum()).sort(["m", "ano"])
+# mês de pico de cada município × ano (o desempate vai para o mês mais cedo)
+pico = fmu.sort(["m", "ano", "focos", "mes"], descending=[False, False, True, False]).group_by(["m", "ano"], maintain_order=True).first()
+fano = fano.join(pico.select("m", "ano", pl.col("mes").alias("pico")), on=["m", "ano"])
+bf.add("fm_m", fano["m"], "u16"); bf.add("fm_a", fano["ano"] - 2000, "u8")
+bf.add("fm_n", fano["focos"], "u32"); bf.add("fm_pico", fano["pico"], "u8")
+delta = grade(bf, "fc_", pl.read_parquet(D / "fogo_celula.parquet"), "focos")
+dq = idx_mun(pl.read_parquet(D / "deter_mun.parquet")).filter(pl.col("classe") == "queimada").sort(["m", "ano"])
+bf.add("fq_m", dq["m"], "u16"); bf.add("fq_a", dq["ano"] - 2000, "u8"); bf.add("fq_v", log16(dq["area_km2"].to_numpy()), "u16")
+bf.meta = {"delta": delta, "passo": PASSO_TERRA, "anos": [int(fano["ano"].min()), int(fano["ano"].max())],
+           "deter": [int(dq["ano"].min()), int(dq["ano"].max())]}
+
 # ---------- metadados ----------
 meta = {
     "mun": {
@@ -549,6 +608,9 @@ cr = pl.read_parquet(D / "credito_mun.parquet")
 fix["credito"] = {"mun": "5107925", "safra": 2023,
                   "valor": float(cr.filter((pl.col("id_municipio") == "5107925") & (pl.col("safra") == 2023)
                                            & (pl.col("operacoes") >= MIN_CELULA))["valor"].sum())}
+fix["prodes"] = {"mun": "1505031", "ano": 2023,   # Novo Progresso (PA)
+                 "km2": float(pmu.filter((pl.col("id_municipio") == "1505031") & (pl.col("ano") == 2023))["incremento"][0])}
+fix["fogo"] = {"ano": 2024, "focos": int(fano.filter(pl.col("ano") == 2024)["focos"].sum())}
 fix["pib"] = {"mun": "5107925", "ano": 2021,
               "va_agro": float(pb.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2021))["va_agro"][0])}
 (RAIZ / "testes" / "fixture.json").write_text(json.dumps(fix, ensure_ascii=False, indent=1))
@@ -558,7 +620,7 @@ print("blocos")
 tpl = (S / "template.html").read_text().replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
 BLOCOS = [("MALHA", "malha", bm), ("PROD", "prod", bp), ("PRODQV", "prodqv", bq), ("MAPB", "mapb", bb),
           ("CRED", "cred", bc), ("CAD", "cad", bk), ("CONTORNOS", "contornos", bt), ("CREDRS", "credrs", br),
-          ("ECON", "econ", be)]
+          ("ECON", "econ", be), ("TERRA", "terra", bd), ("FOGO", "fogo", bf)]
 GZ = {nome: comprime(nome, bloco) for _, nome, bloco in BLOCOS}
 
 # 1. index.html: arquivo único, abre por file:// (os blocos em base64 dentro dele)

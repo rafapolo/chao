@@ -95,9 +95,16 @@
   .modos button[aria-pressed="true"] { border-color: var(--acento); background: color-mix(in srgb, var(--acento) 14%, transparent); }
   .modos button:disabled { opacity: .45; cursor: progress; }
   .modos button small { display: block; color: var(--ink-3); font-size: 10.5px; }
-  .modos .grupo-modos { grid-column: 1 / -1; margin: 6px 0 0; font-family: "Mono", monospace; font-size: 10px;
-    text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
-  .modos .grupo-modos:first-child { margin-top: 0; }
+  /* seções das fontes em abas: só a aba aberta mostra as fontes dela */
+  .modos .abas { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 4px; border-bottom: 1px solid var(--linha); }
+  .modos .grupo-modos { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 0; padding: 6px 7px 5px;
+    background: none; font-family: "Mono", monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--ink-3); cursor: pointer; }
+  .modos .grupo-modos:hover { color: var(--ink); border-color: transparent; }
+  .modos .grupo-modos[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acento); }
+  .modos .grupo-modos.tem-ativo:not([aria-selected="true"])::after { content: ""; display: inline-block; width: 5px; height: 5px;
+    margin-left: 5px; border-radius: 50%; background: var(--acento); vertical-align: 1px; }
+  .modos button[data-modo][hidden] { display: none; }
 
   .busca { width: 100%; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--linha); background: var(--fundo); }
   .busca:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
@@ -250,6 +257,9 @@
   .ficha .sel-ficha { width: 100%; margin-bottom: 8px; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--linha); background: var(--fundo); }
   .ficha .vazio { color: var(--ink-3); font-size: 12px; }
   .ficha .fontes { margin-top: 18px; color: var(--ink-3); font-size: 11px; }
+  .ficha .carrega-extras { display: block; width: 100%; margin-top: 14px; padding: 9px 10px; border-radius: 6px; cursor: pointer;
+    border: 1px dashed var(--ink-3); background: none; color: var(--ink-2); text-align: left; font-size: 12px; min-height: 40px; }
+  .ficha .carrega-extras:hover { border-color: var(--acento); color: var(--ink); }
   .ficha details { border-top: 1px solid var(--linha); margin-top: 12px; }
   .ficha summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px;
     font-family: "Mono", monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3);
@@ -418,6 +428,8 @@
 <script id="b-contornos" type="text/plain" data-etapa="sob-demanda">/*__CONTORNOS__*/</script>
 <script id="b-credrs" type="text/plain" data-etapa="sob-demanda">/*__CREDRS__*/</script>
 <script id="b-econ" type="text/plain" data-etapa="sob-demanda">/*__ECON__*/</script>
+<script id="b-terra" type="text/plain" data-etapa="sob-demanda">/*__TERRA__*/</script>
+<script id="b-fogo" type="text/plain" data-etapa="sob-demanda">/*__FOGO__*/</script>
 <script>
 (async function () {
   'use strict';
@@ -686,11 +698,13 @@
     { id: 'sat', nome: 'Satélite', sub: 'MapBiomas · 1985–2025', sec: 'Produção' },
     { id: 'cmp', nome: 'Satélite × declarado', sub: '1985–2024', sec: 'Produção' },
     { id: 'exp', nome: 'Expansão', sub: 'de onde veio · por década', sec: 'Terra' },
+    { id: 'desm', nome: 'Desmatamento', sub: 'PRODES, DETER, IBAMA', sec: 'Terra', blocos: ['terra'] },
     { id: 'gleba', nome: 'Glebas', sub: 'crédito rural · 2012–2025', sec: 'Dinheiro' },
     { id: 'cred', nome: 'Crédito rural', sub: 'SICOR, ESTBAN, BNDES', sec: 'Dinheiro', blocos: ['credrs'] },
     { id: 'econ', nome: 'Economia', sub: 'PIB municipal · 1999–2021', sec: 'Dinheiro', blocos: ['econ'] },
     { id: 'perda', nome: 'Perdas', sub: 'Proagro · 2012–2025', sec: 'Clima e fogo' },
     { id: 'gs', nome: 'Garantia-Safra', sub: 'semiárido · 2013–2026', sec: 'Clima e fogo', blocos: ['contornos'] },
+    { id: 'fogo', nome: 'Fogo', sub: 'focos do INPE · 2003–2026', sec: 'Clima e fogo', blocos: ['fogo'] },
   ];
   const UFS = [...new Set(M.mun.uf)].sort();
   const BIOMAS = [...new Set(M.mun.bioma.filter(b => b && b !== '0'))].sort();
@@ -721,6 +735,13 @@
         return b ? b.safras : [2012, 2025];
       }
       case 'econ': return SOB.econ?.meta.anos || [1999, 2021];
+      case 'desm': {
+        const A = SOB.terra?.meta.anos;
+        if (!A) return [2001, 2025];
+        const mt = est.metrica;
+        return mt === 'acum' ? A.acum : ['deter', 'degr'].includes(mt) ? A.deter : ['emb', 'embha', 'autos', 'multas'].includes(mt) ? A.ibama : A.prodes;
+      }
+      case 'fogo': return SOB.fogo ? (est.metrica === 'queim' ? SOB.fogo.meta.deter : SOB.fogo.meta.anos) : [2003, 2026];
     }
   }
   function metricasDoModo() {
@@ -740,6 +761,12 @@
     if (est.modo === 'gleba') return [['area', 'Área das glebas (ha)'], ['n', 'Número de glebas']];
     if (est.modo === 'perda') return [['area', 'Área com perda (ha)'], ['n', 'Número de perdas']];
     if (est.modo === 'cred') return CRED_MEDIDAS;
+    if (est.modo === 'desm') return [['km2', 'km² desmatados no ano (PRODES)'], ['pct', '% do município desmatado no ano'],
+      ['grade', 'Desmatamento na grade de 0,1° (km²)'], ['acum', 'Desmatado acumulado (km²)'], ['deter', 'Alertas DETER: desmatamento (km²)'],
+      ['degr', 'Alertas DETER: degradação (km²)'], ['emb', 'Embargos do IBAMA'], ['embha', 'Área embargada (ha)'],
+      ['autos', 'Autos de infração de flora'], ['multas', 'Multas de flora (R$)']];
+    if (est.modo === 'fogo') return [['focos', 'Focos de calor'], ['dens', 'Focos por 1.000 km²'], ['grade', 'Focos na grade de 0,1°'],
+      ['queim', 'Cicatriz de queimada, DETER (km²)']];
     if (est.modo === 'econ') return [['va', 'VA agropecuário (R$)'], ['pct', '% do valor adicionado do município'], ['vakm', 'VA agro por km² rural']];
     if (est.modo === 'gs') return [['n', 'Agricultores pagos'], ['v', 'R$ pagos'], ['vpa', 'R$ por agricultor'], ['pct', '% dos imóveis do CAR']];
   }
@@ -858,6 +885,7 @@
       return;
     }
     if (est.modo === 'cred') return calculaCredito(ano);
+    if (est.modo === 'desm' || est.modo === 'fogo') return calculaTerra(ano);
     if (est.modo === 'econ') {
       const E = SOB.econ?.A;
       if (!E) return;
@@ -881,6 +909,41 @@
         VAL[m] = mt === 'pct' ? (imov[m] > 0 ? n / imov[m] * 100 : NaN) : mt === 'v' ? v : mt === 'vpa' ? (n > 0 ? v / n : NaN) : n;
       }
     }
+  }
+
+  /* Desmatamento e fogo: por município; a grade (medida "grade") é desenhada em
+     células, e VAL fica vazio. CRV guarda a grandeza absoluta que a faixa soma. */
+  function calculaTerra(ano) {
+    const mt = est.metrica, T = SOB.terra?.A, F = SOB.fogo?.A;
+    CRV.fill(0);
+    const poe = (m, v) => { CRV[m] += v; VAL[m] = (VAL[m] > 0 ? VAL[m] : 0) + v; };
+    if (est.modo === 'desm') {
+      if (!T || mt === 'grade') return;
+      const s = ano - 2000, a90 = ano - 1990;
+      if (mt === 'km2' || mt === 'pct' || mt === 'acum') {
+        for (let r = 0; r < T.pr_m.length; r++) if (T.pr_a[r] === s) {
+          const v = LUT[mt === 'acum' ? T.pr_acum[r] : T.pr_inc[r]];
+          if (v > 0) poe(T.pr_m[r], v);
+        }
+        if (mt === 'pct') for (let m = 0; m < NM; m++) VAL[m] = VAL[m] / M.mun.km2[m] * 100;
+      } else if (mt === 'deter' || mt === 'degr') {
+        const c = mt === 'deter' ? 0 : 1;
+        for (let r = 0; r < T.dt_m.length; r++) if (T.dt_a[r] === s && T.dt_c[r] === c) poe(T.dt_m[r], LUT[T.dt_v[r]]);
+      } else {
+        for (let r = 0; r < T.ib_m.length; r++) {
+          if (T.ib_a[r] !== a90) continue;
+          const v = mt === 'emb' ? T.ib_embargos[r] : mt === 'autos' ? T.ib_autos_flora[r]
+            : LUT[mt === 'embha' ? T.ib_area_embargada[r] : T.ib_multas_flora[r]];
+          if (v > 0) poe(T.ib_m[r], v);
+        }
+      }
+      return;
+    }
+    if (!F || mt === 'grade') return;
+    const s = ano - 2000;
+    if (mt === 'queim') { for (let r = 0; r < F.fq_m.length; r++) if (F.fq_a[r] === s) poe(F.fq_m[r], LUT[F.fq_v[r]]); return; }
+    for (let r = 0; r < F.fm_m.length; r++) if (F.fm_a[r] === s) poe(F.fm_m[r], F.fm_n[r]);
+    if (mt === 'dens') for (let m = 0; m < NM; m++) VAL[m] = VAL[m] / M.mun.km2[m] * 1000;
   }
 
   function calculaCredito(ano) {
@@ -1110,7 +1173,7 @@
     ctx.fillStyle = COR.fundo; ctx.fillRect(0, 0, W, H);
     ctx.setTransform(dpr * vista.k, 0, 0, dpr * vista.k, dpr * vista.x, dpr * vista.y);
     const vis = [(0 - vista.x) / vista.k, (0 - vista.y) / vista.k, (W - vista.x) / vista.k, (H - vista.y) / vista.k];
-    const C = GEO.caixa, celulas = est.modo === 'gleba' || est.modo === 'perda';
+    const C = GEO.caixa, celulas = emCelulas();
     const ano = est.ano;
     for (let m = 0; m < NM; m++) {
       if (C[4 * m + 2] < vis[0] || C[4 * m] > vis[2] || C[4 * m + 3] < vis[1] || C[4 * m + 1] > vis[3]) continue;
@@ -1153,9 +1216,26 @@
   /* Glebas e perdas: célula de 0,05° (~30 km²), só as que têm 5 ou mais glebas
      (ou perdas) — abaixo disso a célula identificaria uma propriedade. */
   let celQuebras = [];
+  // modos desenhados em células: glebas, perdas e a grade de desmatamento e de fogo
+  const emCelulas = () => est.modo === 'gleba' || est.modo === 'perda' || (['desm', 'fogo'].includes(est.modo) && est.metrica === 'grade');
+  const passoCel = () => ['desm', 'fogo'].includes(est.modo) ? (SOB.terra || SOB.fogo)?.meta.passo ?? 0.1 : M.passo;
   function celulasAtuais(ano = est.ano) {
     const C = CRED.A, out = [];
     const s = ano - 2000;
+    if (est.modo === 'desm' || est.modo === 'fogo') {
+      const B = est.modo === 'desm' ? SOB.terra?.A : SOB.fogo?.A, pre = est.modo === 'desm' ? 'pc_' : 'fc_', soma = new Map();
+      if (!B) return soma;
+      const Aa = B[pre + 'a'], I = B[pre + 'i'], J = B[pre + 'j'], V = B[pre + 'v'];
+      // linhas em ordem de ano: busca binária pelo começo do ano
+      let lo = 0, hi = Aa.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (Aa[mid] < s) lo = mid + 1; else hi = mid; }
+      // i e j foram gravados em diferença módulo 2^16: o valor volta com sinal
+      for (let r = lo; r < Aa.length && Aa[r] === s; r++) {
+        const i = I[r] > 32767 ? I[r] - 65536 : I[r], j = J[r] > 32767 ? J[r] - 65536 : J[r];
+        soma.set(i * 100000 + j, LUT[V[r]]);
+      }
+      return soma;
+    }
     if (est.modo === 'perda') {
       for (let r = 0; r < C.p_i.length; r++)
         if (C.p_s[r] === s && (est.evento < 0 || C.p_e[r] === est.evento))
@@ -1172,14 +1252,14 @@
     return soma;
   }
   function refazCelQuebras() {
-    const [a0, a1] = M.anos.safra, amostra = [];
+    const [a0, a1] = est.modo === 'gleba' || est.modo === 'perda' ? M.anos.safra : anosDoModo(), amostra = [];
     for (let a = a0; a <= a1; a += 2) for (const v of celulasAtuais(a).values()) amostra.push(v);
     amostra.sort((x, y) => x - y);
     celQuebras = amostra.length ? [0.15, 0.3, 0.45, 0.6, 0.75, 0.9].map(q => amostra[Math.floor(q * (amostra.length - 1))]) : [];
   }
   let CEL = new Map();
   function desenhaCelulas() {
-    const p = M.passo, ramp = est.modo === 'perda' ? COR.s : COR.b;
+    const p = passoCel(), ramp = est.modo === 'gleba' || (est.modo === 'pam' && est.glebas) ? COR.b : COR.s;
     for (const [k, v] of CEL) {
       // chave = i·100000 + j, com |j| < 50000: o arredondamento separa os dois
       const i = Math.round(k / 100000), j = k - i * 100000;
@@ -1300,6 +1380,19 @@
       if (mt === 'vha') return 'R$ ' + fmt(v) + ' por ha rural';
       return 'R$ ' + curto(v);
     }
+    if (est.modo === 'desm') {
+      if (mt === 'pct') return fmt(v, 2) + '% do município · ' + fmt(CRV[m], 1) + ' km²';
+      if (mt === 'emb') return fmt(v) + ' embargos';
+      if (mt === 'autos') return fmt(v) + ' autos de flora';
+      if (mt === 'embha') return curto(v) + ' ha embargados';
+      if (mt === 'multas') return 'R$ ' + curto(v) + ' em multas';
+      return fmt(v, v < 10 ? 2 : 0) + ' km²';
+    }
+    if (est.modo === 'fogo') {
+      if (mt === 'dens') return fmt(v, 1) + ' focos por 1.000 km²';
+      if (mt === 'queim') return fmt(v, 1) + ' km² de cicatriz';
+      return fmt(v) + ' focos';
+    }
     if (est.modo === 'econ') {
       if (mt === 'pct') return fmt(v, 1) + '% do VA · R$ ' + curto(CRV[m]);
       if (mt === 'vakm') return 'R$ ' + curto(v) + ' por km² rural';
@@ -1342,21 +1435,38 @@
     exp: '<path d="M9 16.5V8.5M9 8.5c0-3.2 2-5.2 5.5-5.2 0 3.3-2 5.2-5.5 5.2zM9 10.8C9 8 7.2 6.3 3.8 6.3c0 2.8 1.8 4.5 5.2 4.5z"/>',
     gleba: '<path d="M2.5 4l6-1.5 7 2-1 9-7 1.5-5-2.5z"/><path d="M8.5 2.5L7.5 15M2.5 9l13-.5"/>',
     perda: '<path d="M5 11.5a3.2 3.2 0 0 1 .4-6.4 4.2 4.2 0 0 1 8 .9 2.8 2.8 0 0 1-.3 5.5z"/><path d="M6.5 14l-.8 1.8M9.5 14l-.8 1.8M12.5 14l-.8 1.8"/>',
+    desm: '<path d="M9 2.5l4 6H5zM9 6.5l5 7H4zM9 13.5V16.5"/><path d="M13.5 15.5l3-3M15 11l1.8 1.8"/>',
+    fogo: '<path d="M9 16.5c-3 0-5-2-5-4.8 0-3 2.2-4.6 3-7.7 1.6 1.2 2.4 2.8 2.3 4.6 1-.6 1.7-1.6 1.9-2.8 1.6 1.4 2.8 3.4 2.8 5.9 0 2.8-2 4.8-5 4.8z"/>',
     cred: '<ellipse cx="9" cy="5" rx="5.5" ry="2.2"/><path d="M3.5 5v4c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V5M3.5 9v4c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V9"/>',
     econ: '<path d="M2 16h14M4 13V9M8 13V6M12 13V8M16 3l-4.5 3.5L8 4 3 7.5"/>',
     gs: '<circle cx="9" cy="9" r="3.2"/><path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.7 3.7l1.4 1.4M12.9 12.9l1.4 1.4M3.7 14.3l1.4-1.4M12.9 5.1l1.4-1.4"/>',
   };
   const modosEl = $('modos');
-  MODOS.forEach((md, k) => {
-    if (k === 0 || MODOS[k - 1].sec !== md.sec) {
-      const t = document.createElement('div');
-      t.className = 'grupo-modos'; t.textContent = md.sec;
-      modosEl.append(t);
-    }
+  let aba = '';   // seção aberta no painel; acompanha o modo até alguém trocar de aba
+  const abasEl = document.createElement('div');
+  abasEl.className = 'abas'; abasEl.setAttribute('role', 'tablist'); abasEl.setAttribute('aria-label', 'Seções das fontes');
+  modosEl.append(abasEl);
+  for (const sec of SECOES.filter(sc => MODOS.some(md => md.sec === sc))) {
+    const t = document.createElement('button');
+    t.className = 'grupo-modos'; t.textContent = sec; t.dataset.sec = sec; t.setAttribute('role', 'tab');
+    t.onclick = () => { aba = sec; mostraAba(); };
+    abasEl.append(t);
+  }
+  function mostraAba() {
+    const atual = MODOS.find(md => md.id === est.modo).sec;
+    if (!aba) aba = atual;
+    abasEl.querySelectorAll('button').forEach(t => {
+      t.setAttribute('aria-selected', t.dataset.sec === aba);
+      t.classList.toggle('tem-ativo', t.dataset.sec === atual);
+    });
+    modosEl.querySelectorAll('button[data-modo]').forEach(b => { b.hidden = b.dataset.sec !== aba; });
+  }
+  MODOS.forEach(md => {
     const b = document.createElement('button');
+    b.dataset.sec = md.sec;
     b.dataset.modo = md.id;
     b.innerHTML = `<svg viewBox="0 0 18 18" aria-hidden="true">${ICONES[md.id]}</svg>${md.nome}<small>${md.sub}</small>`;
-    b.onclick = () => { if (b.disabled) return; est.modo = md.id; aoMudarModo(); };
+    b.onclick = () => { if (b.disabled) return; est.modo = md.id; aba = md.sec; aoMudarModo(); };
     modosEl.append(b);
   });
 
@@ -1541,14 +1651,14 @@
     } else if (est.modo === 'cmp') {
       html += `<div class="faixa">${COR.d.map(c => `<span style="background:${c}"></span>`).join('')}</div>
         <div class="rotulos"><span>satélite vê ½</span><span>igual</span><span>vê 2×</span></div>`;
-    } else if (quebras.length || ((est.modo === 'gleba' || est.modo === 'perda') && celQuebras.length)) {
-      const celulas = est.modo === 'gleba' || est.modo === 'perda';
+    } else if (quebras.length || (emCelulas() && celQuebras.length)) {
+      const celulas = emCelulas();
       const q = celulas ? celQuebras : quebras, ramp = est.modo === 'gleba' ? COR.b : COR.s;
       html += `<div class="faixa">${ramp.map(c => `<span style="background:${c}"></span>`).join('')}</div>
         <div class="rotulos"><span>${rotQ(q[0])}</span><span>${rotQ(q[3])}</span><span>${rotQ(q[5])}+</span></div>`;
     }
     const extras = [`<div><i style="background:${COR.semdado}"></i>Sem registro</div>`];
-    if (est.mascara && est.modo !== 'gleba' && est.modo !== 'perda')
+    if (est.mascara && !emCelulas())
       extras.push(`<div><i style="background:${COR.mascara}"></i>Não rural: área urbana, terra indígena, UC de proteção integral</div>`);
     html += `<div class="extra">${extras.join('')}</div>`;
     el.innerHTML = html;
@@ -1572,6 +1682,8 @@
       return 'Crédito rural · ' + mt + (f.length ? ' · ' + f.join(', ') : '');
     }
     if (est.modo === 'econ') return 'Economia · ' + mt;
+    if (est.modo === 'desm') return 'Desmatamento · ' + mt;
+    if (est.modo === 'fogo') return 'Fogo · ' + mt;
     return nomes + ' · ' + mt;
   }
   const NOTAS = {
@@ -1582,6 +1694,8 @@
     gleba: () => `Polígonos das <b>glebas de custeio agrícola</b> financiadas com recurso público (SICOR, Banco Central), somados numa grade de 0,05° (~30 km²). É uma <b>amostra de onde se planta</b>, não o total: na safra 2023/24 a soja com gleba soma ~4 milhões de ha, contra 46 milhões declarados. Células com menos de ${M.min_celula} glebas não aparecem, para não identificar propriedade.` + (produtosSicor().size ? '' : ' <span class="aviso">Nenhuma cultura escolhida tem crédito com gleba.</span>'),
     perda: () => `Área com <b>perda comprovada</b> no Proagro, o seguro do crédito rural, por safra e evento, na grade de 0,05°. A seca responde por 59% da área com perda de 2012 a 2025. Células com menos de ${M.min_celula} perdas não aparecem.`,
     cred: () => `Crédito rural contratado no <b>SICOR</b> (Banco Central), por safra. <b>Só o crédito com município</b>: o SICOR põe o município apenas nas operações de recurso controlado ou equalizado (poupança rural equalizada, BNDES/Finame, fundos constitucionais, LCA equalizada, Funcafé, Pronaf, Pronamp). A LCA livre e os recursos livres não têm município: na safra 2023/24 foram R$ 136 bi com município de R$ 422 bi no país (com uma UF no recorte, a faixa mostra o total dela). Combinação de município, safra, finalidade, atividade e programa com menos de ${M.min_celula} operações não aparece (8% do valor), e o que vem de tomador só onde há ${M.min_celula} ou mais. <b>ESTBAN</b>: saldo de financiamentos rurais nas agências, em dezembro; no espelho faltam os anos ímpares desde 2003, e a queda de 2020 não aparece no SICOR. <b>BNDES</b>: desembolso ao setor agropecuário.`,
+    desm: () => `<b>PRODES</b> (INPE): área de vegetação nativa suprimida por ano (de agosto a julho), em todos os biomas; de 2017 em diante pelo incremento municipal, antes pela diferença do acumulado. A grade soma os polígonos em células de 0,1° (~120 km²). <b>DETER</b>: alertas diários (Amazônia desde 2016, Cerrado desde 2018, Pantanal e não-floresta desde 2023), separados em desmatamento e degradação; cicatriz de queimada fica no modo Fogo. <b>IBAMA</b>: embargos e autos de infração de flora não cancelados, pelo ano da lavratura; a área embargada vem sem unidade declarada na fonte (tratada como ha). Nome de embargado ou autuado não entra.`,
+    fogo: () => `Focos de calor do <b>satélite de referência</b> do INPE (AQUA, passagem da tarde), por ano: é a série comparável ao longo do tempo. Desde 2023 a fonte traz todos os satélites (30 vezes mais focos, o mesmo fogo visto várias vezes); só o de referência entra. Foco não é área queimada: a área vem da cicatriz de queimada do DETER (Amazônia, Cerrado, Pantanal).`,
     econ: () => `Valor adicionado bruto da <b>agropecuária</b> no PIB dos municípios (IBGE), em R$ correntes, de 1999 a 2021 (1999–2001 pela série antiga; o IBGE ainda não abriu 2022 e 2023 por setor). É o que a agropecuária gera de renda no município, não o que ela vende: a soja processada na indústria conta na indústria.`,
     gs: () => `Agricultores familiares do semiárido pagos pelo <b>Garantia-Safra</b> (Portal da Transparência) por ano do pagamento. A porcentagem compara com o número de imóveis no CAR do município — é ordem de grandeza, não cobertura exata.`,
   };
@@ -1599,10 +1713,11 @@
     const guarda = new Float32Array(VAL);
     for (let a = a0; a <= a1; a += (est.modo === 'exp' ? 10 : 1)) {
       let s = 0;
-      if (est.modo === 'gleba' || est.modo === 'perda') { for (const v of celulasAtuais(a).values()) s += v; }
+      if (emCelulas()) { for (const v of celulasAtuais(a).values()) s += v; }
       else {
         calcula(a);
         const absoluto = ['pct', 'dens', 'rend', 'porcab', 'vpa', 'vha', 'vakm'].includes(est.metrica) || CRED_PCT.has(est.metrica)
+          || (est.modo === 'fogo' && est.metrica === 'dens')
           || est.modo === 'cmp' || est.disputa;
         for (let m = 0; m < NM; m++) {
           if (!noRecorte(m)) continue;
@@ -1628,7 +1743,7 @@
     if (est.modo === 'sat') return VAL[m] * RURAL_KM2[m];
     if (est.modo === 'cmp') { let s = 0; for (const c of classesDosItens()) s += serieClasse(c)[m * NAMB + a - A0MB]; return s; }
     if (est.modo === 'exp') return VAL[m] * M.mun.km2[m];
-    if (est.modo === 'cred' || est.modo === 'econ') return CRV[m];
+    if (['cred', 'econ', 'desm', 'fogo'].includes(est.modo)) return CRV[m];
     if (est.modo === 'gs') return est.metrica === 'vpa' ? VAL[m] * GS_N[m] : VAL[m] * CAD.A.car_imoveis[m] / 100;
     return VAL[m];
   }
@@ -1666,6 +1781,8 @@
     if (est.modo === 'gs') return ['v', 'vpa'].includes(est.metrica) ? 'R$' : 'agricultores';
     if (est.modo === 'cred') return est.metrica === 'n' ? 'operações' : est.metrica === 'tom' ? 'tomadores' : 'R$';
     if (est.modo === 'econ') return 'R$ de VA agro';
+    if (est.modo === 'desm') return { emb: 'embargos', autos: 'autos', embha: 'ha', multas: 'R$' }[est.metrica] || 'km²';
+    if (est.modo === 'fogo') return est.metrica === 'queim' ? 'km²' : 'focos';
     if (est.modo === 'perda' || est.modo === 'gleba') return est.metrica === 'n' ? (est.modo === 'gleba' ? 'glebas' : 'perdas') : 'ha';
     if (est.modo === 'pam' && it && !it.area) return est.metrica === 'v' ? 'mil R$' : it.un;   // por cabeça: a faixa soma o produto (leite, lã)
     if (est.modo === 'pam' && (est.metrica === 'q')) return it.un;
@@ -1685,9 +1802,10 @@
     $('ano-txt').textContent = $('chip-ano').textContent = est.modo === 'exp' ? `${a - 10}→${a}` : a;
     const safra = 'safra ' + a + '/' + String(a + 1).slice(2);
     $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
+      desm: ['emb', 'embha', 'autos', 'multas', 'deter', 'degr'].includes(est.metrica) ? 'ano' : 'ago→jul (PRODES)', fogo: 'ano',
       cred: est.metrica === 'estban' ? 'dezembro' : est.metrica === 'bndes' ? 'ano' : safra }[est.modo];
     calcula();
-    if (est.modo === 'gleba' || est.modo === 'perda' || est.glebas) CEL = celulasAtuais();
+    if (emCelulas() || est.glebas) CEL = celulasAtuais();
     if (est.modo === 'pam' && est.disputa) montaLegenda();   // a contagem muda a cada ano
     desenhaFaixa(); pede(); gravaUrl();
     if (est.mun >= 0) montaFicha();
@@ -1741,13 +1859,14 @@
   function atualiza(escala) {
     const chegou = garante(blocosDoEstado());
     $('rotulo-carga').hidden = chegou;
-    modosEl.querySelectorAll('button').forEach(b => {
+    mostraAba();
+    modosEl.querySelectorAll('button[data-modo]').forEach(b => {
       b.setAttribute('aria-pressed', b.dataset.modo === est.modo);
       b.disabled = !pronto && b.dataset.modo !== 'pam';
       b.title = b.disabled ? 'carregando…' : '';
     });
     $('sobre-glebas').disabled = !pronto;
-    const comItens = !['perda', 'gs', 'cred', 'econ'].includes(est.modo);
+    const comItens = !['perda', 'gs', 'cred', 'econ', 'desm', 'fogo'].includes(est.modo);
     $('sec-itens').style.display = comItens ? '' : 'none';
     $('alt-disputa').style.display = est.modo === 'pam' ? '' : 'none';
     const principal = est.modo === 'pam' && est.disputa;
@@ -1768,7 +1887,7 @@
     if (est.modo === 'exp') a = Math.round(a / 10) * 10;
     montaListaItens(); montaSelecionados();
     if (escala) {
-      if (est.modo === 'gleba' || est.modo === 'perda' || est.glebas) {
+      if (emCelulas() || est.glebas) {
         const salvo = est.modo; if (est.glebas && est.modo === 'pam') est.modo = 'gleba';
         refazCelQuebras(); est.modo = salvo;
       }
@@ -1816,10 +1935,55 @@
 
   let itemFicha = -1;   // cultura escolhida no select da série; -1 = a do mapa
   /* Crédito e economia na ficha: pedem os blocos da 3ª etapa ao abrir a ficha */
-  function fichaDinheiro(m, a) {
-    if (!garante(['credrs', 'econ'])) return '<h3>Crédito rural e economia</h3><div class="vazio">carregando…</div>';
-    const B = SOB.credrs.A, BM = SOB.credrs.meta, s = a - 2000;
+  /* Os blocos da 3ª etapa não são baixados só porque a ficha abriu: cada seção
+     aparece se o bloco já veio (pelo modo, ou pelo botão no fim da ficha). */
+  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo'];
+  const NOME_EXTRA = { credrs: 'crédito', econ: 'economia', terra: 'desmatamento e terra', fogo: 'fogo' };
+  function fichaTerra(m, a) {
     let h = '';
+    const T = SOB.terra?.A, F = SOB.fogo?.A;
+    if (T) {
+      const kv = [], s = a - 2000, a90 = a - 1990;
+      let inc = 0, acum = 0, anoAcum = 0, emb = 0, embTot = 0, autos = 0, multas = 0, multasTot = 0;
+      const dt = [0, 0];
+      for (let r = 0; r < T.pr_m.length; r++) if (T.pr_m[r] === m) {
+        if (T.pr_a[r] === s) inc = LUT[T.pr_inc[r]] || 0;
+        if (T.pr_a[r] <= s && LUT[T.pr_acum[r]] > 0 && T.pr_a[r] >= anoAcum) { anoAcum = T.pr_a[r]; acum = LUT[T.pr_acum[r]]; }
+      }
+      for (let r = 0; r < T.dt_m.length; r++) if (T.dt_m[r] === m && T.dt_a[r] === s && T.dt_c[r] < 2) dt[T.dt_c[r]] += LUT[T.dt_v[r]];
+      for (let r = 0; r < T.ib_m.length; r++) if (T.ib_m[r] === m) {
+        embTot += T.ib_embargos[r]; multasTot += LUT[T.ib_multas_flora[r]] || 0;
+        if (T.ib_a[r] === a90) { emb = T.ib_embargos[r]; autos = T.ib_autos_flora[r]; multas = LUT[T.ib_multas_flora[r]] || 0; }
+      }
+      if (inc) kv.push([`Desmatado em ${a} (PRODES)`, fmt(inc, inc < 10 ? 2 : 0) + ' km²']);
+      if (acum) kv.push([`Desmatado acumulado até ${2000 + anoAcum}`, fmt(acum) + ' km² · ' + fmt(acum / M.mun.km2[m] * 100, 0) + '% do município']);
+      if (dt[0] || dt[1]) kv.push([`Alertas DETER em ${a}`, `${fmt(dt[0], 1)} km² desmatamento · ${fmt(dt[1], 1)} km² degradação`]);
+      if (emb || autos) kv.push([`IBAMA em ${a}`, `${fmt(emb)} embargos · ${fmt(autos)} autos de flora · R$ ${curto(multas)}`]);
+      if (embTot) kv.push(['IBAMA desde 2000', `${fmt(embTot)} embargos · R$ ${curto(multasTot)} em multas de flora`]);
+      const fu = k => T['fu_' + k][m], car = CAD?.A.car_area_cadastrada[m] || 0;
+      if (fu('assentamentos')) kv.push(['Assentamentos (INCRA)', `${fmt(fu('assentamentos'))} · ${fmt(fu('familias'))} famílias · ${curto(fu('area_assentamentos'))} ha`]);
+      if (fu('area_sigef') || fu('area_snci')) kv.push(['Área certificada (SIGEF + SNCI)', `${curto(fu('area_sigef') + fu('area_snci'))} ha` + (car ? ` · CAR declara ${curto(car)} ha` : '')]);
+      h += '<h3>Desmatamento e fiscalização</h3>' + (kv.length
+        ? '<div class="kv">' + kv.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('') + '</div>'
+        : '<div class="vazio">Sem desmatamento, alerta ou embargo registrado.</div>');
+    }
+    if (F) {
+      const s = a - 2000, meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'], pts = [];
+      let n = 0, pico = 0, q = 0;
+      for (let r = 0; r < F.fm_m.length; r++) if (F.fm_m[r] === m) { pts.push([2000 + F.fm_a[r], F.fm_n[r]]); if (F.fm_a[r] === s) { n = F.fm_n[r]; pico = F.fm_pico[r]; } }
+      for (let r = 0; r < F.fq_m.length; r++) if (F.fq_m[r] === m && F.fq_a[r] === s) q += LUT[F.fq_v[r]];
+      h += '<h3>Fogo</h3>';
+      if (pts.length) {
+        h += `<div class="nota" style="margin:0 0 6px">${a}: ${fmt(n)} focos${n ? `, mês de pico: ${meses[pico - 1]}` : ''}${q ? ` · ${fmt(q, 1)} km² de cicatriz (DETER)` : ''}.</div>`;
+        h += serieSvg([{ nome: 'Focos por ano (satélite de referência)', cor: COR.s[4], pts }], SOB.fogo.meta.anos[0], SOB.fogo.meta.anos[1], 'focos');
+      } else h += '<div class="vazio">Nenhum foco registrado.</div>';
+    }
+    return h;
+  }
+  function fichaDinheiro(m, a) {
+    let h = '';
+    if (!SOB.credrs) return h + fichaEconomia(m, a);
+    const B = SOB.credrs.A, BM = SOB.credrs.meta, s = a - 2000;
     const sa = Math.min(Math.max(a, BM.safras[0]), BM.safras[1]), ss = sa - 2000;
     const porFin = new Float64Array(BM.finalidades.length);
     let tot = 0, pronaf = 0, ops = 0;
@@ -1871,7 +2035,11 @@
       if (j >= 0) linhas.push([`Carteira rural no SCR, dez. ${S.ano[j]}`, `R$ ${curto(S.carteira[j])} · ${fmt(S.inad[j] / S.carteira[j] * 100, 1)}% inadimplente`]);
       if (linhas.length) h += `<h3>Crédito rural em ${uf}</h3><div class="kv">` + linhas.map(([x, y]) => `<span>${x}</span><span>${y}</span>`).join('') + '</div>';
     }
-    // economia
+    return h + fichaEconomia(m, a);
+  }
+  function fichaEconomia(m, a) {
+    let h = '';
+    if (!SOB.econ) return h;
     const E = SOB.econ.A, pts = [];
     let lin = null;
     for (let r = 0; r < E.m.length; r++) if (E.m[r] === m) {
@@ -2046,7 +2214,9 @@
         gsPts.map(([y, v]) => barra(String(y), v, maxG, fmt(v), y === a ? COR.acento : COR.ink3)).join('') + '</div>';
     }
 
-    h += fichaDinheiro(m, a);
+    h += fichaDinheiro(m, a) + fichaTerra(m, a);
+    const faltam = EXTRAS.filter(id => !SOB[id]);
+    if (faltam.length) h += `<button class="carrega-extras" id="carrega-extras">${PROMESSAS.has(faltam[0]) ? 'carregando…' : 'Mostrar também: ' + faltam.map(id => NOME_EXTRA[id]).join(', ')}</button>`;
 
     // CAR
     const car = k => CAD.A['car_' + k][m];
@@ -2070,6 +2240,8 @@
     f.innerHTML = h;
     recolhiveis(f);
     f.querySelector('.fechar').onclick = () => seleciona(-1);
+    const ce = f.querySelector('#carrega-extras');
+    if (ce) ce.onclick = () => { ce.textContent = 'carregando…'; ce.disabled = true; garante(EXTRAS); };
     const sel = f.querySelector('#serie-item');
     if (sel) sel.onchange = e => { itemFicha = +e.target.value; montaFicha(); };
   }
@@ -2134,7 +2306,7 @@
   /* gancho para os testes: só existe na cópia que testes/comum.ts injeta; chamado
      com os dados completos */
   const gancho = () => {
-    if (window.__testes) window.__testes({ CRV, noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
+    if (window.__testes) window.__testes({ get CEL() { return CEL; }, CRV, noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
       carrega, garante, get CONT() { return CONT; }, get SOB() { return SOB; }, get CAD() { return CAD; }, MALHA });
   };
   if (pronto) gancho();
