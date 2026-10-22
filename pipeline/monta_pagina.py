@@ -180,6 +180,48 @@ bm.add("amc", [grupos[amc_de[m]] for m in IDS], "u16")
 bm.add("k_mun", masc_idx["m"], "u16")
 p = codifica_geo(bm, "k_", masc_idx["wkb"].to_list(), min_pts=4)
 print(f"    máscara: {p:,} vértices".replace(",", "."))
+# divisas das UFs: sempre à vista, em traço fino, por isso na primeira etapa
+regioes = pl.read_parquet(D / "regioes.parquet").sort(["tipo", "nome"])
+ufs_geo = regioes.filter(pl.col("tipo") == "uf")
+p = codifica_geo(bm, "u_", ufs_geo["wkb"].to_list())
+print(f"    UFs: {p:,} vértices".replace(",", "."))
+
+# divisão regional: pertença do município (semiárido, Amazônia Legal) e os
+# agrupamentos do IBGE, como índice numa lista de nomes
+div = pl.DataFrame({"id_municipio": IDS}).join(pl.read_parquet(D / "divisao.parquet"), on="id_municipio", how="left")
+assert div["regiao"].null_count() == 0, "município da malha fora do diretório"
+bm.add("semiarido", div["semiarido"].fill_null(False), "u8")
+bm.add("amazonia", div["amazonia_legal"].fill_null(False), "u8")
+DIVISOES = {}
+for chave, col_id, col_nome in [("regiao", "regiao", "regiao"), ("meso", "id_mesorregiao", "nome_mesorregiao"),
+                                ("micro", "id_microrregiao", "nome_microrregiao"),
+                                ("intermediaria", "id_regiao_intermediaria", "nome_regiao_intermediaria"),
+                                ("imediata", "id_regiao_imediata", "nome_regiao_imediata")]:
+    pares = sorted(set(zip(div[col_id].to_list(), div[col_nome].to_list())))
+    pos = {cod: i for i, (cod, _) in enumerate(pares)}
+    bm.add("dv_" + chave, [pos[c] for c in div[col_id].to_list()], "u16")
+    DIVISOES[chave] = [n for _, n in pares]
+
+# contornos de região (3ª etapa, sob demanda): semiárido no modo Garantia-Safra,
+# divisas de bioma com bioma no recorte, Amazônia Legal, regiões e país
+print("contornos")
+bt = Bloco()
+outros = regioes.filter(pl.col("tipo") != "uf")
+
+
+def sem_furos(w, min_km2=50):
+    """Tira os furos pequenos (frestas da união de municípios); o contorno é só traço."""
+    g = shapely.from_wkb(w)
+    lim = min_km2 / 12300   # km² -> grau² aproximado na latitude do semiárido
+    polys = [shapely.Polygon(p.exterior, [r for r in p.interiors if shapely.Polygon(r).area > lim])
+             for p in getattr(g, "geoms", [g]) if p.geom_type == "Polygon" and p.area > lim]
+    return shapely.to_wkb(shapely.MultiPolygon(polys))
+
+
+outros = outros.with_columns(pl.col("wkb").map_elements(sem_furos, return_dtype=pl.Binary))
+p = codifica_geo(bt, "r_", outros["wkb"].to_list())
+bt.meta = {"regioes": [{"tipo": t, "nome": n} for t, n in zip(outros["tipo"].to_list(), outros["nome"].to_list())]}
+print(f"    {outros.height} contornos, {p:,} vértices".replace(",", "."))
 
 # ---------- catálogo de itens ----------
 prod = idx_mun(pl.read_parquet(D / "producao.parquet"))
@@ -389,6 +431,7 @@ meta = {
         "lon": mun["lon"].round(3).to_list(), "lat": mun["lat"].round(3).to_list(),
         "inst": inst_arr.tolist(),
     },
+    "ufs": ufs_geo["nome"].to_list(), "divisoes": DIVISOES,
     "itens": ITENS, "familias": FAM_META, "mb": MB_CLASSES, "origens": ORIGENS, "sicor": SICOR, "eventos": EVENTOS,
     "sicar": SICAR_COLS,
     "anos": {"prod": anos_prod, "mb": anos_mb, "safra": safras, "gsafra": anos_gs,
@@ -409,7 +452,7 @@ for mid, cru in [("5107925", "T|Soja (em grão)"), ("3543402", "T|Cana-de-açúc
 print("blocos")
 tpl = (S / "template.html").read_text().replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
 BLOCOS = [("MALHA", "malha", bm), ("PROD", "prod", bp), ("PRODQV", "prodqv", bq), ("MAPB", "mapb", bb),
-          ("CRED", "cred", bc), ("CAD", "cad", bk)]
+          ("CRED", "cred", bc), ("CAD", "cad", bk), ("CONTORNOS", "contornos", bt)]
 GZ = {nome: comprime(nome, bloco) for _, nome, bloco in BLOCOS}
 
 # 1. index.html: arquivo único, abre por file:// (os blocos em base64 dentro dele)
@@ -433,8 +476,9 @@ for marca, nome, _ in BLOCOS:
     nomes.add(arq)
     if not (WEB / "dados" / arq).exists():
         (WEB / "dados" / arq).write_bytes(GZ[nome])
-    web = web.replace(f'<script id="b-{nome}" type="text/plain">/*__{marca}__*/</script>',
-                      f'<script id="b-{nome}" type="text/plain" data-src="dados/{arq}"></script>')
+    # o marcador fica entre a tag de abertura (que pode ter data-etapa) e o fechamento
+    web = re.sub(rf'(<script id="b-{nome}" type="text/plain"[^>]*)>/\*__{marca}__\*/</script>',
+                 rf'\1 data-src="dados/{arq}"></script>', web)
 assert "/*__" not in web, "marcador sem bloco na versão web"
 (WEB / "index.html").write_text(web)
 (WEB / ".nojekyll").write_text("")
@@ -444,6 +488,8 @@ for velho in (WEB / "dados").glob("*.bin"):
     if velho.name not in nomes:
         velho.unlink()
 tam = {a: (WEB / "dados" / a).stat().st_size for a in nomes}
-primeira = sum(v for a, v in tam.items() if a.split(".")[0] in ("malha", "prod"))
+etapa = {a: (1 if a.split(".")[0] in ("malha", "prod") else 3 if f'id="b-{a.split(".")[0]}" type="text/plain" data-etapa' in tpl else 2)
+         for a in nomes}
+por = [sum(v for a, v in tam.items() if etapa[a] == e) / 1e6 for e in (1, 2, 3)]
 print(f"{WEB}/ — html {(WEB / 'index.html').stat().st_size / 1e3:.0f} kB, dados {sum(tam.values()) / 1e6:.1f} MB "
-      f"(primeira etapa {primeira / 1e6:.1f} MB)")
+      f"(etapas: 1ª {por[0]:.1f} MB, 2ª {por[1]:.1f} MB, 3ª sob demanda {por[2]:.1f} MB)")

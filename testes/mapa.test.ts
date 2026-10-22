@@ -85,6 +85,19 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("fontes agrupadas em seções; bloco sob demanda carrega uma vez e fica em cache", async () => {
+      const x = await abre(nav, "?c=soja&a=2020");
+      const secoes = await x.p.locator("#modos .grupo-modos").allTextContents();
+      expect(secoes).toEqual(expect.arrayContaining(["Produção", "Terra", "Dinheiro", "Clima e fogo"]));
+      const r = await roda<any>(x.p, `
+        const a = T.carrega('contornos'), b = T.carrega('contornos');
+        return a.then(c => ({ igual: a === b, n: c.meta.regioes.length }));`);
+      expect(r.igual).toBe(true);
+      expect(r.n).toBeGreaterThan(5);
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
     test("lavoura principal: árvore de famílias liga e desliga, conta municípios e vai para a URL", async () => {
       const x = await abre(nav, "?c=soja&a=2020&d=1");
       await quadro(x.p);

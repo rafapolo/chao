@@ -95,6 +95,9 @@
   .modos button[aria-pressed="true"] { border-color: var(--acento); background: color-mix(in srgb, var(--acento) 14%, transparent); }
   .modos button:disabled { opacity: .45; cursor: progress; }
   .modos button small { display: block; color: var(--ink-3); font-size: 10.5px; }
+  .modos .grupo-modos { grid-column: 1 / -1; margin: 6px 0 0; font-family: "Mono", monospace; font-size: 10px;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
+  .modos .grupo-modos:first-child { margin-top: 0; }
 
   .busca { width: 100%; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--linha); background: var(--fundo); }
   .busca:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
@@ -326,6 +329,7 @@
     <div class="secao">
       <div class="titulo">Fonte</div>
       <div class="modos" id="modos" role="group" aria-label="Fonte do mapa"></div>
+      <div class="nota" id="rotulo-carga" hidden>carregando os dados deste modo…</div>
     </div>
     <div class="secao" id="sec-itens">
       <div class="titulo">Cultura ou criação</div>
@@ -389,12 +393,14 @@
 <div class="rotulo-celular" id="rotulo-celular" aria-hidden="true"></div>
 <div id="carregando">carregando dados…</div>
 
-<script id="b-malha" type="text/plain" data-src="dados/malha.4a8801a0ee15.bin"></script>
+<script id="b-malha" type="text/plain" data-src="dados/malha.f6c145790d22.bin"></script>
 <script id="b-prod" type="text/plain" data-src="dados/prod.85fe8d3b5b95.bin"></script>
 <script id="b-prodqv" type="text/plain" data-src="dados/prodqv.79985b2cacf4.bin"></script>
 <script id="b-mapb" type="text/plain" data-src="dados/mapb.16bafbae7911.bin"></script>
 <script id="b-cred" type="text/plain" data-src="dados/cred.4ee17c9598a3.bin"></script>
 <script id="b-cad" type="text/plain" data-src="dados/cad.563efcf6a65a.bin"></script>
+<!-- 3ª etapa: blocos sob demanda, pedidos só quando um modo ou a ficha precisa deles -->
+<script id="b-contornos" type="text/plain" data-etapa="sob-demanda" data-src="dados/contornos.99277bf5c4e8.bin"></script>
 <script>
 (async function () {
   'use strict';
@@ -459,12 +465,20 @@
     $('carregando').textContent = 'Não foi possível abrir os dados do mapa (' + e.message + '). Nada foi desenhado pela metade.';
     $('carregando').classList.add('erro');
   };
+  /* Cada bloco é pedido e decodificado uma vez só: carrega(id) guarda a promessa.
+     A 3ª etapa (data-etapa="sob-demanda") não é pedida no carregamento — só
+     quando um modo, o recorte ou a ficha a chama. */
+  const PROMESSAS = new Map();
+  const carrega = id => {
+    if (!PROMESSAS.has(id)) PROMESSAS.set(id, bloco('b-' + id));
+    return PROMESSAS.get(id);
+  };
   let MALHA, PROD, PRODQV = null, MAPB = null, CRED = null, CAD = null, pronto = false;
   try {
-    [MALHA, PROD] = await Promise.all(['b-malha', 'b-prod'].map(bloco));
+    [MALHA, PROD] = await Promise.all(['malha', 'prod'].map(carrega));
   } catch (e) { return falha(e); }
   // a segunda etapa só começa depois da primeira, para não dividir a banda com ela
-  const segunda = Promise.all(['b-prodqv', 'b-mapb', 'b-cred', 'b-cad'].map(bloco));
+  const segunda = Promise.all(['prodqv', 'mapb', 'cred', 'cad'].map(carrega));
   segunda.catch(() => {});
   const M = MALHA.meta;
   const NM = M.mun.id.length;
@@ -535,6 +549,44 @@
   MASC.p.forEach(p => MASC_TUDO.addPath(p));
   const DIVISAS = new Path2D();
   GEO.p.forEach(p => DIVISAS.addPath(p));
+  // divisas das UFs: um traço fino sempre à vista
+  const DIVISAS_UF = new Path2D();
+  caminhos(MALHA.A, 'u_', M.ufs.length).p.forEach(p => DIVISAS_UF.addPath(p));
+
+  /* ---------- 3ª etapa: blocos sob demanda ----------
+     SOB[id] fica nulo até o bloco chegar; quem precisa dele chama garante([ids]),
+     que pede o que falta e, na chegada, redesenha. Enquanto isso o modo mostra
+     "carregando…". */
+  const SOB = {};
+  let CONT = null;   // contornos de região: { tipo → Path2D[] por nome }
+  const AO_CHEGAR = {
+    contornos: b => {
+      const rs = b.meta.regioes, ps = caminhos(b.A, 'r_', rs.length).p;
+      CONT = {};
+      rs.forEach((r, k) => { (CONT[r.tipo] = CONT[r.tipo] || {})[r.nome] = ps[k]; });
+    },
+  };
+  function garante(ids) {
+    let tudo = true;
+    for (const id of ids) {
+      if (SOB[id]) continue;
+      tudo = false;
+      if (PROMESSAS.has(id)) continue;
+      carrega(id).then(b => {
+        SOB[id] = b;
+        AO_CHEGAR[id]?.(b);
+        atualiza(true);
+        if (est.mun >= 0) montaFicha();
+      }, e => console.error('bloco ' + id + ':', e));
+    }
+    return tudo;
+  }
+  // os blocos sob demanda que o estado atual pede
+  function blocosDoEstado() {
+    const ids = [...(MODOS.find(md => md.id === est.modo)?.blocos || [])];
+    if (est.bioma) ids.push('contornos');
+    return [...new Set(ids)];
+  }
 
   const RURAL_KM2 = new Float64Array(NM);
   for (let m = 0; m < NM; m++) RURAL_KM2[m] = Math.max(M.mun.km2[m] - M.mun.masc_km2[m], 0.01);
@@ -610,14 +662,16 @@
   }
 
   /* ---------- estado ---------- */
+  /* sec: a seção do painel; blocos: o que o modo pede da 3ª etapa */
+  const SECOES = ['Produção', 'Terra', 'Dinheiro', 'Clima e fogo', 'Gente'];
   const MODOS = [
-    { id: 'pam', nome: 'Declarado', sub: 'IBGE · 1974–2025' },
-    { id: 'sat', nome: 'Satélite', sub: 'MapBiomas · 1985–2025' },
-    { id: 'cmp', nome: 'Satélite × declarado', sub: '1985–2024' },
-    { id: 'exp', nome: 'Expansão', sub: 'de onde veio · por década' },
-    { id: 'gleba', nome: 'Glebas', sub: 'crédito rural · 2012–2025' },
-    { id: 'perda', nome: 'Perdas', sub: 'Proagro · 2012–2025' },
-    { id: 'gs', nome: 'Garantia-Safra', sub: 'semiárido · 2013–2026' },
+    { id: 'pam', nome: 'Declarado', sub: 'IBGE · 1974–2025', sec: 'Produção' },
+    { id: 'sat', nome: 'Satélite', sub: 'MapBiomas · 1985–2025', sec: 'Produção' },
+    { id: 'cmp', nome: 'Satélite × declarado', sub: '1985–2024', sec: 'Produção' },
+    { id: 'exp', nome: 'Expansão', sub: 'de onde veio · por década', sec: 'Terra' },
+    { id: 'gleba', nome: 'Glebas', sub: 'crédito rural · 2012–2025', sec: 'Dinheiro' },
+    { id: 'perda', nome: 'Perdas', sub: 'Proagro · 2012–2025', sec: 'Clima e fogo' },
+    { id: 'gs', nome: 'Garantia-Safra', sub: 'semiárido · 2013–2026', sec: 'Clima e fogo', blocos: ['contornos'] },
   ];
   const UFS = [...new Set(M.mun.uf)].sort();
   const BIOMAS = [...new Set(M.mun.bioma.filter(b => b && b !== '0'))].sort();
@@ -953,6 +1007,16 @@
       ctx.strokeStyle = COR.divisa; ctx.lineWidth = Math.min(1.2, (vista.k / 3000)) / vista.k;
       ctx.stroke(DIVISAS);
     }
+    ctx.strokeStyle = COR.ink3; ctx.globalAlpha = 0.45; ctx.lineWidth = 0.8 / vista.k;
+    ctx.stroke(DIVISAS_UF);
+    ctx.globalAlpha = 1;
+    if (CONT) {
+      // contorno de região: o semiárido no Garantia-Safra, o bioma do recorte
+      ctx.lineWidth = 1.6 / vista.k; ctx.strokeStyle = COR.foco; ctx.setLineDash([4 / vista.k, 3 / vista.k]);
+      if (est.modo === 'gs' && CONT.semiarido) for (const p of Object.values(CONT.semiarido)) ctx.stroke(p);
+      if (est.bioma && CONT.bioma?.[est.bioma]) ctx.stroke(CONT.bioma[est.bioma]);
+      ctx.setLineDash([]);
+    }
     if (celulas || (est.glebas && est.modo === 'pam')) desenhaCelulas();
     if (est.mun >= 0) {
       ctx.strokeStyle = COR.foco; ctx.lineWidth = 2 / vista.k; ctx.stroke(GEO.p[est.mun]);
@@ -1143,7 +1207,12 @@
     gs: '<circle cx="9" cy="9" r="3.2"/><path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.7 3.7l1.4 1.4M12.9 12.9l1.4 1.4M3.7 14.3l1.4-1.4M12.9 5.1l1.4-1.4"/>',
   };
   const modosEl = $('modos');
-  MODOS.forEach(md => {
+  MODOS.forEach((md, k) => {
+    if (k === 0 || MODOS[k - 1].sec !== md.sec) {
+      const t = document.createElement('div');
+      t.className = 'grupo-modos'; t.textContent = md.sec;
+      modosEl.append(t);
+    }
     const b = document.createElement('button');
     b.dataset.modo = md.id;
     b.innerHTML = `<svg viewBox="0 0 18 18" aria-hidden="true">${ICONES[md.id]}</svg>${md.nome}<small>${md.sub}</small>`;
@@ -1486,6 +1555,8 @@
     atualiza(true);
   }
   function atualiza(escala) {
+    const chegou = garante(blocosDoEstado());
+    $('rotulo-carga').hidden = chegou;
     modosEl.querySelectorAll('button').forEach(b => {
       b.setAttribute('aria-pressed', b.dataset.modo === est.modo);
       b.disabled = !pronto && b.dataset.modo !== 'pam';
@@ -1765,7 +1836,8 @@
   /* gancho para os testes: só existe na cópia que testes/comum.ts injeta; chamado
      com os dados completos */
   const gancho = () => {
-    if (window.__testes) window.__testes({ est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2 });
+    if (window.__testes) window.__testes({ est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
+      carrega, garante, get CONT() { return CONT; }, get SOB() { return SOB; }, get CAD() { return CAD; }, MALHA });
   };
   if (pronto) gancho();
   else segunda.then(blocos => {
