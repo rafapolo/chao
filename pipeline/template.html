@@ -425,7 +425,7 @@
 
 <script id="b-malha" type="text/plain">/*__MALHA__*/</script>
 <script id="b-prod" type="text/plain">/*__PROD__*/</script>
-<script id="b-prodqv" type="text/plain">/*__PRODQV__*/</script>
+<script id="b-prodqv" type="text/plain" data-etapa="sob-demanda">/*__PRODQV__*/</script>
 <script id="b-mapb" type="text/plain">/*__MAPB__*/</script>
 <script id="b-cred" type="text/plain">/*__CRED__*/</script>
 <script id="b-cad" type="text/plain">/*__CAD__*/</script>
@@ -455,7 +455,10 @@
     let fonte;
     if (src) {
       // versão web: o bloco é um arquivo gzip com o hash do conteúdo no nome
-      const r = await fetch(src);
+      // a primeira etapa já foi pedida no <head> (window.__pre, só na versão web)
+      const pedido = window.__pre?.[id.slice(2)];
+      if (pedido) delete window.__pre[id.slice(2)];
+      const r = await (pedido || fetch(src));
       if (!r.ok) throw new Error(`${src}: HTTP ${r.status}`);
       fonte = r.body;
     } else {
@@ -517,7 +520,9 @@
     [MALHA, PROD] = await Promise.all(['malha', 'prod'].map(carrega));
   } catch (e) { return falha(e); }
   // a segunda etapa só começa depois da primeira, para não dividir a banda com ela
-  const segunda = Promise.all(['prodqv', 'mapb', 'cred', 'cad'].map(carrega));
+  // quantidade e valor (prodqv, o maior bloco) ficam na 3ª etapa: a área basta para o
+  // primeiro mapa e para a lavoura principal
+  const segunda = Promise.all(['mapb', 'cred', 'cad'].map(carrega));
   segunda.catch(() => {});
   const M = MALHA.meta;
   const NM = M.mun.id.length;
@@ -600,6 +605,7 @@
   let CONT = null;   // contornos de região: { tipo → Path2D[] por nome }
   let MEDIA_CHUVA = null, MEDIA_EST = null;   // médias de 2000–2019 (SISAM por município, INMET por estação)
   const AO_CHEGAR = {
+    prodqv: b => { PRODQV = b; cacheItem.clear(); },
     clima: b => {
       const A = b.A, s = new Float64Array(NM), n = new Float64Array(NM);
       for (let r = 0; r < A.ca_m.length; r++) { s[A.ca_m[r]] += A.ca_chuva[r]; n[A.ca_m[r]]++; }
@@ -639,9 +645,14 @@
     }
     return tudo;
   }
+  // quantidade e valor: medidas que não são área, criações (sem área) e a ficha
+  const MEDIDAS_QV = ['q', 'v', 'rend', 'dens', 'porcab'];
+  const precisaQV = () => est.mun >= 0 || (est.modo === 'pam' && !est.disputa
+    && (MEDIDAS_QV.includes(est.metrica) || est.itens.some(i => !ITENS[i].area)));
   // os blocos sob demanda que o estado atual pede
   function blocosDoEstado() {
     const ids = [...(MODOS.find(md => md.id === est.modo)?.blocos || [])];
+    if (precisaQV()) ids.push('prodqv');
     if (est.bioma || est.regiao) ids.push('contornos');
     return [...new Set(ids)];
   }
@@ -1777,7 +1788,7 @@
       }
       const l = document.createElement('label');
       const marcado = est.itens.includes(it.i);
-      l.innerHTML = `<input type="checkbox" ${marcado ? 'checked' : ''} ${!pronto && !it.area ? 'disabled title="carregando…"' : ''}> ${it.nome}`;
+      l.innerHTML = `<input type="checkbox" ${marcado ? 'checked' : ''} > ${it.nome}`;
       l.querySelector('input').onchange = ev => alternaItem(it.i, ev.target.checked);
       el.append(l);
     }
@@ -2184,7 +2195,7 @@
   function aoMudarSelecao() {
     const ms = metricasDoModo();
     if (!ms.some(([v]) => v === est.metrica)) est.metrica = ms[0][0];
-    const espera = v => !pronto && ['q', 'v', 'rend', 'dens', 'porcab'].includes(v);
+    const espera = () => false;   // quantidade e valor vêm sob demanda ao escolher a medida
     $('metrica').innerHTML = ms.map(([v, t]) => `<option value="${v}" ${v === est.metrica ? 'selected' : ''} ${espera(v) ? 'disabled' : ''}>${t}${espera(v) ? ' (carregando…)' : ''}</option>`).join('');
     atualiza(true);
   }
@@ -2239,7 +2250,7 @@
     est.mun = m;
     const f = $('ficha');
     if (m < 0) { f.classList.remove('aberta'); f.innerHTML = ''; }
-    else { f.classList.add('aberta'); montaFicha(); }
+    else { f.classList.add('aberta'); garante(['prodqv']); montaFicha(); }
     gravaUrl(); pede();
   }
   const barra = (nome, v, max, txt, cor) =>
@@ -2723,14 +2734,24 @@
   lerCores();
   const munUrl = leUrl();
   anoPedido = est.ano;
-  function completa([qv, mb, cr, ca]) {
-    PRODQV = qv; MAPB = mb; CRED = cr; CAD = ca; pronto = true;
+  function completa([mb, cr, ca]) {
+    MAPB = mb; CRED = cr; CAD = ca; pronto = true;
     cacheItem.clear();
     iniciaMapb();
   }
-  const precisaTudo = est.modo !== 'pam' || est.glebas || ['q', 'v', 'rend', 'dens', 'porcab'].includes(est.metrica)
-    || est.itens.some(i => !ITENS[i].area);
-  if (precisaTudo) { try { completa(await segunda); } catch (e) { return falha(e); } }
+  const precisaTudo = est.modo !== 'pam' || est.glebas || MEDIDAS_QV.includes(est.metrica)
+    || est.itens.some(i => !ITENS[i].area) || munUrl >= 0;
+  if (precisaTudo) {
+    // um estado de URL que precisa da 2ª etapa ou de blocos da 3ª espera por eles antes de desenhar
+    if (munUrl >= 0) est.mun = munUrl;
+    const ids = blocosDoEstado();
+    est.mun = -1;
+    try {
+      const [seg, ...sob] = await Promise.all([segunda, ...ids.map(carrega)]);
+      completa(seg);
+      ids.forEach((id, k) => { SOB[id] = sob[k]; AO_CHEGAR[id]?.(sob[k]); });
+    } catch (e) { return falha(e); }
+  }
   redimensiona();
   enquadraRecorte();
   aoMudarSelecao();

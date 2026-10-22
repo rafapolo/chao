@@ -50,7 +50,17 @@ for (const motor of ESCOLHIDOS) {
       await p.click('[data-modo="sat"]');
       expect((await p.locator("#tit-legenda").textContent())!.length).toBeGreaterThan(3);
       expect(pedidos.slice(0, 2).sort()).toEqual(["malha", "prod"]);
-      expect(pedidos.sort()).toEqual(["cad", "cred", "malha", "mapb", "prod", "prodqv"]);
+      // quantidade e valor (o maior bloco) não vêm só para a lavoura principal
+      expect([...pedidos].sort()).toEqual(["cad", "cred", "malha", "mapb", "prod"]);
+      // a primeira etapa é pedida no <head>, antes do script, e reusada (sem baixar duas vezes)
+      expect(await p.evaluate(() => "__pre" in window)).toBe(true);
+      expect(new Set(pedidos).size).toBe(pedidos.length);
+      await p.click('#modos .grupo-modos[data-sec="Produção"]');
+      await p.click('[data-modo="pam"]');
+      await p.uncheck("#disputa");
+      await p.selectOption("#metrica", "q");
+      await p.waitForFunction(() => (window as any).__T.SOB.prodqv, null, { timeout: 60_000 });
+      expect(pedidos).toContain("prodqv");
       // 3ª etapa: os contornos só vêm quando um modo pede (Garantia-Safra desenha o semiárido)
       await p.click('#modos .grupo-modos[data-sec="Clima e fogo"]');
       await p.click('[data-modo="gs"]');

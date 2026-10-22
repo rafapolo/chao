@@ -32,7 +32,7 @@ D = S / "dados"
 RAIZ = S.parent
 
 K_LOG = 200.0
-Q = 2 ** 22          # quantização da coordenada de mundo (Mercator em [0,1]): ~9,5 m no equador
+Q = 2 ** 20          # quantização da coordenada de mundo (Mercator em [0,1]): ~38 m no equador, abaixo da simplificação de ~550 m da malha; com 2**22 a malha levava 3,4 MB, com 2**20 leva 2,9
 PASSO = 0.05         # grade das glebas, em graus (o mesmo de baixa_credito.py)
 MIN_CELULA = 5
 ANO0_PROD, ANO0_MB = 1974, 1985
@@ -776,6 +776,11 @@ for marca, nome, _ in BLOCOS:
     # o marcador fica entre a tag de abertura (que pode ter data-etapa) e o fechamento
     web = re.sub(rf'(<script id="b-{nome}" type="text/plain"[^>]*)>/\*__{marca}__\*/</script>',
                  rf'\1 data-src="dados/{arq}"></script>', web)
+# a primeira etapa começa a baixar com o <head>, antes de o script ser lido. Um fetch no
+# <head>, e não <link rel=preload>: o WebKit não casa o preload com o fetch da página e
+# baixava a malha duas vezes (medido 2026-10-22)
+pre = ",".join(f'{nome}:fetch("dados/{nome}.{hashlib.sha256(GZ[nome]).hexdigest()[:12]}.bin")' for nome in ("malha", "prod"))
+web = web.replace('<meta charset="utf-8">', f'<meta charset="utf-8">\n<script>window.__pre={{{pre}}}</script>', 1)
 assert "/*__" not in web, "marcador sem bloco na versão web"
 (WEB / "index.html").write_text(web)
 (WEB / ".nojekyll").write_text("")
