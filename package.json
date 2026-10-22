@@ -1,12 +1,15 @@
 {
   "name": "chao",
   "private": true,
-  "description": "só a suíte de testes — a página publicada não tem dependência de runtime",
+  "description": "suíte de testes e build da versão web (minifica site/ em dist/) — a página não tem dependência de runtime",
   "scripts": {
+    "build": "bun scripts/build.js",
     "test": "bun test",
     "preparar": "bunx playwright install chromium firefox webkit"
   },
   "devDependencies": {
-    "playwright": "1.62.0"
+    "html-minifier-terser": "7.2.0",
+    "playwright": "1.62.0",
+    "terser": "5.48.0"
   }
 }

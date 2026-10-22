@@ -287,6 +287,8 @@
   .topo button { height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--linha); background: var(--painel); cursor: pointer; }
   #carregando { position: fixed; inset: 0; display: grid; place-items: center; z-index: 10; background: var(--fundo); color: var(--ink-2); font-family: "Mono", monospace; }
   #carregando.erro { color: var(--acento); padding: 24px; text-align: center; }
+  #sem-js { position: fixed; inset: 0; z-index: 11; display: grid; place-items: center; padding: 24px; text-align: center;
+    background: var(--fundo); color: var(--acento); font-family: "Mono", monospace; }
   .so-celular, .rotulo-celular { display: none; }
 
   /* ---------- tela média (janela pela metade, ou zoom alto): tudo encolhe, nada some ---------- */
@@ -423,6 +425,7 @@
 <div class="tip" id="tip"></div>
 <div class="rotulo-celular" id="rotulo-celular" aria-hidden="true"></div>
 <div id="carregando">carregando dados…</div>
+<noscript><div id="sem-js">Este mapa precisa de JavaScript para abrir os dados. Ligue o JavaScript no navegador e recarregue a página.</div></noscript>
 
 <script id="b-malha" type="text/plain" data-src="dados/malha.162f657dbd54.bin"></script>
 <script id="b-prod" type="text/plain" data-src="dados/prod.35547fee29de.bin"></script>
@@ -449,10 +452,12 @@
   /* ---------- leitura dos blocos ----------
      u32 tamanho do cabeçalho | cabeçalho JSON | arrays com os bytes em planos
      (todos os bytes 0, depois todos os 1…), como monta_pagina.py escreve. */
+  const PARADO = window.__parado || 20000;   // ms sem receber nada antes de dar o download por parado
   const TIPOS = { u8: [Uint8Array, 1], i8: [Int8Array, 1], u16: [Uint16Array, 2], i16: [Int16Array, 2],
                   u32: [Uint32Array, 4], i32: [Int32Array, 4] };
   async function bloco(id) {
     const el = $(id), src = el.dataset.src;
+    let parou = null;
     let fonte;
     if (src) {
       // versão web: o bloco é um arquivo gzip com o hash do conteúdo no nome
@@ -461,7 +466,19 @@
       if (pedido) delete window.__pre[id.slice(2)];
       const r = await (pedido || fetch(src));
       if (!r.ok) throw new Error(`${src}: HTTP ${r.status}`);
-      fonte = r.body;
+      // a página guarda o bloco no cache que o service worker serve: a visita seguinte,
+      // mesmo sem rede, não baixa de novo (o nome tem o hash, o conteúdo nunca muda)
+      if (window.caches && location.protocol.startsWith('http')) {
+        const copia = r.clone();
+        caches.open('chao-dados').then(c => c.put(new URL(src, location.href).href, copia)).catch(() => {});
+      }
+      /* vigia: se nenhum pedaço chega por PARADO ms, o download parou (rede que cai no
+         meio) e a página desiste com aviso, em vez de girar para sempre */
+      let vigia;
+      const arma = c => { clearTimeout(vigia); vigia = setTimeout(() => { parou = new Error('o download de ' + src + ' parou'); c.error(parou); }, PARADO); };
+      fonte = r.body.pipeThrough(new TransformStream({
+        start: arma, transform(pedaco, c) { arma(c); c.enqueue(pedaco); }, flush() { clearTimeout(vigia); },
+      }));
     } else {
       const t = el.textContent.trim();
       if (!t || t.startsWith('/*')) throw new Error('bloco vazio: ' + id);
@@ -471,7 +488,8 @@
       fonte = new Blob([bin]).stream();
     }
     const fluxo = fonte.pipeThrough(new DecompressionStream('gzip'));
-    const buf = await new Response(fluxo).arrayBuffer();
+    // o Chromium troca o erro do vigia por um "Failed to fetch" genérico: repassa o do vigia
+    const buf = await new Response(fluxo).arrayBuffer().catch(e => { throw parou || e; });
     const u8 = new Uint8Array(buf);
     const n = new DataView(buf).getUint32(0, true);
     const cab = JSON.parse(new TextDecoder().decode(u8.subarray(4, 4 + n)));
@@ -1895,9 +1913,14 @@
     $('recolhe-painel').setAttribute('aria-label', r ? 'Abrir os filtros' : 'Recolher os filtros');
   };
   // celular: filtros e legenda são folhas de baixo, uma de cada vez
+  // folha fechada no celular fica fora da tabulação e do leitor de tela
+  function inertes() {
+    for (const id of ['painel', 'painel-legenda']) $(id).inert = celular() && !$(id).classList.contains('aberta');
+  }
   const folha = (id, outra) => () => {
     $(outra).classList.remove('aberta');
     $(id).classList.toggle('aberta');
+    inertes();
     $('abre-painel').setAttribute('aria-pressed', $('painel').classList.contains('aberta'));
     $('abre-legenda').setAttribute('aria-pressed', $('painel-legenda').classList.contains('aberta'));
   };
@@ -1929,7 +1952,7 @@
     $('dobra-legenda').setAttribute('aria-expanded', !recolhe);
   };
   $('dobra-legenda').onclick = () => {
-    if (celular()) { $('painel-legenda').classList.remove('aberta'); $('abre-legenda').setAttribute('aria-pressed', false); }
+    if (celular()) { $('painel-legenda').classList.remove('aberta'); $('abre-legenda').setAttribute('aria-pressed', false); inertes(); }
     else dobraLegenda(!$('painel-legenda').classList.contains('recolhida'));
   };
   function montaLegenda() {
@@ -2757,7 +2780,8 @@
   enquadraRecorte();
   aoMudarSelecao();
   if (munUrl >= 0) { seleciona(munUrl); voaPara(GEO.caixa.slice(4 * munUrl, 4 * munUrl + 4)); }
-  addEventListener('resize', () => { redimensiona(); enquadraRecorte(); desenhaFaixa(); });
+  addEventListener('resize', () => { redimensiona(); enquadraRecorte(); desenhaFaixa(); inertes(); });
+  inertes();
   $('carregando').remove();
   pede();
   /* gancho para os testes: só existe na cópia que testes/comum.ts injeta; chamado

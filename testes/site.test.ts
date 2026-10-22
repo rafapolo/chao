@@ -3,16 +3,37 @@ import { type Browser } from "playwright";
 import { join } from "node:path";
 import { ESCOLHIDOS, LENTO, MOTORES, RAIZ } from "./comum";
 
-/* A versão do GitHub Pages (site/): HTML leve e blocos gzip ao lado. Servida por
-   HTTP como o Pages faria; a segunda etapa fica presa até o teste soltar, para
-   provar que o primeiro mapa sai só com a malha e a área. */
-const SITE = join(RAIZ, "site");
+test("build: HTML, CSS e JS minificados, menores que os de site/", () => {
+  const fonte = statSync(join(RAIZ, "site", "index.html")).size, saida = statSync(join(RAIZ, "dist", "index.html")).size;
+  expect(saida).toBeLessThan(fonte * 0.8);   // medido: −27%; o resto é a fonte embutida em base64
+  const html = readFileSync(join(RAIZ, "dist", "index.html"), "utf8");
+  expect(html).not.toContain("/* ---------- ");
+  expect(html).toContain("serviceWorker");
+});
+
+/* A versão do GitHub Pages: o build (scripts/build.js) minifica site/ em dist/, e é
+   dist/ que se testa, servido por HTTP como o Pages faria. A segunda etapa fica presa
+   até o teste soltar, para provar que o primeiro mapa sai só com a malha e a área.
+   Os testes "sem …" e "trava" vêm do swissviz: cada um é um defeito já visto lá. */
+import { readFileSync, statSync } from "node:fs";
+const build = Bun.spawnSync(["bun", "scripts/build.js"], { cwd: RAIZ });
+if (build.exitCode !== 0) throw new Error("build falhou:\n" + build.stderr.toString());
+const SITE = join(RAIZ, "dist");
+let trava = "";   // prefixo de bloco cuja resposta para no meio (40%) e nunca termina
 const servidor = Bun.serve({
   port: 0,
+  idleTimeout: 0,
   async fetch(req) {
-    const caminho = new URL(req.url).pathname;
-    const arq = Bun.file(join(SITE, caminho === "/" ? "index.html" : decodeURIComponent(caminho)));
-    return (await arq.exists()) ? new Response(arq) : new Response("não achei", { status: 404 });
+    const caminho = decodeURIComponent(new URL(req.url).pathname);
+    const arq = Bun.file(join(SITE, caminho === "/" ? "index.html" : caminho));
+    if (!(await arq.exists())) return new Response("não achei", { status: 404 });
+    if (trava && caminho.includes("/dados/" + trava)) {
+      const dado = new Uint8Array(await arq.arrayBuffer());
+      // como no swissviz: declara o tamanho inteiro e manda só 40%
+      return new Response(new ReadableStream({ start(c) { c.enqueue(dado.subarray(0, Math.floor(dado.length * 0.4))); } }),
+        { headers: { "Content-Length": String(dado.length) } });
+    }
+    return new Response(arq);
   },
 });
 const BASE = `http://localhost:${servidor.port}/`;
@@ -24,7 +45,7 @@ for (const motor of ESCOLHIDOS) {
     afterAll(async () => { await nav?.close(); });
 
     test("primeiro mapa com malha e área; o resto chega depois e liga as outras fontes", async () => {
-      const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
+      const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark", serviceWorkers: "block" });
       await ctx.addInitScript(() => { (window as any).__testes = (o: any) => { (window as any).__T = o; }; });
       let solta!: () => void;
       const portao = new Promise<void>(r => { solta = r; });
@@ -71,7 +92,7 @@ for (const motor of ESCOLHIDOS) {
     }, LENTO);
 
     test("bloco da 3ª etapa que falha pode ser pedido de novo", async () => {
-      const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
+      const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark", serviceWorkers: "block" });
       await ctx.addInitScript(() => { (window as any).__testes = (o: any) => { (window as any).__T = o; }; });
       let falhas = 0;
       await ctx.route("**/dados/econ.*.bin", async rota => { if (falhas++ === 0) await rota.abort(); else await rota.continue(); });
@@ -88,8 +109,55 @@ for (const motor of ESCOLHIDOS) {
       await ctx.close();
     }, LENTO);
 
+    test("sem DecompressionStream, a página diz que o navegador não abre os dados", async () => {
+      const ctx = await nav.newContext({ serviceWorkers: "block" });
+      await ctx.addInitScript(() => { delete (window as any).DecompressionStream; });
+      const p = await ctx.newPage();
+      await p.goto(BASE);
+      expect(await p.locator("#carregando").textContent()).toContain("não descomprime");
+      await ctx.close();
+    }, LENTO);
+
+    test("sem JavaScript, a página diz que precisa dele", async () => {
+      const ctx = await nav.newContext({ javaScriptEnabled: false });
+      const p = await ctx.newPage();
+      await p.goto(BASE);
+      expect(await p.locator("#sem-js").isVisible()).toBe(true);
+      await ctx.close();
+    }, LENTO);
+
+    test("bloco que para no meio do download desiste com aviso, em vez de girar para sempre", async () => {
+      const ctx = await nav.newContext({ serviceWorkers: "block" });
+      await ctx.addInitScript(() => { (window as any).__parado = 1500; });
+      trava = "prod.";
+      try {
+        const p = await ctx.newPage();
+        await p.goto(BASE);
+        await p.waitForFunction(() => document.getElementById("carregando")?.classList.contains("erro"), null, { timeout: 30_000 });
+        expect(await p.locator("#carregando").textContent()).toContain("parou");
+      } finally { trava = ""; await ctx.close(); }
+    }, LENTO);
+
+    /* o WebKit do Playwright não recarrega offline ("internal error"); o teste roda no
+       Chromium e no Firefox. Nos outros testes o service worker fica bloqueado: com ele no
+       controle, o Playwright não vê nem intercepta os pedidos que ele faz. */
+    test.skipIf(motor === "webkit")("segunda visita sem rede: o service worker serve a página e os blocos do cache", async () => {
+      const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 } });
+      const p = await ctx.newPage();
+      await p.goto(BASE + "?c=soja&a=2020");
+      await p.waitForSelector("#carregando", { state: "detached", timeout: 60_000 });
+      await p.evaluate(() => navigator.serviceWorker.ready);
+      // a página guarda cada bloco ao baixá-lo; espera as duas primeiras etapas (5 blocos)
+      await p.waitForFunction(async () => (await (await caches.open("chao-dados")).keys()).length >= 5, null, { timeout: 30_000, polling: 200 });
+      await ctx.setOffline(true);
+      await p.reload();
+      await p.waitForSelector("#carregando", { state: "detached", timeout: 60_000 });
+      expect(await p.locator("#legenda .faixa, #legenda .fam").count()).toBeGreaterThan(0);
+      await ctx.close();
+    }, LENTO);
+
     test("estado da URL que pede a segunda etapa espera por ela", async () => {
-      const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
+      const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark", serviceWorkers: "block" });
       await ctx.addInitScript(() => { (window as any).__testes = (o: any) => { (window as any).__T = o; }; });
       const p = await ctx.newPage();
       const erros: string[] = [];

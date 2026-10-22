@@ -10,10 +10,10 @@ planta e se cria de 1974 a 2025, a terra, o crédito, o clima e quem vive do cam
 medida, fonte e recorte, e uma ficha por município. A spec está em
 `docs/superpowers/specs/2026-10-21-bragro-design.md`.
 
-**Não há build nem dependência em runtime.**
+**Não há dependência em runtime.** O único build é o da versão web (`scripts/build.js`).
 - Os dados vão embutidos em gzip+base64 e são abertos no navegador com `DecompressionStream`.
 - A página tem de abrir por `file://`: é requisito.
-- O `package.json` e o `node_modules/` servem só à suíte de testes.
+- O `package.json` e o `node_modules/` servem à suíte de testes e ao build da web (minificação).
 
 Arquitetura herdada de `../rios-do-brasil`.
 
@@ -50,7 +50,8 @@ e em `../rodado/docs/context/gotchas/`.
 cd pipeline
 for s in malha producao mapbiomas credito cadastros regioes dinheiro terra clima mercado_gente calendario; do
   python3 baixa_$s.py || break; done                          # ~3 min no total
-python3 monta_pagina.py      # parquet -> blocos -> ../index.html (arquivo único) e ../site/ (GitHub Pages)
+python3 monta_pagina.py      # parquet -> blocos -> ../index.html (arquivo único) e ../site/
+cd .. && bun run build       # site/ -> dist/: HTML, CSS e JS minificados + service worker (é o que o Pages publica)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
 bun test                                   # 93 testes (31 × 3 motores, 2 deles sobre site/), ~2 min; CHAO_MOTORES=chromium para um só
@@ -79,16 +80,30 @@ Formato de cada bloco: `u32 tamanho | cabeçalho JSON | arrays`.
 
 - `index.html`: arquivo único com os blocos em base64; abre por `file://` e é o que a suíte
   principal testa.
-- `site/`: a versão do GitHub Pages, publicada por `.github/workflows/pages.yml` (sem build
-  no CI: o workflow só envia a pasta). HTML de ~140 kB e um `.bin` (gzip cru) por bloco,
+- `site/`: a fonte da versão web. O workflow `.github/workflows/pages.yml` roda `bun run
+  build`, que minifica o HTML (−27%) em `dist/` e escreve o `sw.js`, como no `../swissviz`, e
+  publica `dist/` em https://rafapolo.github.io/chao/. `dist/` fica fora do git.
+- Service worker: a página guarda no cache `chao-dados` cada bloco que baixa (o nome tem o
+  hash; o SW não pré-carrega bloco, senão a 1ª visita baixaria tudo duas vezes). O SW serve
+  o bloco do cache e a página da rede, com o cache como reserva: a 2ª visita abre sem rede.
+- A primeira etapa é pedida por um `fetch` no `<head>` (`window.__pre`), não por `<link
+  rel=preload>`: o WebKit não casava o preload e baixava a malha duas vezes.
+- Download parado (nenhum pedaço em 20 s, `PARADO`) desiste com aviso. Sem JavaScript, um
+  `<noscript>` explica.
+- Testes no estilo do swissviz (`testes/site.test.ts`, sobre `dist/`): sem
+  DecompressionStream, sem JavaScript, download parado, 2ª visita offline (não no WebKit, que
+  não recarrega offline no Playwright). Fora do teste do SW, o contexto usa
+  `serviceWorkers: "block"`: com o SW no controle o Playwright não vê os pedidos. HTML de ~140 kB e um `.bin` (gzip cru) por bloco,
   com o hash do conteúdo no nome. Dado que não muda mantém o nome, e o navegador não baixa
   de novo quando só o HTML muda. A montagem apaga de `site/dados/` os `.bin` de hashes
   antigos.
 - A página carrega em três etapas nas duas saídas. A primeira traz malha e área da produção
-  (6,5 MB na web) e desenha. A segunda traz quantidade e valor, MapBiomas, crédito e
-  cadastros (13,7 MB). Até ela chegar, as outras fontes e medidas ficam desligadas; um
+  (6,2 MB na web) e desenha. A segunda traz MapBiomas, crédito e cadastros (3,5 MB).
+  Quantidade e valor (`prodqv`, 10 MB) ficaram na terceira: a abertura (lavoura principal)
+  só usa área. Medido com rede 4G: primeiro mapa em 3,0 s, tudo pronto em 4,2 s com 9,9 MB
+  (antes: 8,5 s com 20,6 MB). Até ela chegar, as outras fontes e medidas ficam desligadas; um
   estado de URL que precise delas espera tudo antes de desenhar.
-- A terceira etapa (`data-etapa="sob-demanda"`: contornos, credrs, econ, terra, fogo, clima,
+- A terceira etapa (`data-etapa="sob-demanda"`: prodqv, contornos, credrs, econ, terra, fogo, clima,
   calend, mercado, emis, gente; 8,1 MB) só é pedida quando um modo a usa (`blocos:` em
   `MODOS`), por `carrega(id)` com cache de promessa e `garante([ids])`. A ficha não baixa
   bloco: mostra o que já veio e oferece o botão "Mostrar também".

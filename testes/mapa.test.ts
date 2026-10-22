@@ -489,6 +489,8 @@ for (const motor of ESCOLHIDOS) {
       await p.waitForTimeout(400);
       expect(await fora()).toBe(false);
       expect(await p.locator("#rotulo-celular").textContent()).toContain("Soja");
+      // a folha fechada (legenda) fica fora da tabulação; a aberta, não
+      expect(await p.evaluate(() => [document.getElementById("painel")!.inert, document.getElementById("painel-legenda")!.inert])).toEqual([false, true]);
       // a legenda é outra folha: abrir uma fecha a outra
       const legFora = () => p.evaluate(() => document.getElementById("painel-legenda")!.getBoundingClientRect().top >= innerHeight - 2);
       expect(await legFora()).toBe(true);

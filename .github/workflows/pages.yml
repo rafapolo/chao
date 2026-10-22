@@ -1,10 +1,11 @@
-# Publica site/ no GitHub Pages. Não há build aqui: os dados vêm do espelho do
-# rodado no beelink, e site/ já sai pronto de pipeline/monta_pagina.py.
+# Publica no GitHub Pages. Os dados vêm do espelho do rodado no beelink, e site/ já sai
+# pronto de pipeline/monta_pagina.py; aqui só roda o build (scripts/build.js), que
+# minifica site/ em dist/ e escreve o service worker, como no swissviz.
 name: pages
 on:
   push:
     branches: [main]
-    paths: [site/**]
+    paths: [site/**, scripts/**, package.json, bun.lock, .github/workflows/pages.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,8 +22,22 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # fixo, não latest: o mesmo Bun da suíte local
+          bun-version: 1.4.3
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      # o playwright é só da suíte local: o build não precisa dos navegadores
+      - run: bun install --frozen-lockfile
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      - run: bun run build
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: dist
       - id: deploy
         uses: actions/deploy-pages@v4

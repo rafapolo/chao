@@ -5,3 +5,4 @@ pipeline/*.gz
 __pycache__/
 testes/_*.ts
 .superpowers/
+dist/
