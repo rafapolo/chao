@@ -115,7 +115,7 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
-    test("sobre os dados abre num diálogo, e cada fonte tem ícone", async () => {
+    test("sobre em diálogo, ícone por fonte, linha do tempo e painel recolhíveis", async () => {
       const x = await abre(nav, "?c=soja&a=2020");
       expect(await x.p.locator("#modos button svg").count()).toBe(7);
       expect(await x.p.locator("#sobre").isVisible()).toBe(false);
@@ -124,6 +124,16 @@ for (const motor of ESCOLHIDOS) {
       expect((await x.p.locator("#sobre #nota").textContent())!.length).toBeGreaterThan(100);
       await x.p.click("#sobre .fechar");
       expect(await x.p.locator("#sobre").isVisible()).toBe(false);
+      // linha do tempo e painel esquerdo abrem e fecham; o chip mostra o ano
+      expect(await x.p.locator("#chip-ano").textContent()).toBe("2020");
+      await x.p.click("#abre-tempo");
+      expect(await x.p.locator("#tempo").isVisible()).toBe(false);
+      await x.p.click("#abre-tempo");
+      expect(await x.p.locator("#tempo").isVisible()).toBe(true);
+      await x.p.click("#recolhe-painel");
+      expect(await x.p.locator("#modos").isVisible()).toBe(false);
+      await x.p.click("#recolhe-painel");
+      expect(await x.p.locator("#modos").isVisible()).toBe(true);
       expect(x.erros).toEqual([]);
       await fecha(x);
     }, LENTO);

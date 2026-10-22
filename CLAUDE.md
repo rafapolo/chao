@@ -117,8 +117,13 @@ O orçamento da spec é ≤ 25 MB, e **a página passa um pouco: 25,7 MB** (2026
   maximiza o menor ΔE. Todos os pares passam o piso de visão normal (15,3); o de daltonismo
   não, e com 10 cores nenhuma paleta passa. O tooltip nomeia a família e a maior lavoura.
 - Estado na URL: `d=1` liga o modo e `dx=soja,milho` lista as lavouras desligadas.
-- "Sobre os dados" é um diálogo (botão `sobre` no alto, como no swissviz). No celular,
-  filtros e legenda são folhas de baixo, uma por vez, e o zoom vira uma pílula.
+- Cada lavoura é um tom da cor da família (OKLCH, mesmo matiz, mais clara ou escura; a
+  maior fica com a cor da família), no mapa e na árvore.
+- Só tema escuro, a pedido. Sem botões de zoom: roda, pinça e duplo clique.
+- Como no swissviz: chips embaixo à direita (`sobre`, que abre um diálogo, e a linha do
+  tempo com o ano); a linha do tempo é compacta, no centro de baixo, e abre e fecha; o
+  painel esquerdo tem a altura do conteúdo e recolhe só no título. No celular, filtros e
+  legenda são folhas de baixo, uma por vez.
 
 ## Testes
 
