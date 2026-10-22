@@ -96,14 +96,17 @@
   .modos button:disabled { opacity: .45; cursor: progress; }
   .modos button small { display: block; color: var(--ink-3); font-size: 10.5px; }
   /* seções das fontes em abas: só a aba aberta mostra as fontes dela */
-  .modos .abas { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 4px; border-bottom: 1px solid var(--linha); }
-  .modos .grupo-modos { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 0; padding: 6px 7px 5px;
-    background: none; font-family: "Mono", monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
-    color: var(--ink-3); cursor: pointer; }
+  .modos .abas { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(5, 1fr); margin-bottom: 4px; border-bottom: 1px solid var(--linha); }
+  .modos .grupo-modos { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0;
+    border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 0; padding: 6px 2px 5px;
+    background: none; font-size: 11px; line-height: 1.1; color: var(--ink-3); cursor: pointer; text-align: center; white-space: nowrap; }
+  .modos .grupo-modos svg { width: 17px; height: 17px; margin: 0; vertical-align: 0; }
   .modos .grupo-modos:hover { color: var(--ink); border-color: transparent; }
   .modos .grupo-modos[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acento); }
-  .modos .grupo-modos.tem-ativo:not([aria-selected="true"])::after { content: ""; display: inline-block; width: 5px; height: 5px;
-    margin-left: 5px; border-radius: 50%; background: var(--acento); vertical-align: 1px; }
+  .modos .grupo-modos { position: relative; }
+  .modos .grupo-modos.tem-ativo:not([aria-selected="true"])::after { content: ""; position: absolute; top: 5px; right: calc(50% - 15px);
+    width: 5px; height: 5px; border-radius: 50%; background: var(--acento); }
+  .modos .grupo-modos[aria-selected="true"] svg { color: var(--acento); }
   .modos button[data-modo][hidden] { display: none; }
 
   .busca { width: 100%; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--linha); background: var(--fundo); }
@@ -1727,9 +1730,18 @@
   const abasEl = document.createElement('div');
   abasEl.className = 'abas'; abasEl.setAttribute('role', 'tablist'); abasEl.setAttribute('aria-label', 'Seções das fontes');
   modosEl.append(abasEl);
+  // ícone e rótulo curto de cada aba (o nome inteiro vai no title)
+  const ABAS = {
+    'Produção': ['Produção', '<path d="M9 16.5V9M9 9c0-3.4 2.2-5.6 6-5.6 0 3.5-2.2 5.6-6 5.6zM9 11.5C9 8.6 7.1 6.8 3.5 6.8c0 2.9 1.9 4.7 5.5 4.7z"/>'],
+    'Terra': ['Terra', '<path d="M1.5 14.5l4.5-7 3 4 2.5-3 5 6z"/><path d="M1.5 16.5h15"/>'],
+    'Dinheiro': ['Dinheiro', '<circle cx="9" cy="9" r="6.8"/><path d="M11.3 6.6c-.4-.9-1.3-1.3-2.4-1.3-1.4 0-2.4.7-2.4 1.8 0 2.6 5.1 1.4 5.1 4 0 1.1-1.1 1.9-2.6 1.9-1.2 0-2.2-.5-2.6-1.4M9 4v1.3M9 12.9v1.2"/>'],
+    'Clima e fogo': ['Clima', '<path d="M5.5 13a3.1 3.1 0 0 1 .3-6.2 4.2 4.2 0 0 1 8 1 2.6 2.6 0 0 1-.3 5.2z"/><path d="M6 15.8l.8-1.4M9.2 15.8l.8-1.4M12.4 15.8l.8-1.4"/>'],
+    'Gente': ['Gente', '<circle cx="6.5" cy="6" r="2.4"/><circle cx="12.3" cy="6.8" r="1.9"/><path d="M2.3 15.5c0-2.7 1.9-4.6 4.2-4.6s4.2 1.9 4.2 4.6M10.4 11.2c.6-.3 1.2-.4 1.9-.4 1.9 0 3.4 1.6 3.4 4.4"/>'],
+  };
   for (const sec of SECOES.filter(sc => MODOS.some(md => md.sec === sc))) {
     const t = document.createElement('button');
-    t.className = 'grupo-modos'; t.textContent = sec; t.dataset.sec = sec; t.setAttribute('role', 'tab');
+    t.className = 'grupo-modos'; t.dataset.sec = sec; t.setAttribute('role', 'tab'); t.title = sec;
+    t.innerHTML = `<svg viewBox="0 0 18 18" aria-hidden="true">${ABAS[sec][1]}</svg><span>${ABAS[sec][0]}</span>`;
     t.onclick = () => { aba = sec; mostraAba(); };
     abasEl.append(t);
   }
@@ -2687,6 +2699,8 @@
   }
   function leUrl() {
     const p = new URLSearchParams(location.search);
+    // a página sem parâmetros abre na lavoura principal: o mapa por família, com a árvore
+    if (![...p.keys()].length) est.disputa = true;
     if (MODOS.some(md => md.id === p.get('f'))) est.modo = p.get('f');
     const cs = (p.get('c') || '').split(',').map(s => ITEM_POR_SLUG[s]).filter(i => i !== undefined);
     if (cs.length) est.itens = cs;

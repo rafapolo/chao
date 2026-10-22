@@ -91,7 +91,11 @@ for (const motor of ESCOLHIDOS) {
     test("fontes agrupadas em seções; bloco sob demanda carrega uma vez e fica em cache", async () => {
       const x = await abre(nav, "?c=soja&a=2020");
       const secoes = await x.p.locator("#modos .grupo-modos").allTextContents();
-      expect(secoes).toEqual(expect.arrayContaining(["Produção", "Terra", "Dinheiro", "Clima e fogo"]));
+      expect(secoes).toEqual(["Produção", "Terra", "Dinheiro", "Clima", "Gente"]);
+      // as abas cabem numa linha só, cada uma com ícone, no desktop e no celular
+      const linhas = async () => x.p.locator("#modos .grupo-modos").evaluateAll(ts => new Set(ts.map(t => Math.round(t.getBoundingClientRect().top))).size);
+      expect(await linhas()).toBe(1);
+      expect(await x.p.locator("#modos .grupo-modos svg").count()).toBe(5);
       // a aba mostra só as fontes dela; trocar de aba não troca o modo
       expect(await x.p.locator('[data-modo="gs"]').isVisible()).toBe(false);
       await x.p.click('#modos .grupo-modos[data-sec="Clima e fogo"]');
@@ -349,6 +353,15 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("sem nada na URL, a página abre na lavoura principal, com a árvore de famílias à direita", async () => {
+      const x = await abre(nav, "");
+      expect(await roda<boolean>(x.p, "return T.est.disputa && T.est.modo === 'pam'")).toBe(true);
+      expect(await x.p.locator("#legenda .fam").count()).toBe(10);
+      expect(await x.p.locator("#tit-legenda").textContent()).toContain("Lavoura principal");
+      expect(x.p.url()).toContain("d=1");
+      await fecha(x);
+    }, LENTO);
+
     test("lavoura principal: árvore de famílias liga e desliga, conta municípios e vai para a URL", async () => {
       const x = await abre(nav, "?c=soja&a=2020&d=1");
       await quadro(x.p);
@@ -487,6 +500,9 @@ for (const motor of ESCOLHIDOS) {
       await p.waitForTimeout(400);
       expect(await legFora()).toBe(true);
       expect(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await p.click("#abre-painel");
+      await p.waitForTimeout(400);
+      expect(await p.locator("#modos .grupo-modos").evaluateAll(ts => new Set(ts.map(t => Math.round(t.getBoundingClientRect().top))).size)).toBe(1);
       await fecha(x);
     }, LENTO);
   });
