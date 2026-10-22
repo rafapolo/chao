@@ -79,7 +79,9 @@ Formato de cada bloco: `u32 tamanho | cabeçalho JSON | arrays`.
 ## Duas saídas: `index.html` e `site/`
 
 - `index.html`: arquivo único com os blocos em base64; abre por `file://` e é o que a suíte
-  principal testa.
+  principal testa. **Fica fora do git** (está no `.gitignore`; 508 dos 567 MB do histórico
+  eram versões dele, limpas com `git filter-repo` em 2026-10-22). Vai como anexo de release:
+  `gh release create vAAAA.MM.DD index.html`.
 - `site/`: a fonte da versão web. O workflow `.github/workflows/pages.yml` roda `bun run
   build`, que minifica o HTML (−27%) em `dist/` e escreve o `sw.js`, como no `../swissviz`, e
   publica `dist/` em https://rafapolo.github.io/chao/. `dist/` fica fora do git.

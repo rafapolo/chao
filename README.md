@@ -3,8 +3,11 @@
 # Chão
 
 O campo brasileiro, município a município: o que se planta e se cria de 1974 a 2025, a
-terra, o dinheiro, o clima e quem vive dele. É uma página só,
-`index.html`, que abre sem internet: basta dar dois cliques no arquivo.
+terra, o dinheiro, o clima e quem vive dele.
+
+- **Na web:** https://rafapolo.github.io/chao/
+- **Sem internet:** baixe o `index.html` da [última release](https://github.com/rafapolo/chao/releases/latest)
+  (37 MB, todos os dados embutidos) e abra com dois cliques.
 
 ## O que dá para ver
 
