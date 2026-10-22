@@ -40,7 +40,7 @@ from beelink import roda
 
 OPS = """
   c AS (SELECT DISTINCT ON (id_referencia_bacen, numero_ordem) id_referencia_bacen, numero_ordem, id_municipio
-        FROM br_bcb_sicor.recurso_publico_complemento_operacao WHERE id_municipio IS NOT NULL),
+        FROM br_bcb_sicor.recurso_publico_complemento_operacao WHERE id_municipio IS NOT NULL ORDER BY id_referencia_bacen, numero_ordem, id_municipio),   -- determinístico se houver dois municípios
   o AS (
     SELECT o.id_referencia_bacen, o.numero_ordem, left(o.ano_safra_emissao, 4)::INTEGER safra,
            o.valor_parcela_credito v, o.area_financiada a, o.cnpj_basico_instituicao_financeira inst,

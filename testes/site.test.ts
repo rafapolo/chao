@@ -60,6 +60,24 @@ for (const motor of ESCOLHIDOS) {
       await ctx.close();
     }, LENTO);
 
+    test("bloco da 3ª etapa que falha pode ser pedido de novo", async () => {
+      const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
+      await ctx.addInitScript(() => { (window as any).__testes = (o: any) => { (window as any).__T = o; }; });
+      let falhas = 0;
+      await ctx.route("**/dados/econ.*.bin", async rota => { if (falhas++ === 0) await rota.abort(); else await rota.continue(); });
+      const p = await ctx.newPage();
+      await p.goto(BASE + "?c=soja&a=2020");
+      await p.waitForFunction(() => !!(window as any).__T, null, { timeout: 60_000 });
+      await p.click('#modos .grupo-modos[data-sec="Dinheiro"]');
+      await p.click('[data-modo="econ"]');
+      await p.waitForFunction(() => /falharam/.test(document.getElementById("rotulo-carga")!.textContent!), null, { timeout: 30_000 });
+      await p.click('[data-modo="cred"]');
+      await p.click('[data-modo="econ"]');
+      await p.waitForFunction(() => (window as any).__T.SOB.econ, null, { timeout: 30_000 });
+      expect(falhas).toBe(2);
+      await ctx.close();
+    }, LENTO);
+
     test("estado da URL que pede a segunda etapa espera por ela", async () => {
       const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
       await ctx.addInitScript(() => { (window as any).__testes = (o: any) => { (window as any).__T = o; }; });

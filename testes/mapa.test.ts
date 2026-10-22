@@ -290,6 +290,9 @@ for (const motor of ESCOLHIDOS) {
         return { sor: T.VAL[sor], mt, cuiaba: T.VAL[outro] };`);
       expect(Math.abs(r.sor / r.mt - 1)).toBeLessThan(1e-4);
       expect(r.cuiaba).toBe(r.sor);
+      // a faixa soma os municípios, não o total do grupo repetido em cada um
+      const faixa = await roda<number>(x.p, "return T.serieNacional.find(s => s[0] === 2024)[1]");
+      expect(Math.abs(faixa / 46.2e6 - 1)).toBeLessThan(0.05);
       expect(x.p.url()).toContain("ag=uf");
       await x.p.selectOption("#metrica", "pct");
       const pct = await roda<number>(x.p, "return T.VAL[T.M.mun.id.indexOf('5107925')]");
@@ -298,6 +301,35 @@ for (const motor of ESCOLHIDOS) {
       const n = await roda<number>(x.p, "return new Set([...T.VAL].filter(v => v > 0)).size");
       expect(n).toBeGreaterThan(100); expect(n).toBeLessThan(511);
       expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("agrupar por: % do VA e % dos imóveis do CAR somam numerador e denominador do grupo", async () => {
+      const x = await abre(nav, "?f=econ&m=pct&a=2021&ag=uf");
+      await x.p.waitForFunction(() => (window as any).__T.SOB.econ, null, { timeout: 60_000 });
+      await quadro(x.p);
+      const r = await roda<number[]>(x.p, `
+        const E = T.SOB.econ.A, LUT = v => Math.exp((v - 1) / T.M.k) - 1; let n = 0, d = 0;
+        for (let i = 0; i < E.m.length; i++) if (E.a[i] === 31 && T.M.mun.uf[E.m[i]] === 'SP') { n += LUT(E.va_agro[i]); d += LUT(E.va[i]); }
+        return [T.VAL[T.M.mun.id.indexOf('3550308')], n / d * 100];`);
+      expect(Math.abs(r[0] - r[1])).toBeLessThan(0.05);
+      await fecha(x);
+    }, LENTO);
+
+    test("o ano da URL sobrevive à chegada do bloco da 3ª etapa", async () => {
+      for (const [busca, ano] of [["?f=emis&m=se_agro&a=1995", 1995], ["?f=clima&m=est&a=2024", 2024], ["?f=trab&m=caged&a=2025", 2025]] as const) {
+        const x = await abre(nav, busca);
+        await x.p.waitForFunction(() => document.getElementById("rotulo-carga")!.hidden, null, { timeout: 60_000 });
+        expect(await roda<number>(x.p, "return T.est.ano"), busca).toBe(ano);
+        expect(x.p.url(), busca).toContain(`a=${ano}`);
+        await fecha(x);
+      }
+    }, LENTO);
+
+    test("PRODES começa em 2002: 2001 é artefato da linha de base do acumulado", async () => {
+      const x = await abre(nav, "?f=desm&a=2001");
+      await x.p.waitForFunction(() => (window as any).__T.SOB.terra, null, { timeout: 60_000 });
+      expect(await roda<number>(x.p, "return +document.getElementById('ano').min")).toBe(2002);
       await fecha(x);
     }, LENTO);
 
@@ -405,6 +437,14 @@ for (const motor of ESCOLHIDOS) {
         for (const v of A.if_n) if (v < i) i = v;
         return [n, t, i]; })`);
       for (const v of cr) expect(v).toBeGreaterThanOrEqual(5);
+      // indicadores do crédito por município × safra, calendário (município × cultura) e Seguro-Defeso
+      const outros = await roda<number[]>(x.p, `return Promise.all(['credrs', 'calend', 'gente'].map(T.carrega)).then(([c, k, g]) => {
+        let ops = Infinity; for (const v of c.A.ci_ops) if (v < ops) ops = v;
+        const tot = new Map(); for (let r = 0; r < k.A.p.length; r++) if (!k.A.f[r]) { const key = k.A.m[r] * 1000 + k.A.p[r]; tot.set(key, (tot.get(key) || 0) + k.A.n[r]); }
+        let cal = Infinity; for (const v of tot.values()) if (v < cal) cal = v;
+        let def = Infinity; for (const v of g.A.def_n_v) { const n = Math.exp((v - 1) / T.M.k) - 1; if (v && n < def) def = n; }
+        return [ops, cal, Math.round(def)]; })`);
+      for (const v of outros) expect(v).toBeGreaterThanOrEqual(5);
       await fecha(x);
     }, LENTO);
 

@@ -24,7 +24,7 @@ from beelink import roda
 cal = roda("calendario", """
 COPY (
   WITH c AS (SELECT DISTINCT ON (id_referencia_bacen, numero_ordem) id_referencia_bacen, numero_ordem, id_municipio
-             FROM br_bcb_sicor.recurso_publico_complemento_operacao WHERE id_municipio IS NOT NULL),
+             FROM br_bcb_sicor.recurso_publico_complemento_operacao WHERE id_municipio IS NOT NULL ORDER BY id_referencia_bacen, numero_ordem, id_municipio),   -- determinístico se houver dois municípios
   o AS (
     SELECT c.id_municipio, e.produto, o.data_inicio_plantio p, o.data_fim_colheita f
     FROM br_bcb_sicor.operacao o

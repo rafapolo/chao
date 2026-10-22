@@ -593,7 +593,7 @@
      SOB[id] fica nulo até o bloco chegar; quem precisa dele chama garante([ids]),
      que pede o que falta e, na chegada, redesenha. Enquanto isso o modo mostra
      "carregando…". */
-  const SOB = {};
+  const SOB = {}, FALHOU = new Set();
   let CONT = null;   // contornos de região: { tipo → Path2D[] por nome }
   let MEDIA_CHUVA = null, MEDIA_EST = null;   // médias de 2000–2019 (SISAM por município, INMET por estação)
   const AO_CHEGAR = {
@@ -613,18 +613,26 @@
       rs.forEach((r, k) => { (CONT[r.tipo] = CONT[r.tipo] || {})[r.nome] = ps[k]; });
     },
   };
-  function garante(ids) {
+  // um bloco que falhou só é pedido de novo por ação do usuário (tentar = true)
+  function garante(ids, tentar = false) {
     let tudo = true;
     for (const id of ids) {
       if (SOB[id]) continue;
       tudo = false;
-      if (PROMESSAS.has(id)) continue;
+      if (PROMESSAS.has(id) || (FALHOU.has(id) && !tentar)) continue;
+      FALHOU.delete(id);
       carrega(id).then(b => {
         SOB[id] = b;
         AO_CHEGAR[id]?.(b);
         atualiza(true);
         if (est.mun >= 0) montaFicha();
-      }, e => console.error('bloco ' + id + ':', e));
+      }, e => {
+        // esquece a promessa: escolher o modo de novo (ou o botão da ficha) tenta outra vez
+        console.error('bloco ' + id + ':', e);
+        PROMESSAS.delete(id); FALHOU.add(id);
+        $('rotulo-carga').textContent = 'Os dados deste modo falharam ao baixar. Escolha o modo de novo para tentar outra vez.';
+        if (est.mun >= 0) montaFicha();
+      });
     }
     return tudo;
   }
@@ -857,7 +865,8 @@
 
   /* ---------- valores por município no ano ---------- */
   const VAL = new Float32Array(NM);
-  const GS_N = new Float32Array(NM);   // agricultores pagos no ano, para a faixa somar R$ por agricultor
+  const GS_N = new Float32Array(NM);
+  const DEN = new Float32Array(NM);   // denominador de % que não é área (VA total, imóveis do CAR), para agrupar   // agricultores pagos no ano, para a faixa somar R$ por agricultor
   const CAT = new Int8Array(NM);   // lavoura principal: a família que vence (-1 = nenhuma)
   const VENCE = new Int16Array(NM); // a maior lavoura dentro da família que vence
   const classesDosItens = () => [...new Set(est.itens.map(i => ITENS[i].mb).filter(c => c !== undefined))];
@@ -899,9 +908,17 @@
     if (['rend', 'porcab', 'vpa', 'mes', 'ciclo', 'safrinha', 'lib', 'desc', 'pj', 'top10', 'coopcred', 'coop', 'car', 'pronaf'].includes(mt)) return false;
     return true;
   }
+  // % cujo denominador não é área: soma do numerador ÷ soma do denominador do grupo
+  const razaoPropria = () => est.metrica === 'pct' && (est.modo === 'econ' || est.modo === 'gs');
   function agrega() {
     if (!agrupavel()) return;
     const NGr = est.agrupa === 'uf' ? UFS.length : M.divisoes[est.agrupa].length;
+    if (razaoPropria()) {
+      const num = est.modo === 'econ' ? CRV : GS_N, n = new Float64Array(NGr), d = new Float64Array(NGr);
+      for (let m = 0; m < NM; m++) if (Number.isFinite(VAL[m]) && DEN[m] > 0) { n[grupoDe(m)] += num[m]; d[grupoDe(m)] += DEN[m]; }
+      for (let m = 0; m < NM; m++) { const g = grupoDe(m); VAL[m] = d[g] > 0 ? n[g] / d[g] * 100 : NaN; }
+      return;
+    }
     const s = new Float64Array(NGr), w = new Float64Array(NGr), tem = new Uint8Array(NGr);
     const peso = porArea(), soma = aditiva();
     for (let m = 0; m < NM; m++) {
@@ -1014,22 +1031,22 @@
       const E = SOB.econ?.A;
       if (!E) return;
       const a = ano - 1990;
-      CRV.fill(0);
+      CRV.fill(0); DEN.fill(0);
       for (let r = 0; r < E.m.length; r++) {
         if (E.a[r] !== a) continue;
         const m = E.m[r], va = LUT[E.va_agro[r]];
-        CRV[m] = va;
+        CRV[m] = va; DEN[m] = LUT[E.va[r]];
         VAL[m] = mt === 'pct' ? va / LUT[E.va[r]] * 100 : mt === 'vakm' ? va / RURAL_KM2[m] : va;
       }
       return;
     }
     if (est.modo === 'gs') {
       const s = ano - 2000, G = CAD.A, imov = CAD.A.car_imoveis;
-      GS_N.fill(0);
+      GS_N.fill(0); DEN.fill(0);
       for (let r = 0; r < G.gs_m.length; r++) {
         if (G.gs_a[r] !== s) continue;
         const m = G.gs_m[r], n = G.gs_n[r], v = LUT[G.gs_v[r]];
-        GS_N[m] = n;
+        GS_N[m] = n; DEN[m] = imov[m];
         VAL[m] = mt === 'pct' ? (imov[m] > 0 ? n / imov[m] * 100 : NaN) : mt === 'v' ? v : mt === 'vpa' ? (n > 0 ? v / n : NaN) : n;
       }
     }
@@ -1730,7 +1747,7 @@
     b.dataset.sec = md.sec;
     b.dataset.modo = md.id;
     b.innerHTML = `<svg viewBox="0 0 18 18" aria-hidden="true">${ICONES[md.id]}</svg>${md.nome}<small>${md.sub}</small>`;
-    b.onclick = () => { if (b.disabled) return; est.modo = md.id; aba = md.sec; aoMudarModo(); };
+    b.onclick = () => { if (b.disabled) return; est.modo = md.id; aba = md.sec; garante(md.blocos || [], true); aoMudarModo(); };
     modosEl.append(b);
   });
 
@@ -2000,7 +2017,7 @@
       if (emCelulas()) { for (const v of celulasAtuais(a).values()) s += v; }
       else if (est.modo === 'clima') {
         // mm, °C e anomalia não se somam: a faixa mostra a média do recorte
-        calcula(a);
+        calculaBase(a);
         let n = 0;
         if (emPontos()) for (const pt of PONTOS) { s += pt.v; n++; }
         else for (let m = 0; m < NM; m++) if (noRecorte(m) && Number.isFinite(VAL[m])) { s += VAL[m]; n++; }
@@ -2008,7 +2025,7 @@
         if (DIVERGENTE()) s += 100;   // a barra mostra a chuva em % da média (100 = normal)
       }
       else {
-        calcula(a);
+        calculaBase(a);   // sem agrupar: a faixa soma os municípios, não o total do grupo repetido
         const absoluto = ['pct', 'dens', 'rend', 'porcab', 'vpa', 'vha', 'vakm'].includes(est.metrica) || CRED_PCT.has(est.metrica) || est.modo === 'cal'
           || (est.modo === 'fogo' && est.metrica === 'dens')
           || est.modo === 'cmp' || est.disputa;
@@ -2093,7 +2110,12 @@
   });
 
   /* ---------- tempo ---------- */
-  function defineAno(a) {
+  /* anoPedido: o último ano escolhido (URL, linha do tempo, teclado). Um modo que
+     ainda espera o bloco restringe o ano ao intervalo provisório, mas quando o bloco
+     chega o ano volta a ser o pedido. */
+  let anoPedido = null;
+  function defineAno(a, pedido = true) {
+    if (pedido) anoPedido = a;
     est.ano = a;
     $('ano').value = a;
     $('ano-txt').textContent = $('chip-ano').textContent = est.modo === 'exp' ? `${a - 10}→${a}` : a;
@@ -2157,6 +2179,8 @@
   function atualiza(escala) {
     const chegou = garante(blocosDoEstado());
     $('rotulo-carga').hidden = chegou;
+    $('rotulo-carga').textContent = blocosDoEstado().some(id => FALHOU.has(id))
+      ? 'Os dados deste modo falharam ao baixar. Escolha o modo de novo para tentar outra vez.' : 'carregando os dados deste modo…';
     mostraAba();
     modosEl.querySelectorAll('button[data-modo]').forEach(b => {
       b.setAttribute('aria-pressed', b.dataset.modo === est.modo);
@@ -2183,7 +2207,7 @@
     $('mostra-mascara').checked = est.mascara; $('sobre-glebas').checked = est.glebas;
     const [a0, a1] = anosDoModo();
     $('ano').min = a0; $('ano').max = a1; $('ano').step = est.modo === 'exp' ? 10 : 1;
-    let a = Math.min(a1, Math.max(a0, est.ano));
+    let a = Math.min(a1, Math.max(a0, anoPedido ?? est.ano));
     if (est.modo === 'exp') a = Math.round(a / 10) * 10;
     montaListaItens(); montaSelecionados();
     if (escala) {
@@ -2195,7 +2219,7 @@
     }
     refazSerieNacional();
     montaLegenda();
-    defineAno(a);
+    defineAno(a, false);
   }
 
   /* ---------- ficha do município ---------- */
@@ -2610,7 +2634,7 @@
 
     h += fichaCalendario(m) + fichaDinheiro(m, a) + fichaTerra(m, a) + fichaClima(m, a) + fichaSeries(m, a);
     const faltam = EXTRAS.filter(id => !SOB[id]);
-    if (faltam.length) h += `<button class="carrega-extras" id="carrega-extras">${PROMESSAS.has(faltam[0]) ? 'carregando…' : 'Mostrar também: ' + faltam.map(id => NOME_EXTRA[id]).join(', ')}</button>`;
+    if (faltam.length) h += `<button class="carrega-extras" id="carrega-extras">${faltam.some(id => PROMESSAS.has(id)) ? 'carregando…' : 'Mostrar também: ' + faltam.map(id => NOME_EXTRA[id]).join(', ')}</button>`;
 
     // CAR
     const car = k => CAD.A['car_' + k][m];
@@ -2635,7 +2659,7 @@
     recolhiveis(f);
     f.querySelector('.fechar').onclick = () => seleciona(-1);
     const ce = f.querySelector('#carrega-extras');
-    if (ce) ce.onclick = () => { ce.textContent = 'carregando…'; ce.disabled = true; garante(EXTRAS); };
+    if (ce) ce.onclick = () => { ce.textContent = 'carregando…'; ce.disabled = true; garante(EXTRAS, true); };
     const sel = f.querySelector('#serie-item');
     if (sel) sel.onchange = e => { itemFicha = +e.target.value; montaFicha(); };
   }
@@ -2684,6 +2708,7 @@
   /* ---------- início ---------- */
   lerCores();
   const munUrl = leUrl();
+  anoPedido = est.ano;
   function completa([qv, mb, cr, ca]) {
     PRODQV = qv; MAPB = mb; CRED = cr; CAD = ca; pronto = true;
     cacheItem.clear();
@@ -2702,7 +2727,7 @@
   /* gancho para os testes: só existe na cópia que testes/comum.ts injeta; chamado
      com os dados completos */
   const gancho = () => {
-    if (window.__testes) window.__testes({ voaPara, get ROTULOS() { return ROTULOS; }, get PONTOS() { return PONTOS; }, get CEL() { return CEL; }, CRV, noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
+    if (window.__testes) window.__testes({ get serieNacional() { return serieNacional; }, voaPara, get ROTULOS() { return ROTULOS; }, get PONTOS() { return PONTOS; }, get CEL() { return CEL; }, CRV, noRecorte, est, VAL, CAT, M, ITENS, serieItem, calcula, GEO, CRED, defineAno, seleciona, municipioEm, vista, AMC, MEMBROS, RURAL_KM2,
       carrega, garante, get CONT() { return CONT; }, get SOB() { return SOB; }, get CAD() { return CAD; }, MALHA });
   };
   if (pronto) gancho();

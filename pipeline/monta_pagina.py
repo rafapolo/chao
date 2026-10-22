@@ -451,7 +451,11 @@ br.add("cr_f", cm["f"], "u8"); br.add("cr_t", cm["t"], "u8"); br.add("cr_p", cm[
 br.add("cr_n", cm["operacoes"], "u32"); br.add("cr_v", log16(cm["valor"].to_numpy()), "u16")
 br.add("cr_a", log16(cm["area"].to_numpy()), "u16")
 
-ci = idx_mun(pl.read_parquet(D / "credito_ind.parquet")).filter(pl.col("safra").is_between(2012, 2026)).sort(["m", "safra"])
+# privacidade: o indicador de município × safra só entra com MIN_CELULA ou mais operações
+# contratadas (sem isso, ci_valor − Σcr_v devolveria o valor das combinações cortadas);
+# a dívida em aberto de um ano sem operação contratada (só saldo) também sai
+ci = (idx_mun(pl.read_parquet(D / "credito_ind.parquet")).filter(pl.col("safra").is_between(2012, 2026))
+      .filter(pl.col("ops").fill_null(0) >= MIN_CELULA).sort(["m", "safra"]))
 # o que vem de tomador (contagem, PJ, concentração) só onde há ao menos MIN_CELULA tomadores
 poucos = pl.col("tomadores").fill_null(0) < MIN_CELULA
 ci = ci.with_columns([pl.when(poucos).then(None).otherwise(pl.col(c)).alias(c) for c in ("tomadores", "tomadores_pj", "top10")])
@@ -521,10 +525,12 @@ def grade(bloco, pre, df, col):
 print("terra")
 CLASSES_DETER = ["desmatamento", "degradação", "queimada", "mineração"]
 bd = Bloco()
-pmu = idx_mun(pl.read_parquet(D / "prodes_mun.parquet")).sort(["m", "ano"])
+# o PRODES começa em 2002: o incremento de 2001 sai da diferença contra a linha de base de
+# 2000 e soma 101 mil km² (2002–2004: 73–79 mil), artefato do acumulado inicial
+pmu = idx_mun(pl.read_parquet(D / "prodes_mun.parquet")).filter(pl.col("ano") >= 2002).sort(["m", "ano"])
 bd.add("pr_m", pmu["m"], "u16"); bd.add("pr_a", pmu["ano"] - 2000, "u8")
 bd.add("pr_inc", log16(pmu["incremento"].to_numpy()), "u16"); bd.add("pr_acum", log16(pmu["acumulado"].to_numpy()), "u16")
-delta = grade(bd, "pc_", pl.read_parquet(D / "prodes_celula.parquet"), "area_km2")
+delta = grade(bd, "pc_", pl.read_parquet(D / "prodes_celula.parquet").filter(pl.col("ano") >= 2002), "area_km2")
 dtm = idx_mun(pl.read_parquet(D / "deter_mun.parquet")).filter(pl.col("classe") != "queimada").sort(["m", "ano", "classe"])
 bd.add("dt_m", dtm["m"], "u16"); bd.add("dt_a", dtm["ano"] - 2000, "u8")
 bd.add("dt_c", dtm["classe"].replace_strict({c: i for i, c in enumerate(CLASSES_DETER)}, return_dtype=pl.Int32), "u8")

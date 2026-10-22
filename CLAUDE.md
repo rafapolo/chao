@@ -125,8 +125,12 @@ dados do tema). No `site/`, a primeira etapa segue com 6,7 MB. Se precisar corta
 - **Privacidade:** célula da grade com menos de 5 glebas ou perdas não é embutida (cai ~35% da
   área de glebas). O mesmo corte vale para o agregado por município × produto × safra (glebas)
   e município × evento × safra (perdas). Também vale para o crédito em R$ (combinação com
-  menos de 5 operações; tomadores só com 5 ou mais; instituição por município), o calendário
-  (município × cultura) e o Seguro-Defeso (5 pescadores). Há teste que confere.
+  menos de 5 operações; indicadores do município × safra só com 5 ou mais operações, para
+  que a diferença com as combinações não revele o que foi cortado; tomadores só com 5 ou
+  mais; instituição por município), o calendário (município × cultura) e o Seguro-Defeso
+  (5 pescadores). O teste de privacidade confere todos esses cortes.
+- **PRODES:** começa em 2002. O incremento de 2001 sai da diferença contra a linha de base de
+  2000 e infla (101 mil km², contra 73–79 mil em 2002–2004).
 - **SICOR em R$:** só o crédito de recurso controlado ou equalizado tem município (R$ 136 de
   422 bi em 2023/24). O mapa mostra essa parte, e a UF mostra o total.
 - **Desmembramentos:** 1.624 municípios foram instalados depois de 1974. Antes de existir, o
