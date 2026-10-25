@@ -182,7 +182,11 @@ dados do tema). No `site/`, a primeira etapa segue com 6,7 MB. Se precisar corta
   hortaliças, borracha e forragem). Lavoura nova na PAM sem família quebra a montagem de
   propósito (`KeyError`).
 - O município sai na cor da família que soma mais área entre as lavouras ligadas. A legenda
-  à direita é uma árvore: a família abre, e família e lavoura ligam e desligam.
+  à direita é uma árvore em três níveis: grupo do IBGE (lavoura temporária, lavoura
+  permanente; abertos de início), família e lavoura. Família que tem lavoura dos dois grupos
+  aparece nos dois, cada vez só com as suas (`data-g` + `data-fam` no botão). Grupo, família
+  e lavoura ligam e desligam; na soma, o grupo inteiro conta como uma unidade
+  (`c=f:lavoura-temporaria`).
 - A árvore é o único lugar onde se escolhe a cultura, nos dois modos (alternador `Soma |
   Principal` no topo da legenda, busca logo abaixo). Na soma ela ganha um galho por grupo do
   IBGE que não é lavoura (rebanho, origem animal, aquicultura, extração, silvicultura;

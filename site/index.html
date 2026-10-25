@@ -179,11 +179,12 @@
     border: 1px solid var(--linha); border-radius: 6px; background: none; cursor: pointer; color: var(--ink-2); }
   .legenda .abre svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2;
     stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
-  .legenda .fam[aria-expanded="true"] .abre svg { transform: rotate(90deg); }
-  .legenda .fam[aria-expanded="true"] .abre { border-color: var(--ink-3); color: var(--ink); }
+  .legenda .fam[aria-expanded="true"] > .linha-fam .abre svg { transform: rotate(90deg); }   /* só a do próprio nó: o grupo aberto tem famílias fechadas dentro */
+  .legenda .fam[aria-expanded="true"] > .linha-fam .abre { border-color: var(--ink-3); color: var(--ink); }
   .legenda .abre:hover { border-color: var(--ink-3); color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
   .legenda .abre:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
   .legenda .filhos { margin: 0 0 4px 36px; padding-left: 6px; border-left: 1px solid var(--linha); }
+  .legenda .grupo > .filhos { margin-left: 12px; }   /* as famílias dentro do grupo: recuo curto, sobra largura */
   .legenda .item.sub { padding: 2px 4px; }
   .legenda .item.sub i { width: 10px; height: 10px; }
   .legenda .item.sub .rot { font-size: 12px; color: var(--ink-2); }
@@ -786,7 +787,7 @@
     credFin: -1, credAtiv: -1, credProg: -1,   // filtros do crédito (-1 = todos)
     agrupa: '',   // agrupar por região ('' = cada município)
     desligadas: new Set(),   // lavoura principal: lavouras tiradas da disputa (índice do item)
-    abertas: new Set(),      // famílias abertas na árvore da legenda
+    abertas: new Set(),      // nós abertos na árvore da legenda: 'T' (grupo), 'T:1' (família no grupo), '12' (outro galho)
   };
   /* Lavoura principal: cada lavoura pertence a uma família (cereais, oleaginosas,
      frutas…), definida em monta_pagina.py; cada família tem uma cor. */
@@ -800,7 +801,18 @@
     if (n < 0) { n = ARVORE.length; ARVORE.push({ nome: it.grupo, itens: [] }); }
     ARVORE[n].itens.push(it.i); it.no = n;
   }
+  /* Os dois grupos de lavoura do IBGE (temporária e permanente) ficam no topo da árvore, com
+     as famílias dentro; também são nós de ARVORE, para o grupo inteiro contar como uma
+     unidade no limite, no título e na URL (c=f:lavoura-temporaria). */
+  const GRUPOS_LAV = {};
+  for (const g of ['T', 'P']) {
+    const itens = ITENS.filter(it => it.area && it.g === g).map(it => it.i);
+    GRUPOS_LAV[g] = ARVORE.length;
+    ARVORE.push({ nome: ITENS[itens[0]].grupo, itens, g });
+    for (const i of itens) ITENS[i].gn = GRUPOS_LAV[g];
+  }
   ARVORE.forEach(no => { no.slug = slug(no.nome); });
+  for (const g in GRUPOS_LAV) est.abertas.add(g);   // os grupos começam abertos, as famílias fechadas
 
   function anosDoModo() {
     switch (est.modo) {
@@ -854,7 +866,11 @@
     if (est.modo === 'exp') return [['pct', '% da área do município'], ['area', 'Área convertida (ha)']];
     if (est.modo === 'gleba') return [['area', 'Área das glebas (ha)'], ['n', 'Número de glebas']];
     if (est.modo === 'perda') return [['area', 'Área com perda (ha)'], ['n', 'Número de perdas']];
-    if (SERIES[est.modo]) return SERIES[est.modo].medidas.map(([k, n]) => [k, n]);
+    if (SERIES[est.modo]) {
+      // medida cuja série não veio no bloco (ex.: uso do solo antes do zonal) não aparece
+      const B = SOB[SERIES[est.modo].bloco];
+      return SERIES[est.modo].medidas.filter(([k]) => !B || B.meta.series[k]).map(([k, n]) => [k, n]);
+    }
     if (est.modo === 'cal') return [['mes', 'Mês típico do plantio'], ['ciclo', 'Ciclo: do plantio ao fim da colheita (dias)'],
       ['safrinha', '% plantado de janeiro a abril (2ª safra)']];
     if (est.modo === 'cred') return CRED_MEDIDAS;
@@ -921,6 +937,10 @@
       ['sigef', 'Imóveis do CAR com parcela certificada no SIGEF (%)', '%'],
       ['assent', 'Imóveis do CAR dentro de assentamento do INCRA (%)', '%'],
       ['anl', 'Área do CAR já analisada pelo órgão ambiental (%)', '%'],
+      ['u_flo', 'Floresta dentro do CAR (MapBiomas, % da área do CAR)', '%'],
+      ['u_pas', 'Pastagem dentro do CAR (MapBiomas, % da área do CAR)', '%'],
+      ['u_soja', 'Soja dentro do CAR (MapBiomas, % da área do CAR)', '%'],
+      ['u_agro', 'Agropecuária dentro do CAR (MapBiomas, % da área do CAR)', '%'],
       ['rlvn', 'Reserva legal declarada ÷ vegetação nativa declarada (%)', '%'],
       ['ncar', 'Imóveis no CAR, sem cancelados', 'imóveis']] },
   };
@@ -1848,13 +1868,13 @@
   // família que se marca inteira: os itens válidos somam entre si
   const marcavel = n => { const v = validos(n); return v.length > 1 && v.every(i => compativeis(ITENS[v[0]], ITENS[i])); };
   const inteira = (n, its = est.itens) => marcavel(n) && validos(n).every(i => its.includes(i));
-  /* A seleção em unidades, na ordem em que entraram: família inteira conta como uma
-     (é o que vai no título, na URL e no limite), o resto item a item. */
+  /* A seleção em unidades, na ordem em que entraram: grupo ou família inteira conta como
+     uma (é o que vai no título, na URL e no limite), o resto item a item. */
   function unidades(its = est.itens) {
     const us = [], vistas = new Set();
     for (const i of its) {
-      const n = ITENS[i].no;
-      if (!inteira(n, its)) us.push({ n: -1, itens: [i] });
+      const G = ITENS[i].gn, n = G !== undefined && inteira(G, its) ? G : inteira(ITENS[i].no, its) ? ITENS[i].no : -1;
+      if (n < 0) us.push({ n: -1, itens: [i] });
       else if (!vistas.has(n)) { vistas.add(n); us.push({ n, itens: validos(n) }); }
     }
     return us;
@@ -1969,20 +1989,22 @@
     if (!b) return;
     const d = b.dataset;
     if (d.abre !== undefined) {
-      const f = +d.abre;
-      est.abertas.has(f) ? est.abertas.delete(f) : est.abertas.add(f);
+      est.abertas.has(d.abre) ? est.abertas.delete(d.abre) : est.abertas.add(d.abre);
       return montaLegenda();
     }
+    // grupo (data-g), família dentro do grupo (data-g e data-fam) ou outro galho (só data-fam)
+    const doNo = d.g === undefined ? null : naArvore(d.g, d.fam === undefined ? -1 : +d.fam);
     if (!est.disputa) {
-      // soma: lavoura liga e desliga; família marcável entra ou sai inteira
+      // soma: lavoura liga e desliga; grupo e família marcáveis entram ou saem inteiros
       if (d.item !== undefined) escolhe([+d.item], b.getAttribute('aria-pressed') !== 'true');
+      else if (doNo) { const v = doNo.filter(i => itemValidoNoModo(ITENS[i])); escolhe(v, !v.every(i => est.itens.includes(i))); }
       else if (d.fam !== undefined) escolhe(validos(+d.fam), !inteira(+d.fam));
       return;
     }
     if (d.todas !== undefined) est.desligadas = d.todas === '1' ? new Set() : new Set(LAVOURAS);
-    else if (d.fam !== undefined) {
-      const its = FAMILIAS[+d.fam].itens, algumaLigada = its.some(i => !est.desligadas.has(i));
-      for (const i of its) algumaLigada ? est.desligadas.add(i) : est.desligadas.delete(i);
+    else if (doNo) {
+      const algumaLigada = doNo.some(i => !est.desligadas.has(i));
+      for (const i of doNo) algumaLigada ? est.desligadas.add(i) : est.desligadas.delete(i);
     } else if (d.item !== undefined) {
       const i = +d.item;
       est.desligadas.has(i) ? est.desligadas.delete(i) : est.desligadas.add(i);
@@ -2015,50 +2037,86 @@
     return i => QV ? [rs[i] * 1000, 'R$'] : null;
   }
   const textoTotal = ([x, un]) => !(x > 0) ? '—' : un === 'R$' ? 'R$ ' + curto(x) : curto(x) + ' ' + un;
+  // as lavouras do grupo g, ou só as da família f dentro dele
+  const naArvore = (g, f = -1) => ARVORE[GRUPOS_LAV[g]].itens.filter(i => f < 0 || ITENS[i].fam === f);
   function montaArvore() {
     const el = $('leg-arvore'), principal = est.modo === 'pam' && est.disputa;
     const filtro = semAcento($('busca-item').value.trim()), n = v => v.toLocaleString('pt-BR');
     const tot = !principal && est.modo === 'pam' ? totaisNoRecorte() : null, u0 = ITENS[est.itens[0]];
-    let html = principal ? `<div class="controles"><button data-todas="1">Todas</button><button data-todas="0">Nenhuma</button></div>` : '';
-    html += `<div class="arvore${principal ? '' : ' soma'}" role="tree">`;
-    let algum = false;
-    (principal ? ARVORE.slice(0, NF) : ARVORE).forEach((no, f) => {
-      const todos = principal ? no.itens : validos(f);
-      let its = todos;
-      if (filtro && !semAcento(no.nome).includes(filtro)) its = its.filter(i => semAcento(ITENS[i].nome).includes(filtro));
-      if (!its.length) return;
-      algum = true;
-      const aberta = est.abertas.has(f) || !!filtro;
-      let h = `<div class="fam" role="treeitem" aria-expanded="${aberta}"><div class="linha-fam">`
-        + `<button class="abre" data-abre="${f}" aria-label="${aberta ? 'Fechar' : 'Abrir'} ${no.nome}"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2.5L9.5 7 5 11.5"/></svg></button>`;
+    const somaTot = its => {
+      const totais = tot && its.map(tot), un = totais?.[0]?.[1];
+      return totais && totais.every(t => t && t[1] === un) ? textoTotal([totais.reduce((s, t) => s + (t[0] > 0 ? t[0] : 0), 0), un]) : '';
+    };
+    const contaPrincipal = its => its.reduce((s, i) => s + (CONT_ITEM[i] || 0), 0);
+    const seta = (chave, nome, aberta) => `<button class="abre" data-abre="${chave}" aria-label="${aberta ? 'Fechar' : 'Abrir'} ${nome}">`
+      + `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2.5L9.5 7 5 11.5"/></svg></button>`;
+    // uma lavoura (folha)
+    const folha = i => {
+      if (principal) {
+        const off = est.desligadas.has(i);
+        return `<button class="item sub${off ? ' desligada' : ''}" data-item="${i}" aria-pressed="${!off}" title="municípios onde é a maior lavoura da família que vence">`
+          + `<i style="background:${COR.i[i]}"></i><span class="rot">${ITENS[i].nome}</span>`
+          + `<span class="n">${off ? '—' : CONT_ITEM[i] ? n(CONT_ITEM[i]) : ''}</span></button>`;
+      }
+      const outra = !compativeis(u0, ITENS[i]);
+      return `<button class="item sub${outra ? ' outra' : ''}" data-item="${i}" aria-pressed="${est.itens.includes(i)}"${outra ? ' title="Outra unidade: escolher troca a seleção"' : ''}>`
+        + `<i></i><span class="rot">${ITENS[i].nome}</span><span class="n">${tot && tot(i) ? textoTotal(tot(i)) : ''}</span></button>`;
+    };
+    // a linha de um nó (grupo, família no grupo ou outro galho), que liga e desliga os seus itens
+    const linha = (alvo, nome, todos, cor, titulo) => {
       if (principal) {
         const ligadas = todos.filter(i => !est.desligadas.has(i)).length;
         const estado = ligadas === 0 ? ' desligada' : ligadas < todos.length ? ' parcial' : '';
-        h += `<button class="item${estado}" data-fam="${f}" aria-pressed="${ligadas > 0}" title="${todos.length} lavouras; ${ligadas} ligadas">`
-          + `<i style="background:${COR.f[f]}"></i><span class="rot">${no.nome}</span>`
-          + `<span class="n">${ligadas ? n(CONT_FAM[f]) : '—'}</span></button></div>`;
-      } else {
-        const marcados = todos.filter(i => est.itens.includes(i)).length, pode = marcavel(f);
-        const estado = (marcados && marcados < todos.length ? ' parcial' : '') + (compativeis(u0, ITENS[todos[0]]) ? '' : ' outra');
-        // família com unidades diferentes (leite em litros, ovos em dúzias) só abre e fecha
-        const alvo = pode ? `data-fam="${f}" aria-pressed="${marcados === todos.length}"` : `data-abre="${f}"`;
-        const totais = tot && todos.map(tot), un = totais?.[0]?.[1];
-        const soma = totais && totais.every(t => t && t[1] === un) ? textoTotal([totais.reduce((s, t) => s + (t[0] > 0 ? t[0] : 0), 0), un]) : '';
-        h += `<button class="item${estado}" ${alvo} title="${pode ? `${todos.length} itens; ${marcados} na soma` : 'Unidades diferentes: escolha um a um'}">`
-          + `<i></i><span class="rot">${no.nome}</span><span class="n">${soma}</span></button></div>`;
+        return `<button class="item${estado}" ${alvo} aria-pressed="${ligadas > 0}" title="${todos.length} lavouras; ${ligadas} ligadas">`
+          + `<i style="background:${cor}"></i><span class="rot">${nome}</span>`
+          + `<span class="n">${ligadas ? n(contaPrincipal(todos.filter(i => !est.desligadas.has(i)))) : '—'}</span></button>`;
       }
-      if (aberta) h += '<div class="filhos" role="group">' + its.map(i => {
-        if (principal) {
-          const off = est.desligadas.has(i);
-          return `<button class="item sub${off ? ' desligada' : ''}" data-item="${i}" aria-pressed="${!off}" title="municípios onde é a maior lavoura da família que vence">`
-            + `<i style="background:${COR.i[i]}"></i><span class="rot">${ITENS[i].nome}</span>`
-            + `<span class="n">${off ? '—' : CONT_ITEM[i] ? n(CONT_ITEM[i]) : ''}</span></button>`;
-        }
-        const outra = !compativeis(u0, ITENS[i]);
-        return `<button class="item sub${outra ? ' outra' : ''}" data-item="${i}" aria-pressed="${est.itens.includes(i)}"${outra ? ' title="Outra unidade: escolher troca a seleção"' : ''}>`
-          + `<i></i><span class="rot">${ITENS[i].nome}</span><span class="n">${tot && tot(i) ? textoTotal(tot(i)) : ''}</span></button>`;
-      }).join('') + '</div>';
-      html += h + '</div>';
+      const marcados = todos.filter(i => est.itens.includes(i)).length;
+      const estado = (marcados && marcados < todos.length ? ' parcial' : '') + (compativeis(u0, ITENS[todos[0]]) ? '' : ' outra');
+      return `<button class="item${estado}" ${alvo} aria-pressed="${marcados === todos.length}" title="${titulo || `${todos.length} itens; ${marcados} na soma`}">`
+        + `<i></i><span class="rot">${nome}</span><span class="n">${somaTot(todos)}</span></button>`;
+    };
+    // filtra pela busca: o nome do nó mostra tudo, senão só as lavouras que casam
+    const filtra = (nome, its) => !filtro || semAcento(nome).includes(filtro) ? its : its.filter(i => semAcento(ITENS[i].nome).includes(filtro));
+    const valido = its => principal ? its : its.filter(i => itemValidoNoModo(ITENS[i]));
+    let html = principal ? `<div class="controles"><button data-todas="1">Todas</button><button data-todas="0">Nenhuma</button></div>` : '';
+    html += `<div class="arvore${principal ? '' : ' soma'}" role="tree">`;
+    let algum = false;
+    for (const g in GRUPOS_LAV) {
+      const G = ARVORE[GRUPOS_LAV[g]], todosG = valido(G.itens);
+      const grupoCasa = !!filtro && semAcento(G.nome).includes(filtro);
+      let filhos = '';
+      for (let f = 0; f < NF; f++) {
+        const todos = valido(naArvore(g, f));
+        if (!todos.length) continue;
+        const its = grupoCasa ? todos : filtra(FAMILIAS[f].nome, todos);
+        if (!its.length) continue;
+        const chave = `${g}:${f}`, aberta = est.abertas.has(chave) || (!!filtro && !grupoCasa);
+        filhos += `<div class="fam" role="treeitem" aria-expanded="${aberta}"><div class="linha-fam">${seta(chave, FAMILIAS[f].nome, aberta)}`
+          + linha(`data-g="${g}" data-fam="${f}"`, FAMILIAS[f].nome, todos, COR.f[f]) + '</div>'
+          + (aberta ? '<div class="filhos" role="group">' + its.map(folha).join('') + '</div>' : '') + '</div>';
+      }
+      if (!filhos) continue;
+      algum = true;
+      const aberta = est.abertas.has(g) || !!filtro;
+      // a bolinha do grupo leva as cores das famílias que ele tem
+      const cores = [...new Set(todosG.map(i => ITENS[i].fam))].map(f => COR.f[f]);
+      html += `<div class="fam grupo" role="treeitem" aria-expanded="${aberta}"><div class="linha-fam">${seta(g, G.nome, aberta)}`
+        + linha(`data-g="${g}"`, G.nome, todosG, `conic-gradient(${cores.join(', ')})`) + '</div>'
+        + (aberta ? `<div class="filhos" role="group">${filhos}</div>` : '') + '</div>';
+    }
+    // na soma, os galhos que não são lavoura (rebanho, origem animal…)
+    if (!principal) ARVORE.forEach((no, f) => {
+      if (f < NF || no.g) return;
+      const todos = validos(f), its = filtra(no.nome, todos);
+      if (!its.length) return;
+      algum = true;
+      const chave = String(f), aberta = est.abertas.has(chave) || !!filtro, pode = marcavel(f);
+      // família com unidades diferentes (leite em litros, ovos em dúzias) só abre e fecha
+      const alvo = pode ? `data-fam="${f}"` : `data-abre="${chave}"`;
+      html += `<div class="fam" role="treeitem" aria-expanded="${aberta}"><div class="linha-fam">${seta(chave, no.nome, aberta)}`
+        + linha(alvo, no.nome, todos, '', pode ? '' : 'Unidades diferentes: escolha um a um') + '</div>'
+        + (aberta ? '<div class="filhos" role="group">' + its.map(folha).join('') + '</div>' : '') + '</div>';
     });
     el.innerHTML = html + '</div>' + (algum ? '' : '<div class="vazio">Nada com esse nome.</div>');
   }
@@ -2134,7 +2192,7 @@
     expo: () => `<b>Trase</b>: a exportação de soja (2004–2020, em equivalente de grão) e de carne bovina (2015–2017) ligada ao <b>município onde foi produzida</b>, com a exposição da soja ao desmatamento (área desmatada atribuída à soja exportada). <b>Comex Stat</b>: exportação de produtos do agro (capítulos 01–24 do SH, mais couro, celulose e algodão) e importação de fertilizantes e defensivos, pelo <b>domicílio fiscal da empresa</b>: a soja de Sorriso pode sair por Rondonópolis ou por São Paulo. Compare as duas.`,
     emis: () => `Emissões de gases de efeito estufa por município, em tCO₂e (GWP-AR5), estimadas pelo <b>SEEG</b> (Observatório do Clima): agropecuária (fermentação entérica do gado, solos e adubo, dejetos, arroz irrigado) e mudança de uso da terra (desmatamento e queima de vegetação), com a remoção por vegetação secundária e áreas protegidas.`,
     trab: () => `<b>RAIS</b>: empregos formais da agropecuária (subsetor IBGE 25) em 31 de dezembro; o emprego informal, a maior parte do trabalho no campo, não aparece. <b>CAGED</b>: admissões menos desligamentos na seção A da CNAE, de 2020 em diante (vermelho: fechou vagas). <b>CNEFE</b>: endereços de estabelecimentos agropecuários no Censo 2022. <b>CAFIR</b>: imóveis rurais ativos no cadastro da Receita, na data mais recente (a área do cadastro fica de fora: não fecha em nenhuma unidade).`,
-    imovel: () => `Cruzamento pelo <b>imóvel rural do CAR</b> (SICAR, foto de 2025-10-15, sem cancelados), feito fora da página; aqui só entram somas por município, no município do imóvel. O CAR é <b>autodeclarado</b>, tem imóveis sobrepostos e a mesma foto vale para todas as safras: um imóvel inscrito em 2024 aparece como se existisse em 2016. <b>Crédito</b> (SICOR): a operação vai para o imóvel pelo código do CAR que ela informa (de 2019 em diante) ou, antes, pela gleba financiada, e o valor se reparte entre os imóveis da operação. Sem nenhum dos dois, entra a gleba da perda comunicada ao Proagro. <b>Desmatamento durante a operação</b>: polígono do PRODES ou aviso do DETER que se sobrepõe ao imóvel (a área se reparte pela interseção), entre a emissão e o vencimento. <b>Embargo vigente</b>: termo do IBAMA não cancelado, lavrado antes da emissão e sem desembargo até ela, ou embargo do ICMBio ou da SEMA-MT (que não publicam data de desembargo: vale da lavratura em diante). <b>Perda no Proagro</b>: área com perda comprovada em operação cujo imóvel teve desmatamento durante a operação ou embargo vigente. Cada soma de crédito só aparece com ${M.min_celula} ou mais operações e ${M.min_celula} ou mais imóveis. Na <b>grade de 0,05°</b> (o imóvel entra na célula do seu centro), o mesmo vale por célula, e uma célula também cai quando, somada às outras publicadas, deixaria calcular por diferença o que o município esconde: onde os imóveis são grandes e poucos por célula, como na Amazônia, a grade mostra só uma parte pequena do total. TI, UC de proteção integral, floresta pública não destinada (CNFP 2025, tipo B), Lista de Desmatamento Ilegal do Pará (SEMAS-PA; só com 5 ou mais imóveis atingidos no município), SIGEF (metade ou mais do imóvel coberta por parcela certificada), assentamento, análise do CAR (na Bahia, todo imóvel aparece como aguardando análise no SICAR federal, então ela fica sem dado) e camadas declaradas (reserva legal, vegetação nativa) são o retrato atual; as áreas somam imóvel a imóvel, então o CAR sobreposto conta mais de uma vez (na floresta pública não destinada, 42,8 mi ha somados contra no máximo 36,1 mi ha de floresta tocada).`,
+    imovel: () => `Cruzamento pelo <b>imóvel rural do CAR</b> (SICAR, foto de 2025-10-15, sem cancelados), feito fora da página; aqui só entram somas por município, no município do imóvel. O CAR é <b>autodeclarado</b>, tem imóveis sobrepostos e a mesma foto vale para todas as safras: um imóvel inscrito em 2024 aparece como se existisse em 2016. <b>Crédito</b> (SICOR): a operação vai para o imóvel pelo código do CAR que ela informa (de 2019 em diante) ou, antes, pela gleba financiada, e o valor se reparte entre os imóveis da operação. Sem nenhum dos dois, entra a gleba da perda comunicada ao Proagro. <b>Desmatamento durante a operação</b>: polígono do PRODES ou aviso do DETER que se sobrepõe ao imóvel (a área se reparte pela interseção), entre a emissão e o vencimento. <b>Embargo vigente</b>: termo do IBAMA não cancelado, lavrado antes da emissão e sem desembargo até ela, ou embargo do ICMBio ou da SEMA-MT (que não publicam data de desembargo: vale da lavratura em diante). <b>Perda no Proagro</b>: área com perda comprovada em operação cujo imóvel teve desmatamento durante a operação ou embargo vigente. Cada soma de crédito só aparece com ${M.min_celula} ou mais operações e ${M.min_celula} ou mais imóveis. Na <b>grade de 0,05°</b> (o imóvel entra na célula do seu centro), o mesmo vale por célula, e uma célula também cai quando, somada às outras publicadas, deixaria calcular por diferença o que o município esconde: onde os imóveis são grandes e poucos por célula, como na Amazônia, a grade mostra só uma parte pequena do total. <b>Uso do solo dentro do CAR</b>: a fração de cada classe do MapBiomas (coleção 10, 30 m) em cada imóvel, ano a ano de 2016 a 2024, vezes a área declarada. TI, UC de proteção integral, floresta pública não destinada (CNFP 2025, tipo B), Lista de Desmatamento Ilegal do Pará (SEMAS-PA; só com 5 ou mais imóveis atingidos no município), SIGEF (metade ou mais do imóvel coberta por parcela certificada), assentamento, análise do CAR (na Bahia, todo imóvel aparece como aguardando análise no SICAR federal, então ela fica sem dado) e camadas declaradas (reserva legal, vegetação nativa) são o retrato atual; as áreas somam imóvel a imóvel, então o CAR sobreposto conta mais de uma vez (na floresta pública não destinada, 42,8 mi ha somados contra no máximo 36,1 mi ha de floresta tocada).`,
     social: () => `Famílias inscritas no <b>Cadastro Único</b> por grupo (agricultores familiares, pescadores artesanais, extrativistas, assentados) e em domicílio rural, no último mês de cada ano. <b>Seguro-Defeso</b>: pescadores artesanais pagos no período em que a pesca é proibida (Portal da Transparência), contados pelo NIS; município com menos de ${M.min_celula} não aparece. População estimada pelo IBGE.`,
     clima: () => `<b>SISAM</b> (INPE): chuva e temperatura por município, de 2000 a 2019, a partir de modelo e satélite, não de pluviômetro: serve para comparar um ano com outro no mesmo lugar (a <b>anomalia</b>, contra a média de 2000–2019), menos para o valor absoluto. As <b>estações do INMET</b> são medição direta, de 2000 a 2025, desenhadas como pontos: só os anos com 90% ou mais das horas medidas. <b>S2ID</b> (Defesa Civil): situações de emergência ou calamidade reconhecidas e ainda vigentes; a fonte só guarda o retrato atual. Compare a seca de 2012–2016 no semiárido com as Perdas do Proagro e o Garantia-Safra.`,
     fogo: () => `Focos de calor do <b>satélite de referência</b> do INPE (AQUA, passagem da tarde), por ano: é a série comparável ao longo do tempo. Desde 2023 a fonte traz todos os satélites (30 vezes mais focos, o mesmo fogo visto várias vezes); só o de referência entra. Foco não é área queimada: a área vem da cicatriz de queimada do DETER (Amazônia, Cerrado, Pantanal).`,

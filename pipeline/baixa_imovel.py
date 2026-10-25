@@ -21,11 +21,15 @@ Etapas no beelink, cada uma um parquet em ~/bragro_tmp/imovel/ que NÃO volta:
   grade     — o crédito ligado a CAR e o crédito com desmatamento durante a operação
               na grade de 0,05° (célula do centroide do imóvel), com a checagem de
               diferença contra o município (ver a etapa)
+  mapbiomas — (depois do zonal no beelink) floresta, pastagem, soja e agropecuária dentro
+              do CAR, por município × ano, 2016–2024
   terra     — área do imóvel em TI, em UC de proteção integral e em floresta pública não
               destinada (CNFP tipo B) e na Lista de Desmatamento Ilegal do Pará; cobertura
               por parcelas do SIGEF; ponto do imóvel dentro de assentamento (polígonos do INCRA)
 
 Saídas em pipeline/dados/ (só agregados; nenhum id_imovel, CPF, CNPJ ou nome):
+  imovel_uso.parquet — id_municipio, ano, imoveis, area_car, floresta, pastagem, soja, agro
+                       (ha, MapBiomas dentro do CAR); só municípios com 5+ imóveis
   imovel_celula.parquet — k (ccar, desm), i, j (célula de 0,05°), ano, valor (R$), ops e
                        imoveis (para a conferência do corte em monta_pagina.py)
   imovel_mun.parquet — id_municipio (o do imóvel) e o retrato do CAR: imoveis, area_car,
@@ -524,6 +528,28 @@ COPY (
   GROUP BY ALL ORDER BY ALL
 ) TO '{{saida}}' (FORMAT parquet);
 """)
+
+
+@etapa
+def mapbiomas():
+    # Uso do solo dentro do CAR, ano a ano (coleção 10, 30 m, 2016–2024): a fração de cada
+    # classe em cada imóvel sai do zonal feito no beelink (~/scrap_tmp/mapbiomas_raster/
+    # zonal.py, exactextract), e aqui vira área por município, vezes a área declarada.
+    # Soma imóvel a imóvel, como as outras áreas: o CAR sobreposto conta mais de uma vez.
+    global uso
+    uso = roda("imovel_uso", f"""
+COPY (
+  SELECT c.id_municipio, u.ano, count(*) imoveis, sum(c.area_ha) area_car,
+         sum(c.area_ha * u.f_floresta) floresta, sum(c.area_ha * u.f_pastagem) pastagem,
+         sum(c.area_ha * u.f_soja) soja, sum(c.area_ha * u.f_agro) agro
+  FROM read_parquet('{IM}/mapbiomas/*/*.parquet', hive_partitioning = true) u
+  JOIN {CAR} c USING (id_imovel)
+  WHERE c.status <> 'CA' AND c.id_municipio IS NOT NULL
+  GROUP BY ALL HAVING count(*) >= {MIN} ORDER BY ALL
+) TO '{{saida}}' (FORMAT parquet);
+""")
+    s = uso.group_by("ano").agg((pl.col("floresta", "pastagem", "soja", "agro").sum() / 1e6).round(1)).sort("ano")
+    print("uso do solo dentro do CAR (mi ha):"); print(s)
 
 
 pedidas = sys.argv[1:] or list(ETAPAS)

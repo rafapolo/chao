@@ -62,7 +62,7 @@ for (const motor of ESCOLHIDOS) {
       await p.goto(BASE + "?c=soja&a=2020&d=1");
       await p.waitForSelector("#carregando", { state: "detached", timeout: 60_000 });
       // desenhado e com a árvore, mas sem a segunda etapa
-      expect(await p.locator("#legenda .fam").count()).toBe(10);
+      expect(await p.locator("#legenda .fam.grupo").count()).toBe(2);   // lavoura temporária e permanente
       expect(await p.locator('[data-modo="sat"]').isDisabled()).toBe(true);
       expect(await p.evaluate(() => !!(window as any).__T)).toBe(false);
       solta();

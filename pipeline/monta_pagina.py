@@ -702,6 +702,14 @@ SER = series(bi, ima, {"cd_v": "cd_valor", "cd_a": "cd_area", "ce_v": "ce_valor"
 SER.update(series(bi, imm, {"ti": "ti", "ucpi": "ucpi", "fpnd": "fpnd", "ldi": "ldi", "ldi_ha": "area_ldi",
                             "sigef": "sigef", "assent": "assent",
                             "anl": "anl", "rlvn": "rlvn", "ncar": "imoveis"}, zero=("anl",)))
+# uso do solo dentro do CAR (MapBiomas 30 m, baixa_imovel.py etapa mapbiomas); sem o
+# parquet (o zonal no beelink leva horas), a página só não mostra essas medidas
+if (D / "imovel_uso.parquet").exists():
+    uso = idx_mun(pl.read_parquet(D / "imovel_uso.parquet")).with_columns(
+        (100 * pl.col(c) / pl.col("area_car")).alias("u_" + c) for c in ("floresta", "pastagem", "soja", "agro"))
+    SER.update(series(bi, uso, {"u_flo": "u_floresta", "u_pas": "u_pastagem", "u_soja": "u_soja", "u_agro": "u_agro"}))
+else:
+    print("    sem imovel_uso.parquet: uso do solo dentro do CAR fica de fora")
 # grade de 0,05° (baixa_imovel.py, etapa grade): a checagem de diferença contra o
 # município roda no beelink; aqui, o corte de cada célula
 cel = pl.read_parquet(D / "imovel_celula.parquet")

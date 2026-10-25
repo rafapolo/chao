@@ -83,7 +83,7 @@ for (const motor of ESCOLHIDOS) {
       await x.p.click('#modos .grupo-modos[data-sec="Produção"]');
       await x.p.click('[data-modo="pam"]');
       await x.p.click('#alterna-disputa [data-d="1"]');
-      expect(await x.p.locator("#legenda .fam").count()).toBe(10);   // famílias de lavoura
+      expect(await x.p.locator("#legenda .fam.grupo").count()).toBe(2);   // lavoura temporária e permanente
       expect(x.erros).toEqual([]);
       await fecha(x);
     }, LENTO);
@@ -356,7 +356,7 @@ for (const motor of ESCOLHIDOS) {
     test("sem nada na URL, a página abre na lavoura principal, com a árvore de famílias à direita", async () => {
       const x = await abre(nav, "");
       expect(await roda<boolean>(x.p, "return T.est.disputa && T.est.modo === 'pam'")).toBe(true);
-      expect(await x.p.locator("#legenda .fam").count()).toBe(10);
+      expect(await x.p.locator("#legenda .fam.grupo").count()).toBe(2);   // lavoura temporária e permanente
       expect(await x.p.locator("#tit-legenda").textContent()).toContain("Lavoura principal");
       expect(x.p.url()).toContain("d=1");
       await fecha(x);
@@ -365,12 +365,16 @@ for (const motor of ESCOLHIDOS) {
     test("lavoura principal: árvore de famílias liga e desliga, conta municípios e vai para a URL", async () => {
       const x = await abre(nav, "?c=soja&a=2020&d=1");
       await quadro(x.p);
-      expect(await x.p.locator("#legenda .fam").count()).toBe(10);
+      // os dois grupos do IBGE no topo, abertos, com as famílias dentro
+      expect(await x.p.locator("#legenda .fam.grupo").count()).toBe(2);
+      const nFam = await x.p.locator("#legenda button[data-fam]").count();
+      expect(nFam).toBeGreaterThan(10);   // família com lavoura temporária e permanente aparece nos dois
       const conta = async (sel: string) => Number((await x.p.locator(`#legenda ${sel} .n`).textContent())!.replace(/\D/g, "") || 0);
-      // a soja é oleaginosa (família 1); os cereais (0) herdam municípios quando ela sai
-      const oleo = await conta('[data-fam="1"]'), cereais = await conta('[data-fam="0"]');
+      // a soja é oleaginosa (família 1) temporária; os cereais (0) herdam municípios quando ela sai
+      const OLEO = '[data-g="T"][data-fam="1"]', CEREAIS = '[data-g="T"][data-fam="0"]';
+      const oleo = await conta(OLEO), cereais = await conta(CEREAIS);
       expect(oleo).toBeGreaterThan(500);
-      await x.p.click('#legenda [data-abre="1"]');
+      await x.p.click('#legenda [data-abre="T:1"]');
       expect(await x.p.locator('#legenda .filhos [data-item]').count()).toBeGreaterThan(3);
       const soja = await x.p.locator('#legenda .filhos [data-item]').first();
       expect(await soja.locator(".rot").textContent()).toBe("Soja");
@@ -378,16 +382,17 @@ for (const motor of ESCOLHIDOS) {
       await soja.click();
       await quadro(x.p);
       expect(x.p.url()).toContain("dx=soja");
-      expect(await x.p.locator('#legenda [data-fam="1"]').getAttribute("class")).toContain("parcial");
-      expect(await conta('[data-fam="0"]')).toBeGreaterThan(cereais);
+      expect(await x.p.locator(`#legenda ${OLEO}`).getAttribute("class")).toContain("parcial");
+      expect(await x.p.locator('#legenda button[data-g="T"]:not([data-fam])').getAttribute("class")).toContain("parcial");
+      expect(await conta(CEREAIS)).toBeGreaterThan(cereais);
       expect(await digital(x.p)).not.toBe(antes);
       await x.p.click('#legenda [data-todas="0"]');
       await quadro(x.p);
-      expect(await x.p.locator('#legenda [data-fam].desligada').count()).toBe(10);
+      expect(await x.p.locator('#legenda button[data-fam].desligada').count()).toBe(nFam);
       await x.p.click('#legenda [data-todas="1"]');
       await quadro(x.p);
       expect(await x.p.locator("#legenda .desligada, #legenda .parcial").count()).toBe(0);
-      expect(await conta('[data-fam="1"]')).toBe(oleo);
+      expect(await conta(OLEO)).toBe(oleo);
       expect(x.erros).toEqual([]);
       await fecha(x);
     }, LENTO);
@@ -396,12 +401,13 @@ for (const motor of ESCOLHIDOS) {
       const x = await abre(nav, "?c=soja&a=2020");
       await quadro(x.p);
       expect(await x.p.locator('#alterna-disputa [data-d="0"]').getAttribute("aria-pressed")).toBe("true");
-      // rebanho e os outros grupos entram como galhos da árvore, depois das 10 famílias
-      expect(await x.p.locator("#legenda .fam").count()).toBeGreaterThan(10);
-      const soja = x.p.locator('#legenda .soma [data-fam="1"]');
+      // rebanho e os outros grupos entram como galhos da árvore, depois das lavouras
+      expect(await x.p.locator("#legenda .fam.grupo").count()).toBe(2);
+      expect(await x.p.locator("#legenda .arvore > .fam:not(.grupo)").count()).toBeGreaterThan(2);
+      const soja = x.p.locator('#legenda .soma [data-g="T"][data-fam="1"]');
       expect(await soja.locator(".n").textContent()).toMatch(/mi ha/);
       // família inteira: uma unidade no título e na URL
-      await x.p.click('#legenda [data-fam="0"]');
+      await x.p.click('#legenda [data-g="T"][data-fam="0"]');
       await quadro(x.p);
       expect(decodeURIComponent(x.p.url())).toContain("c=soja,f:cereais");
       expect(await x.p.locator("#tit-legenda").textContent()).toContain("Soja + Cereais");
@@ -416,7 +422,20 @@ for (const motor of ESCOLHIDOS) {
       expect(await x.p.locator('#legenda .soma .item.sub.outra', { hasText: "Soja" }).count()).toBe(0);   // a busca filtra
       await x.p.fill("#busca-item", "");
       await x.p.dispatchEvent("#busca-item", "input");
-      expect(await x.p.locator('#legenda .soma [data-fam="0"]').getAttribute("class")).toContain("outra");
+      expect(await x.p.locator('#legenda .soma [data-g="T"][data-fam="0"]').getAttribute("class")).toContain("outra");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("soma: o grupo lavoura temporária entra inteiro como uma unidade", async () => {
+      const x = await abre(nav, "?c=soja&a=2020");
+      await quadro(x.p);
+      await x.p.click('#legenda button[data-g="T"]:not([data-fam])');
+      await quadro(x.p);
+      expect(decodeURIComponent(x.p.url())).toContain("f:lavoura-temporaria");
+      expect(await x.p.locator("#tit-legenda").textContent()).toContain("Lavoura temporária");
+      expect(await roda<number>(x.p, "return T.est.itens.length")).toBeGreaterThan(20);
+      expect(await x.p.locator('#legenda button[data-g="T"]:not([data-fam])').getAttribute("aria-pressed")).toBe("true");
       expect(x.erros).toEqual([]);
       await fecha(x);
     }, LENTO);
@@ -490,7 +509,7 @@ for (const motor of ESCOLHIDOS) {
       // imóvel do CAR: o bloco só traz séries município × ano (nada por imóvel; o corte
       // de 5 operações e 5 imóveis é conferido em monta_pagina.py, onde estão as contagens)
       const imv = await roda<string[]>(x.p, `return T.carrega('imovel').then(b =>
-        Object.keys(b.A).filter(k => !/^(cd_v|cd_a|ce_v|ce_a|pp_a|ccar|dcar|dpct|ti|ucpi|fpnd|ldi|ldi_ha|sigef|assent|anl|rlvn|ncar)_[mav]$|^(g_ccar|g_cd)_[aijv]$/.test(k)))`);
+        Object.keys(b.A).filter(k => !/^(cd_v|cd_a|ce_v|ce_a|pp_a|ccar|dcar|dpct|ti|ucpi|fpnd|ldi|ldi_ha|sigef|assent|anl|u_flo|u_pas|u_soja|u_agro|rlvn|ncar)_[mav]$|^(g_ccar|g_cd)_[aijv]$/.test(k)))`);
       expect(imv).toEqual([]);
       await fecha(x);
     }, LENTO);
