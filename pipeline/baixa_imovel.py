@@ -19,12 +19,12 @@ Etapas no beelink, cada uma um parquet em ~/bragro_tmp/imovel/ que NÃO volta:
   desmat    — polígonos do PRODES (2016–) e do DETER (desmatamento e supressão) cruzados
               com o imóvel: a área do alerta se reparte pela interseção
   terra     — área do imóvel em TI, em UC de proteção integral e em floresta pública não
-              destinada (CNFP tipo B); cobertura por parcelas do SIGEF; ponto do imóvel
-              dentro de assentamento (polígonos do INCRA)
+              destinada (CNFP tipo B) e na Lista de Desmatamento Ilegal do Pará; cobertura
+              por parcelas do SIGEF; ponto do imóvel dentro de assentamento (polígonos do INCRA)
 
 Saídas em pipeline/dados/ (só agregados; nenhum id_imovel, CPF, CNPJ ou nome):
   imovel_mun.parquet — id_municipio (o do imóvel) e o retrato do CAR: imoveis, area_car,
-                       area_ti, area_ucpi, area_fpnd, area_analisada, imoveis_sigef,
+                       area_ti, area_ucpi, area_fpnd, area_ldi (só com 5+ imóveis atingidos), area_analisada, imoveis_sigef,
                        imoveis_assent, app, rl, veg_nativa, consolidada (ha); nulo onde há
                        menos de 5 imóveis
   imovel_ano.parquet — id_municipio, ano (safra de emissão, ou ano do PRODES): crédito em
@@ -328,6 +328,7 @@ def terra(incra=True):
     # proporção da interseção no polígono do imóvel, vezes a área declarada; somada sobre
     # as feições e limitada a 1. "Com parcela certificada" = metade ou mais do imóvel
     # coberta por parcelas do SIGEF. Assentamento: o ponto interno do imóvel no projeto.
+    # LDI (Pará): área embargada por desmatamento ilegal, sem data (retrato atual).
     # `terra-` pula o INCRA.
     def fr(nome, tabela, onde="TRUE"):
         # uma tabela temporária por camada: num WITH só, as quatro interseções juntas
@@ -341,11 +342,14 @@ SET threads = 8; SET memory_limit = '22GB'; SET preserve_insertion_order = false
 {fr("ti", "br_geobr_mapas.terra_indigena")}
 {fr("uc", "br_geobr_mapas.unidade_conservacao", "t.sigla_grupo = 'PI'")}
 {fr("fp", "br_sfb_cnfp.florestas_publicas", "t.tipo = 'TIPO B'")}
+{fr("ld", "br_semas_pa_ldi.areas_embargadas", "t.ano_desmat <= year(current_date)")}
 COPY (
-  WITH k AS (SELECT id_imovel FROM ti UNION SELECT id_imovel FROM uc UNION SELECT id_imovel FROM fp)
+  WITH k AS (SELECT id_imovel FROM ti UNION SELECT id_imovel FROM uc UNION SELECT id_imovel FROM fp
+             UNION SELECT id_imovel FROM ld)
   SELECT k.id_imovel, least(coalesce(ti.f, 0), 1) f_ti, least(coalesce(uc.f, 0), 1) f_ucpi,
-         least(coalesce(fp.f, 0), 1) f_fpnd
+         least(coalesce(fp.f, 0), 1) f_fpnd, least(coalesce(ld.f, 0), 1) f_ldi
   FROM k LEFT JOIN ti USING (id_imovel) LEFT JOIN uc USING (id_imovel) LEFT JOIN fp USING (id_imovel)
+  LEFT JOIN ld USING (id_imovel)
   ORDER BY ALL
 ) TO '{IM}/terra.parquet' (FORMAT parquet, COMPRESSION zstd);
 """)
@@ -376,6 +380,9 @@ COPY (
     SELECT c.id_municipio, count(*) imoveis, sum(c.area_ha) area_car,
            sum(c.area_ha * coalesce(t.f_ti, 0)) area_ti, sum(c.area_ha * coalesce(t.f_ucpi, 0)) area_ucpi,
            sum(c.area_ha * coalesce(t.f_fpnd, 0)) area_fpnd,
+           -- Lista de Desmatamento Ilegal do Pará: só com 5 ou mais imóveis atingidos
+           CASE WHEN count(*) FILTER (WHERE t.f_ldi >= 0.01) >= {MIN}
+                THEN sum(c.area_ha * coalesce(t.f_ldi, 0)) END area_ldi,
            count(*) FILTER (WHERE i.sigef) imoveis_sigef, count(*) FILTER (WHERE i.assentamento) imoveis_assent,
            sum(c.area_ha) FILTER (WHERE c.condicao LIKE 'Analisado%') area_analisada,
            sum(k.app) app, sum(k.rl) rl, sum(k.veg_nativa) veg_nativa, sum(k.consolidada) consolidada
@@ -438,7 +445,8 @@ if "agrega" in pedidas:
     f = lambda v: f"{v:,.0f}".replace(",", ".")
     print(f"CAR ativo nos municípios: {f(mun['area_car'].sum() / 1e6)} mi ha em {f(mun['imoveis'].sum())} imóveis (SICAR ≈ 713 mi ha)")
     print(f"  em TI: {f(mun['area_ti'].sum() / 1e6)} mi ha · em UC de proteção integral: {f(mun['area_ucpi'].sum() / 1e6)} mi ha"
-          f" · em floresta pública não destinada: {f(mun['area_fpnd'].sum() / 1e6)} mi ha")
+          f" · em floresta pública não destinada: {f(mun['area_fpnd'].sum() / 1e6)} mi ha"
+          f" · na LDI do Pará: {f(mun['area_ldi'].sum())} ha")
     print(f"  com parcela SIGEF: {f(mun['imoveis_sigef'].sum())} imóveis · em assentamento: {f(mun['imoveis_assent'].sum())}"
           f" · área analisada: {f(mun['area_analisada'].sum() / 1e6)} mi ha")
     print(f"perda no Proagro em imóvel com desmatamento ou embargo: {f(ano['pp_area'].sum())} ha")

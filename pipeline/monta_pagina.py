@@ -690,6 +690,7 @@ imm = idx_mun(pl.read_parquet(D / "imovel_mun.parquet")).with_columns(
     (100 * pl.col("area_ucpi") / pl.col("area_car")).alias("ucpi"),
     (100 * pl.col("imoveis_sigef") / pl.col("imoveis")).alias("sigef"),
     (100 * pl.col("area_fpnd") / pl.col("area_car")).alias("fpnd"),
+    (100 * pl.col("area_ldi") / pl.col("area_car")).alias("ldi"),
     (100 * pl.col("imoveis_assent") / pl.col("imoveis")).alias("assent"),
     # a Bahia (sistema estadual) não manda a análise ao SICAR: UF sem nenhum imóvel
     # analisado fica sem dado; nas outras, 0% é medida
@@ -698,7 +699,8 @@ imm = idx_mun(pl.read_parquet(D / "imovel_mun.parquet")).with_columns(
     (100 * pl.col("rl") / pl.col("veg_nativa")).alias("rlvn"))
 SER = series(bi, ima, {"cd_v": "cd_valor", "cd_a": "cd_area", "ce_v": "ce_valor", "ce_a": "ce_area",
                        "pp_a": "pp_area", "ccar": "ccar_valor", "dcar": "desm_car_km2", "dpct": "dpct"})
-SER.update(series(bi, imm, {"ti": "ti", "ucpi": "ucpi", "fpnd": "fpnd", "sigef": "sigef", "assent": "assent",
+SER.update(series(bi, imm, {"ti": "ti", "ucpi": "ucpi", "fpnd": "fpnd", "ldi": "ldi", "ldi_ha": "area_ldi",
+                            "sigef": "sigef", "assent": "assent",
                             "anl": "anl", "rlvn": "rlvn", "ncar": "imoveis"}, zero=("anl",)))
 bi.meta = {"series": SER}
 
