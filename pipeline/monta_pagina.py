@@ -610,12 +610,13 @@ bca.add("ciclo", (cal["ciclo_dias"].fill_null(0) / cal["operacoes"]).round(0), "
 bca.meta = {"delta": ["m"]}
 
 # ---------- séries genéricas município × ano (3ª etapa) ----------
-def series(bloco, df, cols, ano0=1970, inteiro=()):
+def series(bloco, df, cols, ano0=1970, inteiro=(), zero=()):
     """Uma série por coluna: K_m, K_a (ano − ano0) e K_v (escala log, ou i32 cru nas
-    colunas em `inteiro`, que podem ser negativas). Sem as linhas nulas ou zero."""
+    colunas em `inteiro`, que podem ser negativas). Sem as linhas nulas ou zero, menos
+    nas colunas em `zero`, onde 0 é medida e não falta de dado."""
     meta = {}
     for chave, col in cols.items():
-        d = df.filter(pl.col(col).is_not_null() & (pl.col(col) != 0)).sort(["m", "ano"])
+        d = df.filter(pl.col(col).is_not_null() & ((pl.col(col) != 0) | (col in zero))).sort(["m", "ano"])
         bloco.add(chave + "_m", d["m"], "u16"); bloco.add(chave + "_a", d["ano"] - ano0, "u8")
         if col in inteiro:
             bloco.add(chave + "_v", d[col].round(0), "i32")
@@ -670,6 +671,36 @@ SER.update(series(bg, som, {"cad_agri": "agricultores", "cad_pesc": "pescadores"
 SER.update(series(bg, imv.rename({"ano_cafir": "ano"}), {"cafir": "imoveis_cafir"}))
 SER.update(series(bg, imv.rename({"ano_cnefe": "ano"}), {"cnefe": "estabelecimentos_agro"}))
 bg.meta = {"series": SER}
+
+print("imóvel")
+bi = Bloco()
+ima = idx_mun(pl.read_parquet(D / "imovel_ano.parquet"))
+# privacidade: cada soma de crédito por imóvel com MIN_CELULA ou mais operações e imóveis,
+# e o resto do crédito em CAR com 0 ou MIN_CELULA ou mais operações (baixa_imovel.cortes)
+for col, marca in [("cd_valor", "desm"), ("cd_area", "desm"), ("ce_valor", "emb"), ("ce_area", "emb"),
+                   ("pp_area", "perda"), ("ccar_valor", "car")]:
+    d = ima.filter(pl.col(col).is_not_null())
+    assert d[f"ops_{marca}"].min() >= MIN_CELULA and d[f"imo_{marca}"].min() >= MIN_CELULA, col
+    resto = d["ops_car"] - d[f"ops_{marca}"]
+    assert ((resto == 0) | (resto >= MIN_CELULA)).all(), col
+ima = ima.with_columns((100 * pl.col("desm_car_km2") / pl.col("desm_km2")).alias("dpct"))
+imm = idx_mun(pl.read_parquet(D / "imovel_mun.parquet")).with_columns(
+    pl.lit(2025).alias("ano"),   # a foto do CAR é de 2025-10-15
+    (100 * pl.col("area_ti") / pl.col("area_car")).alias("ti"),
+    (100 * pl.col("area_ucpi") / pl.col("area_car")).alias("ucpi"),
+    (100 * pl.col("imoveis_sigef") / pl.col("imoveis")).alias("sigef"),
+    (100 * pl.col("area_fpnd") / pl.col("area_car")).alias("fpnd"),
+    (100 * pl.col("imoveis_assent") / pl.col("imoveis")).alias("assent"),
+    # a Bahia (sistema estadual) não manda a análise ao SICAR: UF sem nenhum imóvel
+    # analisado fica sem dado; nas outras, 0% é medida
+    pl.when(pl.col("area_analisada").fill_null(0).sum().over(pl.col("id_municipio").str.slice(0, 2)) > 0)
+    .then(100 * pl.col("area_analisada").fill_null(0) / pl.col("area_car")).alias("anl"),
+    (100 * pl.col("rl") / pl.col("veg_nativa")).alias("rlvn"))
+SER = series(bi, ima, {"cd_v": "cd_valor", "cd_a": "cd_area", "ce_v": "ce_valor", "ce_a": "ce_area",
+                       "pp_a": "pp_area", "ccar": "ccar_valor", "dcar": "desm_car_km2", "dpct": "dpct"})
+SER.update(series(bi, imm, {"ti": "ti", "ucpi": "ucpi", "fpnd": "fpnd", "sigef": "sigef", "assent": "assent",
+                            "anl": "anl", "rlvn": "rlvn", "ncar": "imoveis"}, zero=("anl",)))
+bi.meta = {"series": SER}
 
 sedes = (pl.DataFrame({"id_municipio": IDS}).join(pl.read_parquet(D / "sedes.parquet"), on="id_municipio", how="left")
          .join(mun.select("id_municipio", pl.col("lon").alias("lon2"), pl.col("lat").alias("lat2")), on="id_municipio")
@@ -735,6 +766,9 @@ fix["series"] = {
     "se_agro": {"mun": "5107925", "ano": 2022, "v": float(sgm.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2022))["agro"][0])},
     "rais": {"mun": "5107925", "ano": 2020, "v": float(tbm.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2020))["vinculos"][0])},
     "caged": {"ano": 2023, "v": float(tbm.filter(pl.col("ano") == 2023)["saldo"].sum())},
+    # crédito em imóvel com desmatamento durante a operação: o município de maior soma em 2021
+    "cd_v": (lambda r: {"mun": r["id_municipio"], "ano": 2021, "v": float(r["cd_valor"])})(
+        ima.filter(pl.col("ano") == 2021).sort("cd_valor", descending=True, nulls_last=True).row(0, named=True)),
 }
 sc_ = cal.filter((pl.col("id_municipio") == "5107925") & (pl.col("produto") == "SOJA") & (pl.col("f") == 0))
 fix["calendario"] = {"mun": "5107925", "mes_moda": int(sc_.sort(["operacoes", "mes"], descending=[True, False])["mes"][0]),
@@ -749,7 +783,8 @@ tpl = (S / "template.html").read_text().replace("/*__FONTE__*/", (S / "fonte_mon
 BLOCOS = [("MALHA", "malha", bm), ("PROD", "prod", bp), ("PRODQV", "prodqv", bq), ("MAPB", "mapb", bb),
           ("CRED", "cred", bc), ("CAD", "cad", bk), ("CONTORNOS", "contornos", bt), ("CREDRS", "credrs", br),
           ("ECON", "econ", be), ("TERRA", "terra", bd), ("FOGO", "fogo", bf), ("CLIMA", "clima", bcl), ("CALEND", "calend", bca),
-          ("MERCADO", "mercado", bx), ("EMIS", "emis", bs), ("GENTE", "gente", bg)]
+          ("MERCADO", "mercado", bx), ("EMIS", "emis", bs), ("GENTE", "gente", bg),
+          ("IMOVEL", "imovel", bi)]
 GZ = {nome: comprime(nome, bloco) for _, nome, bloco in BLOCOS}
 
 # 1. index.html: arquivo único, abre por file:// (os blocos em base64 dentro dele)

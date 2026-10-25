@@ -28,7 +28,7 @@ for (const motor of ESCOLHIDOS) {
       let antes = await digital(p);
       const passos: [string, () => Promise<unknown>, RegExp][] = [
         ["ano", () => roda(p, "T.defineAno(1990)"), /a=1990/],
-        ["cultura", () => p.locator("#lista-itens label", { hasText: /^\s*Milho$/ }).locator("input").check(), /c=soja%2Cmilho|c=soja,milho/],
+        ["cultura", async () => { await p.fill("#busca-item", "milho"); await p.locator('#leg-arvore [data-item]:has(.rot:text-is("Milho"))').click(); }, /c=soja%2Cmilho|c=soja,milho/],
         ["medida", () => p.selectOption("#metrica", "area"), /m=area/],
         ["fonte", () => p.click('[data-modo="sat"]'), /f=sat/],
       ];
@@ -82,7 +82,7 @@ for (const motor of ESCOLHIDOS) {
       }
       await x.p.click('#modos .grupo-modos[data-sec="Produção"]');
       await x.p.click('[data-modo="pam"]');
-      await x.p.check("#disputa");
+      await x.p.click('#alterna-disputa [data-d="1"]');
       expect(await x.p.locator("#legenda .fam").count()).toBe(10);   // famílias de lavoura
       expect(x.erros).toEqual([]);
       await fecha(x);
@@ -245,14 +245,14 @@ for (const motor of ESCOLHIDOS) {
 
     test("séries genéricas: Trase, SEEG, RAIS e CAGED batem com o pipeline; o saldo do CAGED é divergente", async () => {
       const F = FIXTURE.series;
-      for (const [modo, k] of [["expo", "soja_t"], ["emis", "se_agro"], ["trab", "rais"]]) {
+      for (const [modo, k] of [["expo", "soja_t"], ["emis", "se_agro"], ["trab", "rais"], ["imovel", "cd_v"]]) {
         const f = F[k];
         const x = await abre(nav, `?f=${modo}&m=${k}&a=${f.ano}&mun=${f.mun}`);
         await x.p.waitForFunction(() => document.getElementById("rotulo-carga")!.hidden && (window as any).__T.est.metrica, null, { timeout: 60_000 });
         await x.p.waitForFunction(m => (window as any).__T.VAL[(window as any).__T.M.mun.id.indexOf(m)] > 0, f.mun, { timeout: 60_000 });
         const v = await roda<number>(x.p, `return T.VAL[T.M.mun.id.indexOf('${f.mun}')]`);
         expect(Math.abs(v / f.v - 1), k).toBeLessThan(0.005);
-        expect(await x.p.locator("#ficha").textContent(), k).toContain(modo === "expo" ? "Destinos da soja" : modo === "emis" ? "Emissões" : "Trabalho e estrutura");
+        expect(await x.p.locator("#ficha").textContent(), k).toContain({ expo: "Destinos da soja", emis: "Emissões", trab: "Trabalho e estrutura", imovel: "Imóvel (CAR)" }[modo]!);
         expect(x.erros).toEqual([]);
         await fecha(x);
       }
@@ -392,6 +392,35 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("soma: a árvore escolhe lavoura e família inteira, com total e unidade", async () => {
+      const x = await abre(nav, "?c=soja&a=2020");
+      await quadro(x.p);
+      expect(await x.p.locator('#alterna-disputa [data-d="0"]').getAttribute("aria-pressed")).toBe("true");
+      // rebanho e os outros grupos entram como galhos da árvore, depois das 10 famílias
+      expect(await x.p.locator("#legenda .fam").count()).toBeGreaterThan(10);
+      const soja = x.p.locator('#legenda .soma [data-fam="1"]');
+      expect(await soja.locator(".n").textContent()).toMatch(/mi ha/);
+      // família inteira: uma unidade no título e na URL
+      await x.p.click('#legenda [data-fam="0"]');
+      await quadro(x.p);
+      expect(decodeURIComponent(x.p.url())).toContain("c=soja,f:cereais");
+      expect(await x.p.locator("#tit-legenda").textContent()).toContain("Soja + Cereais");
+      // a mesma URL volta à mesma seleção
+      const n = await roda<number>(x.p, "return T.est.itens.length");
+      expect(n).toBeGreaterThan(5);
+      // outra unidade: bovinos troca a seleção inteira
+      await x.p.fill("#busca-item", "bovinos");
+      await x.p.press("#busca-item", "Enter");
+      await quadro(x.p);
+      expect(decodeURIComponent(x.p.url())).toMatch(/c=bovinos&/);
+      expect(await x.p.locator('#legenda .soma .item.sub.outra', { hasText: "Soja" }).count()).toBe(0);   // a busca filtra
+      await x.p.fill("#busca-item", "");
+      await x.p.dispatchEvent("#busca-item", "input");
+      expect(await x.p.locator('#legenda .soma [data-fam="0"]').getAttribute("class")).toContain("outra");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
     test("sobre em diálogo, ícone por fonte, linha do tempo e painel recolhíveis", async () => {
       const x = await abre(nav, "?c=soja&a=2020");
       expect(await x.p.locator("#modos button[data-modo] svg").count()).toBe(await x.p.locator("#modos button[data-modo]").count());
@@ -458,6 +487,11 @@ for (const motor of ESCOLHIDOS) {
         let def = Infinity; for (const v of g.A.def_n_v) { const n = Math.exp((v - 1) / T.M.k) - 1; if (v && n < def) def = n; }
         return [ops, cal, Math.round(def)]; })`);
       for (const v of outros) expect(v).toBeGreaterThanOrEqual(5);
+      // imóvel do CAR: o bloco só traz séries município × ano (nada por imóvel; o corte
+      // de 5 operações e 5 imóveis é conferido em monta_pagina.py, onde estão as contagens)
+      const imv = await roda<string[]>(x.p, `return T.carrega('imovel').then(b =>
+        Object.keys(b.A).filter(k => !/^(cd_v|cd_a|ce_v|ce_a|pp_a|ccar|dcar|dpct|ti|ucpi|fpnd|sigef|assent|anl|rlvn|ncar)_[mav]$/.test(k)))`);
+      expect(imv).toEqual([]);
       await fecha(x);
     }, LENTO);
 

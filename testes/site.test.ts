@@ -78,7 +78,7 @@ for (const motor of ESCOLHIDOS) {
       expect(new Set(pedidos).size).toBe(pedidos.length);
       await p.click('#modos .grupo-modos[data-sec="Produção"]');
       await p.click('[data-modo="pam"]');
-      await p.uncheck("#disputa");
+      await p.click('#alterna-disputa [data-d="0"]');
       await p.selectOption("#metrica", "q");
       await p.waitForFunction(() => (window as any).__T.SOB.prodqv, null, { timeout: 60_000 });
       expect(pedidos).toContain("prodqv");

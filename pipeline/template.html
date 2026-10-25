@@ -111,20 +111,6 @@
 
   .busca { width: 100%; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--linha); background: var(--fundo); }
   .busca:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
-  .lista-itens { margin-top: 6px; max-height: 230px; overflow-y: auto; border: 1px solid var(--linha); border-radius: 6px; }
-  .lista-itens .grupo { font-family: "Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
-    color: var(--ink-3); padding: 6px 8px 2px; position: sticky; top: 0; background: var(--painel); }
-  .lista-itens label { display: flex; align-items: center; gap: 7px; padding: 3px 8px; cursor: pointer; }
-  .lista-itens label:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
-  .lista-itens label.sem-sat { color: var(--ink-3); }
-  .lista-itens input { accent-color: var(--acento); margin: 0; }
-  .lista-itens .chip { width: 9px; height: 9px; border-radius: 2px; flex: none; }
-  .selecionados { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; min-height: 22px; }
-  .selecionados button { border: 1px solid var(--linha); background: transparent; border-radius: 999px; padding: 1px 8px 1px 6px;
-    cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
-  .selecionados button::after { content: "×"; color: var(--ink-3); }
-  .selecionados .chip { width: 8px; height: 8px; border-radius: 2px; }
-
   .linha-ctl { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
   .linha-ctl select { flex: 1; min-width: 0; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--linha); background: var(--fundo); }
   .alternar { display: flex; align-items: center; gap: 7px; margin-top: 8px; cursor: pointer; font-size: 12px; color: var(--ink-2); }
@@ -133,6 +119,15 @@
   .alternar.destaque:has(input:checked) { border-color: var(--acento); background: color-mix(in srgb, var(--acento) 10%, transparent); }
 
   .legenda { margin-top: 6px; }
+  /* soma ou lavoura principal: o alternador no topo da legenda */
+  .alterna-modo { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 2px 0 10px; border: 1px solid var(--linha); border-radius: 6px; overflow: hidden; }
+  .alterna-modo[hidden] { display: none; }
+  .alterna-modo button { padding: 6px 0; border: 0; background: none; cursor: pointer; font-size: 12px; color: var(--ink-2); }
+  .alterna-modo button + button { border-left: 1px solid var(--linha); }
+  .alterna-modo button[aria-pressed="true"] { color: var(--ink); background: color-mix(in srgb, var(--acento) 16%, transparent); }
+  .alterna-modo button:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
+  .legenda #busca-item { margin: 10px 0 6px; }
+  .legenda .vazio { font-size: 12px; color: var(--ink-3); padding: 4px; }
   .legenda .faixa { display: flex; gap: 2px; }
   .legenda .faixa span { flex: 1; height: 12px; border-radius: 2px; }
   .legenda .rotulos { display: flex; justify-content: space-between; font-family: "Mono", monospace; font-size: 10.5px; color: var(--ink-2); margin-top: 3px; }
@@ -191,6 +186,12 @@
   .legenda .item.sub { padding: 2px 4px; }
   .legenda .item.sub i { width: 10px; height: 10px; }
   .legenda .item.sub .rot { font-size: 12px; color: var(--ink-2); }
+  /* na soma, a bolinha vira caixa de marcar: a cor não diz nada no mapa sequencial */
+  .legenda .soma .item i { border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--ink-3); background: none; }
+  .legenda .soma .item[aria-pressed="true"] i { box-shadow: none; background: var(--acento); }
+  .legenda .soma .item.parcial i { box-shadow: inset 0 0 0 1.5px var(--acento); background: linear-gradient(135deg, var(--acento) 50%, transparent 50%); }
+  .legenda .soma .item[aria-pressed="true"] .rot { font-weight: 600; }
+  .legenda .soma .item.outra { opacity: .5; }
 
   /* ---------- sobre os dados: diálogo, como o "about" do swissviz ---------- */
   .chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px; border-radius: 17px;
@@ -334,7 +335,7 @@
     .legenda .abre { height: 34px; width: 34px; }
     .legenda .abre svg { width: 16px; height: 16px; }
     .legenda .item .n, .legenda .controles button, .legenda .item.sub .rot, .legenda .rotulos,
-    .legenda .extra, .modos button small, .lista-itens .grupo, .secao > .titulo, .ficha h3, .chip { font-size: 12px; }
+    .legenda .extra, .modos button small, .secao > .titulo, .ficha h3, .chip { font-size: 12px; }
     .legenda .controles button { padding: 8px 0; }
     .nota { font-size: 12.5px; }
     .sobre { padding: 22px 18px 16px; }
@@ -357,13 +358,6 @@
       <div class="titulo">Fonte</div>
       <div class="modos" id="modos" role="group" aria-label="Fonte do mapa"></div>
       <div class="nota" id="rotulo-carga" hidden>carregando os dados deste modo…</div>
-    </div>
-    <div class="secao" id="sec-itens">
-      <div class="titulo">Cultura ou criação</div>
-      <label class="alternar destaque" id="alt-disputa"><input type="checkbox" id="disputa"> Lavoura principal: cada município na cor da família de lavouras que ocupa mais área</label>
-      <input class="busca" id="busca-item" type="search" placeholder="Buscar: soja, café, bovinos…" autocomplete="off" aria-label="Buscar cultura">
-      <div class="selecionados" id="selecionados"></div>
-      <div class="lista-itens" id="lista-itens" role="group" aria-label="Culturas"></div>
     </div>
     <div class="secao" id="sec-metrica">
       <div class="titulo">Medida</div>
@@ -413,7 +407,17 @@
 </div>
 <aside class="painel-legenda" id="painel-legenda" aria-label="Legenda">
   <button class="cab" id="dobra-legenda" aria-expanded="true" aria-controls="corpo-legenda"><span id="tit-legenda">Legenda</span><span class="seta" aria-hidden="true">▾</span></button>
-  <div class="corpo" id="corpo-legenda"><div class="legenda" id="legenda"></div></div>
+  <div class="corpo" id="corpo-legenda">
+    <div class="alterna-modo" id="alterna-disputa" role="group" aria-label="Como pintar as lavouras">
+      <button data-d="0" title="Soma das culturas escolhidas, em escala de cor">Soma</button><button data-d="1" title="Cada município na cor da família de lavouras que ocupa mais área">Principal</button>
+    </div>
+    <div class="legenda" id="legenda">
+      <div id="leg-escala"></div>
+      <input class="busca" id="busca-item" type="search" placeholder="Buscar: soja, café, bovinos…" autocomplete="off" aria-label="Buscar cultura ou criação">
+      <div id="leg-arvore"></div>
+      <div id="leg-extra"></div>
+    </div>
+  </div>
 </aside>
 <dialog id="sobre" class="sobre" aria-labelledby="sobre-tit">
   <form method="dialog"><button class="fechar" aria-label="Fechar">×</button></form>
@@ -443,6 +447,7 @@
 <script id="b-mercado" type="text/plain" data-etapa="sob-demanda">/*__MERCADO__*/</script>
 <script id="b-emis" type="text/plain" data-etapa="sob-demanda">/*__EMIS__*/</script>
 <script id="b-gente" type="text/plain" data-etapa="sob-demanda">/*__GENTE__*/</script>
+<script id="b-imovel" type="text/plain" data-etapa="sob-demanda">/*__IMOVEL__*/</script>
 <script>
 (async function () {
   'use strict';
@@ -759,6 +764,7 @@
     { id: 'exp', nome: 'Expansão', sub: 'de onde veio · por década', sec: 'Terra' },
     { id: 'desm', nome: 'Desmatamento', sub: 'PRODES, DETER, IBAMA', sec: 'Terra', blocos: ['terra'] },
     { id: 'emis', nome: 'Emissões', sub: 'SEEG · 1990–2024', sec: 'Terra', blocos: ['emis'] },
+    { id: 'imovel', nome: 'Imóvel (CAR)', sub: 'crédito, embargo e desmatamento no imóvel', sec: 'Terra', blocos: ['imovel'] },
     { id: 'gleba', nome: 'Glebas', sub: 'crédito rural · 2012–2025', sec: 'Dinheiro' },
     { id: 'cred', nome: 'Crédito rural', sub: 'SICOR, ESTBAN, BNDES', sec: 'Dinheiro', blocos: ['credrs'] },
     { id: 'econ', nome: 'Economia', sub: 'PIB municipal · 1999–2021', sec: 'Dinheiro', blocos: ['econ'] },
@@ -784,6 +790,16 @@
   /* Lavoura principal: cada lavoura pertence a uma família (cereais, oleaginosas,
      frutas…), definida em monta_pagina.py; cada família tem uma cor. */
   const FAMILIAS = M.familias;
+  /* A árvore da legenda: as famílias de lavoura e, depois delas, um galho por grupo do
+     IBGE que não é lavoura (rebanho, origem animal…), que só aparece na soma. */
+  const ARVORE = [...FAMILIAS.map(fa => ({ nome: fa.nome, itens: fa.itens }))];
+  for (const it of ITENS) {
+    if (it.area) { it.no = it.fam; continue; }
+    let n = ARVORE.findIndex((no, k) => k >= FAMILIAS.length && no.nome === it.grupo);
+    if (n < 0) { n = ARVORE.length; ARVORE.push({ nome: it.grupo, itens: [] }); }
+    ARVORE[n].itens.push(it.i); it.no = n;
+  }
+  ARVORE.forEach(no => { no.slug = slug(no.nome); });
 
   function anosDoModo() {
     switch (est.modo) {
@@ -801,7 +817,7 @@
       }
       case 'econ': return SOB.econ?.meta.anos || [1999, 2021];
       case 'cal': return [2012, 2025];
-      case 'expo': case 'emis': case 'trab': case 'social':
+      case 'expo': case 'emis': case 'trab': case 'social': case 'imovel':
         return SOB[SERIES[est.modo].bloco]?.meta.series[est.metrica]?.anos || [2000, 2024];
       case 'desm': {
         const A = SOB.terra?.meta.anos;
@@ -826,7 +842,9 @@
       if (!it || !it.area) return [['dens', 'Por km² rural'], ['q', 'Quantidade']]
         .concat(it && it.g !== 'R' ? [['v', 'Valor (R$ mil)']] : [])
         .concat(it?.porcab && est.itens.length === 1 ? [['porcab', it.porcab.txt[0].toUpperCase() + it.porcab.txt.slice(1)]] : []);
-      const ms = [['pct', '% da área rural'], ['area', 'Área (ha)'], ['q', 'Produção'], ['v', 'Valor (R$ mil)']];
+      // produção só soma com a mesma unidade (t com t; banana vai em mil frutos)
+      const ms = [['pct', '% da área rural'], ['area', 'Área (ha)']]
+        .concat(est.itens.every(i => ITENS[i].un === it.un) ? [['q', 'Produção']] : [], [['v', 'Valor (R$ mil)']]);
       if (est.itens.length === 1) ms.push(['rend', 'Rendimento (por ha)']);
       return ms;
     }
@@ -884,6 +902,22 @@
       ['cad_extr', 'Famílias extrativistas (CadÚnico)', 'famílias'], ['cad_asse', 'Famílias assentadas da reforma agrária (CadÚnico)', 'famílias'],
       ['cad_rural', 'Famílias em domicílio rural (CadÚnico)', 'famílias'], ['def_n', 'Pescadores pagos no Seguro-Defeso', 'pescadores'],
       ['def_v', 'Seguro-Defeso pago (R$)', 'R$'], ['pop', 'População (IBGE)', 'pessoas']] },
+    imovel: { bloco: 'imovel', titulo: 'Imóvel (CAR)', medidas: [
+      ['cd_v', 'Crédito em imóvel com desmatamento durante a operação (R$)', 'R$'],
+      ['cd_a', 'Área financiada em imóvel com desmatamento durante a operação (ha)', 'ha'],
+      ['ce_v', 'Crédito em imóvel com embargo do IBAMA vigente na emissão (R$)', 'R$'],
+      ['ce_a', 'Área financiada em imóvel embargado (ha)', 'ha'],
+      ['pp_a', 'Perda comprovada no Proagro em imóvel com desmatamento ou embargo (ha)', 'ha'],
+      ['ccar', 'Crédito ligado a um imóvel do CAR (R$)', 'R$'],
+      ['dcar', 'Desmatamento (PRODES) dentro de imóvel do CAR (km²)', 'km²'],
+      ['dpct', 'Parte do desmatamento (PRODES) dentro de imóvel do CAR (%)', '%'],
+      ['ti', 'Área do CAR dentro de terra indígena (%)', '%'], ['ucpi', 'Área do CAR em UC de proteção integral (%)', '%'],
+      ['fpnd', 'Área do CAR em floresta pública não destinada (%)', '%'],
+      ['sigef', 'Imóveis do CAR com parcela certificada no SIGEF (%)', '%'],
+      ['assent', 'Imóveis do CAR dentro de assentamento do INCRA (%)', '%'],
+      ['anl', 'Área do CAR já analisada pelo órgão ambiental (%)', '%'],
+      ['rlvn', 'Reserva legal declarada ÷ vegetação nativa declarada (%)', '%'],
+      ['ncar', 'Imóveis no CAR, sem cancelados', 'imóveis']] },
   };
   const medidaSerie = () => SERIES[est.modo]?.medidas.find(([k]) => k === est.metrica);
   function valorSerie(B, k, m, ano) {
@@ -1749,6 +1783,7 @@
     expo: '<path d="M2 12.5h14l-2 3.5H4zM4.5 12.5V8h9v4.5M7 8V5h4v3M9 2.5V5"/>',
     emis: '<path d="M4.5 13a3 3 0 0 1 .4-6 4.3 4.3 0 0 1 8.2 1A2.6 2.6 0 0 1 13 13z"/><path d="M7 10.5h1.6M10 9.7v1.6"/>',
     trab: '<path d="M3 15.5V9l6-4 6 4v6.5zM7 15.5v-4h4v4"/>',
+    imovel: '<path d="M2.5 15.5l2-9 6-3.5 5 4-1.5 8.5z"/><path d="M6 9.5l4 1.5 2.5-2"/>',
     social: '<circle cx="6.5" cy="6" r="2.2"/><circle cx="12" cy="7" r="1.8"/><path d="M2.5 15c0-2.6 1.8-4.5 4-4.5s4 1.9 4 4.5M10.5 11.2c.5-.3 1-.4 1.5-.4 1.9 0 3.5 1.6 3.5 4.2"/>',
     cred: '<ellipse cx="9" cy="5" rx="5.5" ry="2.2"/><path d="M3.5 5v4c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V5M3.5 9v4c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V9"/>',
     econ: '<path d="M2 16h14M4 13V9M8 13V6M12 13V8M16 3l-4.5 3.5L8 4 3 7.5"/>',
@@ -1792,64 +1827,59 @@
     modosEl.append(b);
   });
 
-  function montaListaItens() {
-    const filtro = semAcento($('busca-item').value.trim());
-    const el = $('lista-itens');
-    el.innerHTML = '';
-    let grupo = '';
-    for (const it of ITENS) {
-      if (!itemValidoNoModo(it)) continue;
-      if (filtro && !semAcento(it.nome).includes(filtro) && !semAcento(it.grupo).includes(filtro)) continue;
-      if (it.grupo !== grupo) {
-        grupo = it.grupo;
-        const g = document.createElement('div'); g.className = 'grupo'; g.textContent = grupo; el.append(g);
-      }
-      const l = document.createElement('label');
-      const marcado = est.itens.includes(it.i);
-      l.innerHTML = `<input type="checkbox" ${marcado ? 'checked' : ''} > ${it.nome}`;
-      l.querySelector('input').onchange = ev => alternaItem(it.i, ev.target.checked);
-      el.append(l);
-    }
-  }
   function itemValidoNoModo(it) {
     if (est.modo === 'cal') return it.sicor !== undefined;
     if (est.modo === 'sat' || est.modo === 'cmp' || est.modo === 'exp') return it.mb !== undefined && (est.modo !== 'cmp' || it.area);
     if (est.modo === 'gleba') return it.sicor !== undefined;
     return true;
   }
-  /* Somar itens só faz sentido com a mesma unidade: soja + milho em hectares sim,
-     soja + bovinos não. Escolher um item de outra unidade troca a seleção. */
-  function alternaItem(i, on) {
-    const lim = 8;
+  /* Somar itens só faz sentido com a mesma unidade: lavouras somam em hectares (soja +
+     banana sim), o resto só com a mesma unidade (bovinos + suínos sim, soja + bovinos
+     não). Escolher um item de outra unidade troca a seleção. */
+  const compativeis = (a, b) => a.area ? b.area : !b.area && a.un === b.un;
+  const validos = n => ARVORE[n].itens.filter(i => itemValidoNoModo(ITENS[i]));
+  // família que se marca inteira: os itens válidos somam entre si
+  const marcavel = n => { const v = validos(n); return v.length > 1 && v.every(i => compativeis(ITENS[v[0]], ITENS[i])); };
+  const inteira = (n, its = est.itens) => marcavel(n) && validos(n).every(i => its.includes(i));
+  /* A seleção em unidades, na ordem em que entraram: família inteira conta como uma
+     (é o que vai no título, na URL e no limite), o resto item a item. */
+  function unidades(its = est.itens) {
+    const us = [], vistas = new Set();
+    for (const i of its) {
+      const n = ITENS[i].no;
+      if (!inteira(n, its)) us.push({ n: -1, itens: [i] });
+      else if (!vistas.has(n)) { vistas.add(n); us.push({ n, itens: validos(n) }); }
+    }
+    return us;
+  }
+  const LIMITE = 8;
+  function escolhe(novos, on) {
     if (on) {
-      const u = ITENS[i];
-      const compat = est.itens.every(j => ITENS[j].area === u.area && ITENS[j].un === u.un);
-      if (!compat) est.itens = [];
-      est.itens = [...est.itens.filter(j => j !== i), i].slice(-lim);
+      if (!est.itens.every(j => compativeis(ITENS[j], ITENS[novos[0]]))) est.itens = [];
+      let its = [...est.itens.filter(j => !novos.includes(j)), ...novos];
+      for (let us = unidades(its); us.length > LIMITE; us = unidades(its)) its = its.filter(j => !us[0].itens.includes(j));
+      est.itens = its;
     } else {
-      est.itens = est.itens.filter(j => j !== i);
-      if (!est.itens.length) est.itens = [i];
+      const resto = est.itens.filter(j => !novos.includes(j));
+      if (!resto.length) return;   // a seleção nunca fica vazia
+      est.itens = resto;
     }
     aoMudarSelecao();
   }
-  function montaSelecionados() {
-    const el = $('selecionados');
-    el.innerHTML = '';
-    est.itens.forEach((i, k) => {
-      const b = document.createElement('button');
-      b.innerHTML = ITENS[i].nome;
-      b.title = 'Tirar ' + ITENS[i].nome;
-      b.onclick = () => alternaItem(i, false);
-      el.append(b);
-    });
-  }
-  $('busca-item').addEventListener('input', montaListaItens);
+  const nomeSelecao = () => unidades().map(u => u.n >= 0 ? ARVORE[u.n].nome : ITENS[u.itens[0]].nome).join(' + ');
+  $('busca-item').addEventListener('input', montaArvore);
+  // Enter: na soma marca a primeira lavoura achada; na lavoura principal liga ou desliga
   $('busca-item').addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
-    const primeiro = $('lista-itens').querySelector('label input');
-    if (primeiro && !primeiro.checked) primeiro.click();
+    const primeiro = $('leg-arvore').querySelector('.filhos [data-item]');
+    if (primeiro && (est.disputa || primeiro.getAttribute('aria-pressed') !== 'true')) primeiro.click();
   });
-  $('disputa').onchange = e => { est.disputa = e.target.checked; aoMudarSelecao(); };
+  $('alterna-disputa').addEventListener('click', e => {
+    const b = e.target.closest('button[data-d]');
+    if (!b || est.disputa === (b.dataset.d === '1')) return;
+    est.disputa = b.dataset.d === '1';
+    aoMudarSelecao();
+  });
 
   $('uf').innerHTML = '<option value="">Brasil inteiro</option>' + UFS.map(u => `<option>${u}</option>`).join('');
   /* bioma, região do IBGE ou região especial: um recorte só, em grupos */
@@ -1936,6 +1966,12 @@
       est.abertas.has(f) ? est.abertas.delete(f) : est.abertas.add(f);
       return montaLegenda();
     }
+    if (!est.disputa) {
+      // soma: lavoura liga e desliga; família marcável entra ou sai inteira
+      if (d.item !== undefined) escolhe([+d.item], b.getAttribute('aria-pressed') !== 'true');
+      else if (d.fam !== undefined) escolhe(validos(+d.fam), !inteira(+d.fam));
+      return;
+    }
     if (d.todas !== undefined) est.desligadas = d.todas === '1' ? new Set() : new Set(LAVOURAS);
     else if (d.fam !== undefined) {
       const its = FAMILIAS[+d.fam].itens, algumaLigada = its.some(i => !est.desligadas.has(i));
@@ -1954,30 +1990,81 @@
     if (celular()) { $('painel-legenda').classList.remove('aberta'); $('abre-legenda').setAttribute('aria-pressed', false); inertes(); }
     else dobraLegenda(!$('painel-legenda').classList.contains('recolhida'));
   };
+  /* Totais do ano no recorte, por item, para os números da árvore na soma: uma passada
+     pelas linhas da produção. A lavoura mostra o que a medida soma (ha ou R$); o resto,
+     quantidade (ou R$). */
+  function totaisNoRecorte() {
+    const a = est.ano - A0, QV = PRODQV && PRODQV.A, v = est.metrica === 'v';
+    const area = new Float64Array(ITENS.length), q = new Float64Array(ITENS.length), rs = new Float64Array(ITENS.length);
+    const rec = new Uint8Array(NM);
+    for (let m = 0; m < NM; m++) rec[m] = noRecorte(m);
+    for (let r = 0; r < NP; r++) {
+      if (PA.a[r] !== a || !rec[PA.m[r]]) continue;
+      const i = PA.i[r], x = LUT[PA.area[r]];
+      if (x > 0) area[i] += x;
+      if (QV) { const y = LUT[QV.q[r]], z = LUT[QV.v[r]]; if (y > 0) q[i] += y; if (z > 0) rs[i] += z; }
+    }
+    if (!v) return i => ITENS[i].area ? [area[i], 'ha'] : QV ? [q[i], ITENS[i].un] : null;
+    return i => QV ? [rs[i] * 1000, 'R$'] : null;
+  }
+  const textoTotal = ([x, un]) => !(x > 0) ? '—' : un === 'R$' ? 'R$ ' + curto(x) : curto(x) + ' ' + un;
+  function montaArvore() {
+    const el = $('leg-arvore'), principal = est.modo === 'pam' && est.disputa;
+    const filtro = semAcento($('busca-item').value.trim()), n = v => v.toLocaleString('pt-BR');
+    const tot = !principal && est.modo === 'pam' ? totaisNoRecorte() : null, u0 = ITENS[est.itens[0]];
+    let html = principal ? `<div class="controles"><button data-todas="1">Todas</button><button data-todas="0">Nenhuma</button></div>` : '';
+    html += `<div class="arvore${principal ? '' : ' soma'}" role="tree">`;
+    let algum = false;
+    (principal ? ARVORE.slice(0, NF) : ARVORE).forEach((no, f) => {
+      const todos = principal ? no.itens : validos(f);
+      let its = todos;
+      if (filtro && !semAcento(no.nome).includes(filtro)) its = its.filter(i => semAcento(ITENS[i].nome).includes(filtro));
+      if (!its.length) return;
+      algum = true;
+      const aberta = est.abertas.has(f) || !!filtro;
+      let h = `<div class="fam" role="treeitem" aria-expanded="${aberta}"><div class="linha-fam">`
+        + `<button class="abre" data-abre="${f}" aria-label="${aberta ? 'Fechar' : 'Abrir'} ${no.nome}"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2.5L9.5 7 5 11.5"/></svg></button>`;
+      if (principal) {
+        const ligadas = todos.filter(i => !est.desligadas.has(i)).length;
+        const estado = ligadas === 0 ? ' desligada' : ligadas < todos.length ? ' parcial' : '';
+        h += `<button class="item${estado}" data-fam="${f}" aria-pressed="${ligadas > 0}" title="${todos.length} lavouras; ${ligadas} ligadas">`
+          + `<i style="background:${COR.f[f]}"></i><span class="rot">${no.nome}</span>`
+          + `<span class="n">${ligadas ? n(CONT_FAM[f]) : '—'}</span></button></div>`;
+      } else {
+        const marcados = todos.filter(i => est.itens.includes(i)).length, pode = marcavel(f);
+        const estado = (marcados && marcados < todos.length ? ' parcial' : '') + (compativeis(u0, ITENS[todos[0]]) ? '' : ' outra');
+        // família com unidades diferentes (leite em litros, ovos em dúzias) só abre e fecha
+        const alvo = pode ? `data-fam="${f}" aria-pressed="${marcados === todos.length}"` : `data-abre="${f}"`;
+        const totais = tot && todos.map(tot), un = totais?.[0]?.[1];
+        const soma = totais && totais.every(t => t && t[1] === un) ? textoTotal([totais.reduce((s, t) => s + (t[0] > 0 ? t[0] : 0), 0), un]) : '';
+        h += `<button class="item${estado}" ${alvo} title="${pode ? `${todos.length} itens; ${marcados} na soma` : 'Unidades diferentes: escolha um a um'}">`
+          + `<i></i><span class="rot">${no.nome}</span><span class="n">${soma}</span></button></div>`;
+      }
+      if (aberta) h += '<div class="filhos" role="group">' + its.map(i => {
+        if (principal) {
+          const off = est.desligadas.has(i);
+          return `<button class="item sub${off ? ' desligada' : ''}" data-item="${i}" aria-pressed="${!off}" title="municípios onde é a maior lavoura da família que vence">`
+            + `<i style="background:${COR.i[i]}"></i><span class="rot">${ITENS[i].nome}</span>`
+            + `<span class="n">${off ? '—' : CONT_ITEM[i] ? n(CONT_ITEM[i]) : ''}</span></button>`;
+        }
+        const outra = !compativeis(u0, ITENS[i]);
+        return `<button class="item sub${outra ? ' outra' : ''}" data-item="${i}" aria-pressed="${est.itens.includes(i)}"${outra ? ' title="Outra unidade: escolher troca a seleção"' : ''}>`
+          + `<i></i><span class="rot">${ITENS[i].nome}</span><span class="n">${tot && tot(i) ? textoTotal(tot(i)) : ''}</span></button>`;
+      }).join('') + '</div>';
+      html += h + '</div>';
+    });
+    el.innerHTML = html + '</div>' + (algum ? '' : '<div class="vazio">Nada com esse nome.</div>');
+  }
   function montaLegenda() {
-    const el = $('legenda'), it = ITENS[est.itens[0]];
+    const comItens = !['perda', 'gs', 'cred', 'econ', 'desm', 'fogo', 'clima', 'expo', 'emis', 'trab', 'social', 'imovel'].includes(est.modo);
+    $('alterna-disputa').hidden = est.modo !== 'pam';
+    $('alterna-disputa').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', est.disputa === (b.dataset.d === '1')));
+    $('busca-item').hidden = $('leg-arvore').hidden = !comItens;
+    if (comItens) montaArvore();
     let html = '';
     const rotQ = v => est.metrica === 'pct' ? fmt(v, v < 1 ? 2 : (v < 10 ? 1 : 0)) + '%' : (est.modo === 'gs' && est.metrica !== 'n' ? 'R$ ' : '') + curto(v);
     if (est.modo === 'pam' && est.disputa) {
-      const n = v => v.toLocaleString('pt-BR');
-      html += `<div class="controles"><button data-todas="1">Todas</button><button data-todas="0">Nenhuma</button></div><div class="arvore" role="tree">`
-        + FAMILIAS.map((fa, f) => {
-          const ligadas = fa.itens.filter(i => !est.desligadas.has(i)).length;
-          const estado = ligadas === 0 ? ' desligada' : ligadas < fa.itens.length ? ' parcial' : '';
-          const aberta = est.abertas.has(f);
-          let h = `<div class="fam" role="treeitem" aria-expanded="${aberta}"><div class="linha-fam">`
-            + `<button class="abre" data-abre="${f}" aria-label="${aberta ? 'Fechar' : 'Abrir'} ${fa.nome}"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2.5L9.5 7 5 11.5"/></svg></button>`
-            + `<button class="item${estado}" data-fam="${f}" aria-pressed="${ligadas > 0}" title="${fa.itens.length} lavouras; ${ligadas} ligadas">`
-            + `<i style="background:${COR.f[f]}"></i><span class="rot">${fa.nome}</span>`
-            + `<span class="n">${ligadas ? n(CONT_FAM[f]) : '—'}</span></button></div>`;
-          if (aberta) h += '<div class="filhos" role="group">' + fa.itens.map(i => {
-            const off = est.desligadas.has(i);
-            return `<button class="item sub${off ? ' desligada' : ''}" data-item="${i}" aria-pressed="${!off}" title="municípios onde é a maior lavoura da família que vence">`
-              + `<i style="background:${COR.i[i]}"></i><span class="rot">${ITENS[i].nome}</span>`
-              + `<span class="n">${off ? '—' : CONT_ITEM[i] ? n(CONT_ITEM[i]) : ''}</span></button>`;
-          }).join('') + '</div>';
-          return h + '</div>';
-        }).join('') + '</div>';
+      // a árvore é a legenda
     } else if (est.modo === 'cal' && est.metrica === 'mes') {
       html += `<div class="faixa">${CICLICA.map(c => `<span style="background:${c}"></span>`).join('')}</div>
         <div class="rotulos">${['jan', 'abr', 'jul', 'out', 'dez'].map(t => `<span>${t}</span>`).join('')}</div>`;
@@ -1998,14 +2085,14 @@
     if (emPontos()) extras.push(`<div><i style="background:${COR.s[4]};border-radius:50%"></i>Estação com o ano ≥ 90% medido</div>`);
     if (est.mascara && !emCelulas() && !emPontos())
       extras.push(`<div><i style="background:${COR.mascara}"></i>Não rural: área urbana, terra indígena, UC de proteção integral</div>`);
-    html += `<div class="extra">${extras.join('')}</div>`;
-    el.innerHTML = html;
+    $('leg-escala').innerHTML = html;
+    $('leg-extra').innerHTML = `<div class="extra">${extras.join('')}</div>`;
     $('tit-legenda').textContent = tituloLegenda();
     $('rotulo-celular').textContent = tituloLegenda();
     $('nota').innerHTML = NOTAS[est.modo]();
   }
   function tituloLegenda() {
-    const it = ITENS[est.itens[0]], nomes = est.itens.map(i => ITENS[i].nome).join(' + ');
+    const it = ITENS[est.itens[0]], nomes = nomeSelecao();
     const mt = [...$('metrica').options].find(o => o.value === est.metrica)?.text || '';
     if (est.modo === 'pam' && est.disputa) return 'Lavoura principal · municípios';
     if (est.modo === 'perda') return 'Perdas · ' + (est.evento >= 0 ? M.eventos[est.evento] : 'todos os eventos');
@@ -2040,6 +2127,7 @@
     expo: () => `<b>Trase</b>: a exportação de soja (2004–2020, em equivalente de grão) e de carne bovina (2015–2017) ligada ao <b>município onde foi produzida</b>, com a exposição da soja ao desmatamento (área desmatada atribuída à soja exportada). <b>Comex Stat</b>: exportação de produtos do agro (capítulos 01–24 do SH, mais couro, celulose e algodão) e importação de fertilizantes e defensivos, pelo <b>domicílio fiscal da empresa</b>: a soja de Sorriso pode sair por Rondonópolis ou por São Paulo. Compare as duas.`,
     emis: () => `Emissões de gases de efeito estufa por município, em tCO₂e (GWP-AR5), estimadas pelo <b>SEEG</b> (Observatório do Clima): agropecuária (fermentação entérica do gado, solos e adubo, dejetos, arroz irrigado) e mudança de uso da terra (desmatamento e queima de vegetação), com a remoção por vegetação secundária e áreas protegidas.`,
     trab: () => `<b>RAIS</b>: empregos formais da agropecuária (subsetor IBGE 25) em 31 de dezembro; o emprego informal, a maior parte do trabalho no campo, não aparece. <b>CAGED</b>: admissões menos desligamentos na seção A da CNAE, de 2020 em diante (vermelho: fechou vagas). <b>CNEFE</b>: endereços de estabelecimentos agropecuários no Censo 2022. <b>CAFIR</b>: imóveis rurais ativos no cadastro da Receita, na data mais recente (a área do cadastro fica de fora: não fecha em nenhuma unidade).`,
+    imovel: () => `Cruzamento pelo <b>imóvel rural do CAR</b> (SICAR, foto de 2025-10-15, sem cancelados), feito fora da página; aqui só entram somas por município, no município do imóvel. O CAR é <b>autodeclarado</b>, tem imóveis sobrepostos e a mesma foto vale para todas as safras: um imóvel inscrito em 2024 aparece como se existisse em 2016. <b>Crédito</b> (SICOR): a operação vai para o imóvel pelo código do CAR que ela informa (de 2019 em diante) ou, antes, pela gleba financiada, e o valor se reparte entre os imóveis da operação. Sem nenhum dos dois, entra a gleba da perda comunicada ao Proagro. <b>Desmatamento durante a operação</b>: polígono do PRODES ou aviso do DETER que se sobrepõe ao imóvel (a área se reparte pela interseção), entre a emissão e o vencimento. <b>Embargo vigente</b>: termo do IBAMA não cancelado, lavrado antes da emissão e sem desembargo até ela, ou embargo do ICMBio (que não publica desembargo). <b>Perda no Proagro</b>: área com perda comprovada em operação cujo imóvel teve desmatamento durante a operação ou embargo vigente. Cada soma de crédito só aparece com ${M.min_celula} ou mais operações e ${M.min_celula} ou mais imóveis. TI, UC de proteção integral, floresta pública não destinada (CNFP 2025, tipo B), SIGEF (metade ou mais do imóvel coberta por parcela certificada), assentamento, análise do CAR (na Bahia, todo imóvel aparece como aguardando análise no SICAR federal, então ela fica sem dado) e camadas declaradas (reserva legal, vegetação nativa) são o retrato atual; as áreas somam imóvel a imóvel, então o CAR sobreposto conta mais de uma vez (na floresta pública não destinada, 42,8 mi ha somados contra no máximo 36,1 mi ha de floresta tocada).`,
     social: () => `Famílias inscritas no <b>Cadastro Único</b> por grupo (agricultores familiares, pescadores artesanais, extrativistas, assentados) e em domicílio rural, no último mês de cada ano. <b>Seguro-Defeso</b>: pescadores artesanais pagos no período em que a pesca é proibida (Portal da Transparência), contados pelo NIS; município com menos de ${M.min_celula} não aparece. População estimada pelo IBGE.`,
     clima: () => `<b>SISAM</b> (INPE): chuva e temperatura por município, de 2000 a 2019, a partir de modelo e satélite, não de pluviômetro: serve para comparar um ano com outro no mesmo lugar (a <b>anomalia</b>, contra a média de 2000–2019), menos para o valor absoluto. As <b>estações do INMET</b> são medição direta, de 2000 a 2025, desenhadas como pontos: só os anos com 90% ou mais das horas medidas. <b>S2ID</b> (Defesa Civil): situações de emergência ou calamidade reconhecidas e ainda vigentes; a fonte só guarda o retrato atual. Compare a seca de 2012–2016 no semiárido com as Perdas do Proagro e o Garantia-Safra.`,
     fogo: () => `Focos de calor do <b>satélite de referência</b> do INPE (AQUA, passagem da tarde), por ano: é a série comparável ao longo do tempo. Desde 2023 a fonte traz todos os satélites (30 vezes mais focos, o mesmo fogo visto várias vezes); só o de referência entra. Foco não é área queimada: a área vem da cicatriz de queimada do DETER (Amazônia, Cerrado, Pantanal).`,
@@ -2069,6 +2157,13 @@
         else for (let m = 0; m < NM; m++) if (noRecorte(m) && Number.isFinite(VAL[m])) { s += VAL[m]; n++; }
         s = n ? s / n : 0;
         if (DIVERGENTE()) s += 100;   // a barra mostra a chuva em % da média (100 = normal)
+      }
+      else if (medidaSerie()?.[2] === '%') {
+        // porcentagem de série (TI, SIGEF, análise do CAR...) não se soma: média dos municípios
+        calculaBase(a);
+        let n = 0;
+        for (let m = 0; m < NM; m++) if (noRecorte(m) && Number.isFinite(VAL[m])) { s += VAL[m]; n++; }
+        s = n ? s / n : 0;
       }
       else {
         calculaBase(a);   // sem agrupar: a faixa soma os municípios, não o total do grupo repetido
@@ -2126,7 +2221,8 @@
     fctx.textBaseline = 'top';
     const un = unidadeFaixa();
     const rs = un.startsWith('R$');
-    let txt = `${nomeRecorte()}${agrupavel() ? ' (soma dos municípios)' : ''}: ${rs ? 'R$ ' : ''}${atual ? curto(atual[1]) : '—'} ${rs ? un.slice(3) : un}`;
+    const media = est.modo === 'clima' || medidaSerie()?.[2] === '%';
+    let txt = `${nomeRecorte()}${media ? ' (média dos municípios)' : agrupavel() ? ' (soma dos municípios)' : ''}:${rs ? 'R$ ' : ''}${atual ? curto(atual[1]) : '—'} ${rs ? un.slice(3) : un}`;
     // crédito com UF no recorte: o total da UF, de todas as fontes (com e sem município)
     const U = est.modo === 'cred' && est.uf && CRED_SOMA.has(est.metrica) && SOB.credrs?.meta.uf[est.uf];
     if (U) { const k = U.safra.indexOf(est.ano); if (k >= 0) txt += ` · todo o crédito da UF: R$ ${curto(U.valor[k])}`; }
@@ -2167,12 +2263,13 @@
     $('ano-txt').textContent = $('chip-ano').textContent = est.modo === 'exp' ? `${a - 10}→${a}` : a;
     const safra = 'safra ' + a + '/' + String(a + 1).slice(2);
     $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
-      clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', expo: 'ano', emis: 'ano', social: 'ano', cal: 'safras 2012–2025',
+      clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', expo: 'ano', emis: 'ano', social: 'ano',
+      imovel: ['ti', 'ucpi', 'fpnd', 'sigef', 'assent', 'anl', 'rlvn', 'ncar'].includes(est.metrica) ? 'retrato atual' : ['dcar', 'dpct'].includes(est.metrica) ? 'ago→jul (PRODES)' : safra, cal: 'safras 2012–2025',
       trab: est.metrica === 'cnefe' ? 'Censo 2022' : est.metrica === 'cafir' ? 'retrato atual' : 'ano', desm: ['emb', 'embha', 'autos', 'multas', 'deter', 'degr'].includes(est.metrica) ? 'ano' : 'ago→jul (PRODES)', fogo: 'ano',
       cred: est.metrica === 'estban' ? 'dezembro' : est.metrica === 'bndes' ? 'ano' : safra }[est.modo];
     calcula();
     if (emCelulas() || est.glebas) CEL = celulasAtuais();
-    if (est.modo === 'pam' && est.disputa) montaLegenda();   // a contagem muda a cada ano
+    if (est.modo === 'pam') montaLegenda();   // a contagem e os totais da árvore mudam a cada ano
     desenhaFaixa(); pede(); gravaUrl();
     if (est.mun >= 0) montaFicha();
   }
@@ -2234,12 +2331,6 @@
       b.title = b.disabled ? 'carregando…' : '';
     });
     $('sobre-glebas').disabled = !pronto;
-    const comItens = !['perda', 'gs', 'cred', 'econ', 'desm', 'fogo', 'clima', 'expo', 'emis', 'trab', 'social'].includes(est.modo);
-    $('sec-itens').style.display = comItens ? '' : 'none';
-    $('alt-disputa').style.display = est.modo === 'pam' ? '' : 'none';
-    const principal = est.modo === 'pam' && est.disputa;
-    for (const id of ['busca-item', 'selecionados', 'lista-itens']) $(id).style.display = principal ? 'none' : '';
-    $('disputa').checked = est.disputa;
     $('ctl-evento').style.display = est.modo === 'perda' ? '' : 'none';
     $('ctl-origem').style.display = est.modo === 'exp' ? '' : 'none';
     montaFiltrosCredito();
@@ -2255,7 +2346,6 @@
     $('ano').min = a0; $('ano').max = a1; $('ano').step = est.modo === 'exp' ? 10 : 1;
     let a = Math.min(a1, Math.max(a0, anoPedido ?? est.ano));
     if (est.modo === 'exp') a = Math.round(a / 10) * 10;
-    montaListaItens(); montaSelecionados();
     if (escala) {
       if (emCelulas() || est.glebas) {
         const salvo = est.modo; if (est.glebas && est.modo === 'pam') est.modo = 'gleba';
@@ -2307,9 +2397,9 @@
   /* Crédito e economia na ficha: pedem os blocos da 3ª etapa ao abrir a ficha */
   /* Os blocos da 3ª etapa não são baixados só porque a ficha abriu: cada seção
      aparece se o bloco já veio (pelo modo, ou pelo botão no fim da ficha). */
-  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo', 'clima', 'calend', 'mercado', 'emis', 'gente'];
+  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo', 'clima', 'calend', 'mercado', 'emis', 'gente', 'imovel'];
   const NOME_EXTRA = { credrs: 'crédito', econ: 'economia', terra: 'desmatamento e terra', fogo: 'fogo', clima: 'clima',
-    mercado: 'exportação', emis: 'emissões', gente: 'trabalho e famílias', calend: 'calendário' };
+    mercado: 'exportação', emis: 'emissões', gente: 'trabalho e famílias', calend: 'calendário', imovel: 'imóvel (CAR)' };
   /* Calendário na ficha: uma linha por cultura (as 6 com mais operações datadas),
      12 colunas de mês; a opacidade de cada célula é a parte das operações que
      planta (cor cheia) ou colhe (contorno) naquele mês. */
@@ -2714,7 +2804,7 @@
   function gravaUrl() {
     const p = new URLSearchParams();
     if (est.modo !== 'pam') p.set('f', est.modo);
-    p.set('c', est.itens.map(i => ITENS[i].slug).join(','));
+    p.set('c', unidades().map(u => u.n >= 0 ? 'f:' + ARVORE[u.n].slug : ITENS[u.itens[0]].slug).join(','));
     p.set('a', est.ano);
     if (est.metrica !== metricasDoModo()[0][0]) p.set('m', est.metrica);
     if (est.disputa) p.set('d', '1');
@@ -2736,8 +2826,13 @@
     // a página sem parâmetros abre na lavoura principal: o mapa por família, com a árvore
     if (![...p.keys()].length) est.disputa = true;
     if (MODOS.some(md => md.id === p.get('f'))) est.modo = p.get('f');
-    const cs = (p.get('c') || '').split(',').map(s => ITEM_POR_SLUG[s]).filter(i => i !== undefined);
-    if (cs.length) est.itens = cs;
+    // c=f:cereais é a família inteira (os itens dela que o modo mostra)
+    const cs = (p.get('c') || '').split(',').flatMap(s => {
+      if (!s.startsWith('f:')) return ITEM_POR_SLUG[s] ?? [];
+      const n = ARVORE.findIndex(no => no.slug === s.slice(2));
+      return n < 0 ? [] : validos(n);
+    });
+    if (cs.length) est.itens = [...new Set(cs)];
     if (p.get('d') === '1') est.disputa = true;
     for (const sl of (p.get('dx') || '').split(',')) if (ITEM_POR_SLUG[sl] !== undefined && ITENS[ITEM_POR_SLUG[sl]].area) est.desligadas.add(ITEM_POR_SLUG[sl]);
     if (p.get('a')) est.ano = +p.get('a');

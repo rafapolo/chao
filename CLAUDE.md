@@ -39,6 +39,7 @@ Este repositório não guarda dado: `pipeline/dados/` fica fora do git.
 | `baixa_clima.py` | `br_inpe_sisam`, `br_inmet_bdmep`, `br_sedec_desastres` | `clima_ano`, `clima_normal`, `estacoes`, `desastres` |
 | `baixa_mercado_gente.py` | Trase, Comex, SEEG, RAIS, CAGED, CadÚnico, Seguro-Defeso, população, CAFIR, CNEFE | `trase*`, `logistica`, `comex`, `seeg`, `trabalho`, `social`, `imoveis` |
 | `baixa_calendario.py` | SICOR (datas de plantio e colheita) | `calendario` |
+| `baixa_imovel.py` | CAR (SICAR) × SICOR e Proagro, embargos (IBAMA, ICMBio), polígonos do PRODES/DETER, TI/UC, florestas públicas (CNFP), polígonos do INCRA (SIGEF, assentamentos); cruzamento no beelink, só agregados voltam | `imovel_mun`, `imovel_ano` |
 
 `baixa_producao.py` também traz a PEVS (itens `E|` extração e `S|` silvicultura) e vacas
 ordenhadas e ovinos tosquiados da PPM. As armadilhas medidas estão no docstring de cada script
@@ -48,13 +49,13 @@ e em `../rodado/docs/context/gotchas/`.
 
 ```bash
 cd pipeline
-for s in malha producao mapbiomas credito cadastros regioes dinheiro terra clima mercado_gente calendario; do
+for s in malha producao mapbiomas credito cadastros regioes dinheiro terra clima mercado_gente calendario imovel; do
   python3 baixa_$s.py || break; done                          # ~3 min no total
 python3 monta_pagina.py      # parquet -> blocos -> ../index.html (arquivo único) e ../site/
 cd .. && bun run build       # site/ -> dist/: HTML, CSS e JS minificados + service worker (é o que o Pages publica)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
-bun test                                   # 93 testes (31 × 3 motores, 2 deles sobre site/), ~2 min; CHAO_MOTORES=chromium para um só
+bun test                                   # 112 testes nos 3 motores (1 pulado: offline no WebKit), ~3 min; CHAO_MOTORES=chromium para um só
 ```
 
 Dependências Python: `polars`, `numpy`, `shapely`. Cada `baixa_*.py` imprime a própria
@@ -106,7 +107,7 @@ Formato de cada bloco: `u32 tamanho | cabeçalho JSON | arrays`.
   (antes: 8,5 s com 20,6 MB). Até ela chegar, as outras fontes e medidas ficam desligadas; um
   estado de URL que precise delas espera tudo antes de desenhar.
 - A terceira etapa (`data-etapa="sob-demanda"`: prodqv, contornos, credrs, econ, terra, fogo, clima,
-  calend, mercado, emis, gente; 8,1 MB) só é pedida quando um modo a usa (`blocos:` em
+  calend, mercado, emis, gente, imovel; 8,4 MB) só é pedida quando um modo a usa (`blocos:` em
   `MODOS`), por `carrega(id)` com cache de promessa e `garante([ids])`. A ficha não baixa
   bloco: mostra o que já veio e oferece o botão "Mostrar também".
 - Modo novo de série município × ano: uma entrada em `SERIES` (bloco, medidas, unidade) e,
@@ -147,6 +148,11 @@ dados do tema). No `site/`, a primeira etapa segue com 6,7 MB. Se precisar corta
   que a diferença com as combinações não revele o que foi cortado; tomadores só com 5 ou
   mais; instituição por município), o calendário (município × cultura) e o Seguro-Defeso
   (5 pescadores). O teste de privacidade confere todos esses cortes.
+- **Imóvel do CAR** (`baixa_imovel.py`): o cruzamento por imóvel fica no beelink
+  (`~/bragro_tmp/imovel/`) e só voltam somas por município. Cada soma de crédito precisa de 5
+  ou mais operações e 5 ou mais imóveis, e o resto do crédito em CAR, de 0 ou 5 ou mais
+  operações. Quem confere esse corte é um assert no `monta_pagina.py`, com as contagens que
+  não entram na página. O teste só confere que o bloco não traz nada além das séries.
 - **PRODES:** começa em 2002. O incremento de 2001 sai da diferença contra a linha de base de
   2000 e infla (101 mil km², contra 73–79 mil em 2002–2004).
 - **SICOR em R$:** só o crédito de recurso controlado ou equalizado tem município (R$ 136 de
@@ -177,6 +183,14 @@ dados do tema). No `site/`, a primeira etapa segue com 6,7 MB. Se precisar corta
   propósito (`KeyError`).
 - O município sai na cor da família que soma mais área entre as lavouras ligadas. A legenda
   à direita é uma árvore: a família abre, e família e lavoura ligam e desligam.
+- A árvore é o único lugar onde se escolhe a cultura, nos dois modos (alternador `Soma |
+  Principal` no topo da legenda, busca logo abaixo). Na soma ela ganha um galho por grupo do
+  IBGE que não é lavoura (rebanho, origem animal, aquicultura, extração, silvicultura;
+  `ARVORE` no template), mostra o total do ano no recorte e marca em vez de ligar. Família
+  com itens de unidades diferentes só abre e fecha.
+- Seleção da soma: lavouras somam entre si (em ha); o resto só com a mesma unidade, e um
+  item de outra unidade troca a seleção (fica apagado na árvore). Família inteira conta como
+  uma no limite de 8, no título e na URL (`c=soja,f:cereais`).
 - Cores `--f1`…`--f10`: sóbrias (L 0,49–0,72, C ≤ 0,13), de um recozimento em OKLCH que
   maximiza o menor ΔE. Todos os pares passam o piso de visão normal (15,3); o de daltonismo
   não, e com 10 cores nenhuma paleta passa. O tooltip nomeia a família e a maior lavoura.
