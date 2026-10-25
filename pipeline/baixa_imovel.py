@@ -13,7 +13,7 @@ Etapas no beelink, cada uma um parquet em ~/bragro_tmp/imovel/ que NÃO volta:
               cancelado) que contém o centroide; se cai em mais de um, o de maior sobreposição
   operacao  — a ponte operação → imóvel: pelo id_car (de 2019 em diante), senão pela gleba
               do SICOR, senão pela gleba do Proagro; `fracao` reparte a operação e soma 1
-  embargo   — termos do IBAMA (sem cancelados) e do ICMBio por polígono (fração da área
+  embargo   — termos do IBAMA (sem cancelados), do ICMBio e da SEMA-MT por polígono (fração da área
               embargada em cada imóvel, desprezada abaixo de 1%) ou, no IBAMA, pelo ponto
   auto      — autos de flora, pelo polígono da área autuada ou pelo ponto
   desmat    — polígonos do PRODES (2016–) e do DETER (desmatamento e supressão) cruzados
@@ -242,6 +242,11 @@ INSERT INTO e
          ST_MakeValid(ST_Union_Agg(geometria))
   FROM br_icmbio_embargos.termo_embargo WHERE geometria IS NOT NULL AND data IS NOT NULL
   GROUP BY numero_emb, serie;
+-- SEMA-MT: a lista é a das áreas embargadas hoje, sem data de desembargo; vale, como a do
+-- ICMBio, da lavratura em diante
+INSERT INTO e
+  SELECT 'sema_mt:' || camada || ':' || row_number() OVER (), least(data_embargo, current_date), NULL, area_ha, NULL, geometria
+  FROM br_sema_mt_embargos.areas_embargadas WHERE geometria IS NOT NULL AND data_embargo IS NOT NULL;
 COPY (
   WITH p AS (
     SELECT e.seq_tad, c.id_imovel, 'poligono' metodo,

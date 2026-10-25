@@ -44,7 +44,7 @@ medidas, e só depois o Chão lê.
   - **Medido:** 42,8 mi ha de CAR somados imóvel a imóvel. Limitada a 1 por gleba, a
     interseção dá no máximo 36,1 mi ha de floresta tocada (AM 24,2). A página avisa da
     sobreposição.
-- [ ] **Embargos do ICMBio e das secretarias estaduais** (SEMA-MT, SEMAS-PA): completar o
+- [x] **Embargos do ICMBio e das secretarias estaduais** (SEMA-MT, SEMAS-PA): completar o
   embargo federal.
   - **ICMBio feito:** `br_icmbio_embargos.termo_embargo`, 14.806 feições de 6.398
     embargos, sem data de desembargo. Entra na etapa `embargo`; 3.818 embargos tocam um
@@ -54,8 +54,9 @@ medidas, e só depois o Chão lê.
     não tem data de embargo (`difisc_dat` é o ano do desmatamento), então a área não entra
     em "embargo vigente na emissão".
     - Usar como "desmatamento ilegal reconhecido" pede outra medida; fica para depois.
-  - **SEMA-MT bloqueada:** o GeoServer público (`geo.sema.mt.gov.br`) só tem mosaicos de
-    imagem, e nenhum conjunto de embargos foi achado. Próximo passo: LAI.
+  - **SEMA-MT feita:** `br_sema_mt_embargos`, pelo WFS da SEMA com a authkey publicada na
+    página de transparência do SIMGEO. São 20.192 áreas embargadas, sem data de desembargo,
+    e entram na etapa `embargo`.
 - [x] **Situação de análise do CAR e adesão ao PRA** (SICAR): separar o CAR só declarado do
   CAR analisado.
   - Mediu-se antes de buscar fora: `area_imovel.condicao` resolve a análise.

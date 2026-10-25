@@ -37,7 +37,7 @@ Não há nada aberto:
 - o GeoServer público (`geo.sema.mt.gov.br`) só tem mosaicos de imagem;
 - uma busca não achou nenhum conjunto de embargos publicado.
 
-- [x] **Decidido: raspar a consulta pública** do SIMCAR/SEMA-MT. Se ela não tiver polígono ou não abrir, volta para cá.
+- [x] **Feito, por outro caminho:** a consulta do SIMCAR não abre de fora (nem pelo proxy BR), mas o GeoServer da SEMA-MT abre as camadas de embargo com a authkey que a própria SEMA publica na página de transparência do SIMGEO. Resultado: `br_sema_mt_embargos`, com 20.192 áreas embargadas, entrou na etapa `embargo` e liga 18.138 imóveis. **Decidido: raspar a consulta pública.**
 
 ## 5. Lista de Desmatamento Ilegal do Pará: usar como?
 
