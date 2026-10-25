@@ -9,7 +9,7 @@ Publicar a célula (0,05°) junto com o município deixa recalcular por diferen�
 de 5 escondeu. Isso acontece quando os imóveis do município caem em poucas células: a célula
 cortada sai do total do município menos as células publicadas.
 
-- [x] **Decidido (2026-10-25): grade + município com checagem.** O resto do município (total menos as células publicadas) tem de dar 0 ou 5 ou mais operações e imóveis; se não der, corta-se a menor célula publicada até fechar. Uma asserção em `monta_pagina.py` confere.
+- [x] **Feito (2026-10-25), `baixa_imovel.py` etapa `grade`:** 332.665 células × ano, fechadas em 12 rodadas. As 21.929 violações que sobram são municípios sem nenhuma célula publicada, conferidos por asserção; ali o resto é o município inteiro, com menos de 5 operações, que já não é publicado. Na Amazônia a grade mostra pouco (2021: R$ 0,4 bi de R$ 12 bi). **Decidido: grade + município com checagem.** O resto do município (total menos as células publicadas) tem de dar 0 ou 5 ou mais operações e imóveis; se não der, corta-se a menor célula publicada até fechar. Uma asserção em `monta_pagina.py` confere.
 - Opções que havia:
   - (a) publicar só a grade, sem o agregado por município;
   - (b) cortar também o município em que alguma célula foi cortada;
@@ -44,7 +44,7 @@ Não há nada aberto:
 A LDI já está no espelho (`br_semas_pa_ldi.areas_embargadas`), mas não entra na página.
 Ela não tem data de embargo, então não serve para "embargo vigente na emissão".
 
-- [x] **Decidido: medida de retrato atual.** É a área do CAR atingida pela LDI (ha e %) por município, pela sobreposição dos polígonos, sem ligar a crédito.
+- [x] **Feito (`ef4ac64`): 579 mil ha de CAR na LDI.** **Decidido: medida de retrato atual.** É a área do CAR atingida pela LDI (ha e %) por município, pela sobreposição dos polígonos, sem ligar a crédito.
 
 ## 6. Limpeza no beelink
 
@@ -53,7 +53,7 @@ Sobravam 13 GB de zips (a estimativa era 4 GB) das coletas de 2026-10-25, que j�
 - `~/scrap_tmp/cnfp/`
 - `~/scrap_tmp/ldi_pa/`
 
-- [x] **Decidido: apagar.**
+- [x] **Feito: apagados (13 GB).**
 
 ## 7. Commits
 
@@ -62,7 +62,7 @@ Nada foi commitado.
 - No rodado: as gotchas e os arquivos regenerados. Alguns arquivos gerados (`datasets.md`,
   `catalog.md`, páginas do MCP) já estavam modificados antes desta sessão e foram reescritos.
 
-- [x] **Decidido: um commit por repositório, agora, sem push.**
+- [x] **Feito:** `a32a3ed` no Chão; `13e55a6` e `cc93df2` no rodado. No rodado foram só as gotchas e o teste: outra sessão estava mexendo nos mesmos arquivos gerados (`br_mma_cnuc`, `br_prf_infracoes`), que ficaram para ela.
 
 ## 8. Teste quebrado no rodado (não é deste trabalho)
 
@@ -70,4 +70,4 @@ Nada foi commitado.
 `snapshot_mensal` de `br_me_cnpj`. Hoje o arquivo tem `so_o_ultimo_retrato`, e parece ter
 mudado no commit `7f1c0a6` (2026-10-20); isso não foi conferido.
 
-- [x] **Decidido: atualizar o teste**, se o git log confirmar que a renomeação foi de propósito.
+- [x] **Feito (`13e55a6`):** a renomeação foi de propósito (`59eb91e`, 2026-10-13).

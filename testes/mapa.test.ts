@@ -490,7 +490,7 @@ for (const motor of ESCOLHIDOS) {
       // imóvel do CAR: o bloco só traz séries município × ano (nada por imóvel; o corte
       // de 5 operações e 5 imóveis é conferido em monta_pagina.py, onde estão as contagens)
       const imv = await roda<string[]>(x.p, `return T.carrega('imovel').then(b =>
-        Object.keys(b.A).filter(k => !/^(cd_v|cd_a|ce_v|ce_a|pp_a|ccar|dcar|dpct|ti|ucpi|fpnd|ldi|ldi_ha|sigef|assent|anl|rlvn|ncar)_[mav]$/.test(k)))`);
+        Object.keys(b.A).filter(k => !/^(cd_v|cd_a|ce_v|ce_a|pp_a|ccar|dcar|dpct|ti|ucpi|fpnd|ldi|ldi_ha|sigef|assent|anl|rlvn|ncar)_[mav]$|^(g_ccar|g_cd)_[aijv]$/.test(k)))`);
       expect(imv).toEqual([]);
       await fecha(x);
     }, LENTO);

@@ -448,7 +448,7 @@
 <script id="b-mercado" type="text/plain" data-etapa="sob-demanda" data-src="dados/mercado.eb9a42af0b78.bin"></script>
 <script id="b-emis" type="text/plain" data-etapa="sob-demanda" data-src="dados/emis.0bc9b97fda67.bin"></script>
 <script id="b-gente" type="text/plain" data-etapa="sob-demanda" data-src="dados/gente.8cf7a5c876b4.bin"></script>
-<script id="b-imovel" type="text/plain" data-etapa="sob-demanda" data-src="dados/imovel.2eaaf6544651.bin"></script>
+<script id="b-imovel" type="text/plain" data-etapa="sob-demanda" data-src="dados/imovel.dd4d1e88d891.bin"></script>
 <script>
 (async function () {
   'use strict';
@@ -910,6 +910,8 @@
       ['ce_a', 'Área financiada em imóvel embargado (ha)', 'ha'],
       ['pp_a', 'Perda comprovada no Proagro em imóvel com desmatamento ou embargo (ha)', 'ha'],
       ['ccar', 'Crédito ligado a um imóvel do CAR (R$)', 'R$'],
+      ['g_ccar', 'Crédito ligado a um imóvel do CAR, na grade de 0,05° (R$)', 'R$'],
+      ['g_cd', 'Crédito em imóvel com desmatamento durante a operação, na grade de 0,05° (R$)', 'R$'],
       ['dcar', 'Desmatamento (PRODES) dentro de imóvel do CAR (km²)', 'km²'],
       ['dpct', 'Parte do desmatamento (PRODES) dentro de imóvel do CAR (%)', '%'],
       ['ti', 'Área do CAR dentro de terra indígena (%)', '%'], ['ucpi', 'Área do CAR em UC de proteção integral (%)', '%'],
@@ -1091,7 +1093,7 @@
     if (est.modo === 'cal') return calculaCalendario();
     if (SERIES[est.modo]) {
       const B = SOB[SERIES[est.modo].bloco], k = est.metrica;
-      if (!B || !B.meta.series[k]) return;
+      if (!B || !B.meta.series[k] || B.meta.series[k].grade) return;   // a grade é desenhada em células
       const M_ = B.A[k + '_m'], A_ = B.A[k + '_a'], V_ = B.A[k + '_v'], a = ano - 1970, int = B.meta.series[k].int;
       for (let r = 0; r < M_.length; r++) if (A_[r] === a) VAL[M_[r]] = int ? V_[r] : LUT[V_[r]];
       return;
@@ -1538,14 +1540,16 @@
   /* Glebas e perdas: célula de 0,05° (~30 km²), só as que têm 5 ou mais glebas
      (ou perdas) — abaixo disso a célula identificaria uma propriedade. */
   let celQuebras = [];
-  // modos desenhados em células: glebas, perdas e a grade de desmatamento e de fogo
-  const emCelulas = () => est.modo === 'gleba' || est.modo === 'perda' || (['desm', 'fogo'].includes(est.modo) && est.metrica === 'grade');
+  // modos desenhados em células: glebas, perdas, a grade de desmatamento e de fogo e a do imóvel
+  const emCelulas = () => est.modo === 'gleba' || est.modo === 'perda' || (['desm', 'fogo'].includes(est.modo) && est.metrica === 'grade')
+    || (est.modo === 'imovel' && est.metrica.startsWith('g_'));
   const passoCel = () => ['desm', 'fogo'].includes(est.modo) ? (SOB.terra || SOB.fogo)?.meta.passo ?? 0.1 : M.passo;
   function celulasAtuais(ano = est.ano) {
     const C = CRED.A, out = [];
     const s = ano - 2000;
-    if (est.modo === 'desm' || est.modo === 'fogo') {
-      const B = est.modo === 'desm' ? SOB.terra?.A : SOB.fogo?.A, pre = est.modo === 'desm' ? 'pc_' : 'fc_', soma = new Map();
+    if (est.modo === 'desm' || est.modo === 'fogo' || est.modo === 'imovel') {
+      const B = { desm: SOB.terra, fogo: SOB.fogo, imovel: SOB.imovel }[est.modo]?.A, soma = new Map(),
+        pre = { desm: 'pc_', fogo: 'fc_' }[est.modo] || est.metrica + '_';
       if (!B) return soma;
       const Aa = B[pre + 'a'], I = B[pre + 'i'], J = B[pre + 'j'], V = B[pre + 'v'];
       // linhas em ordem de ano: busca binária pelo começo do ano
@@ -2130,7 +2134,7 @@
     expo: () => `<b>Trase</b>: a exportação de soja (2004–2020, em equivalente de grão) e de carne bovina (2015–2017) ligada ao <b>município onde foi produzida</b>, com a exposição da soja ao desmatamento (área desmatada atribuída à soja exportada). <b>Comex Stat</b>: exportação de produtos do agro (capítulos 01–24 do SH, mais couro, celulose e algodão) e importação de fertilizantes e defensivos, pelo <b>domicílio fiscal da empresa</b>: a soja de Sorriso pode sair por Rondonópolis ou por São Paulo. Compare as duas.`,
     emis: () => `Emissões de gases de efeito estufa por município, em tCO₂e (GWP-AR5), estimadas pelo <b>SEEG</b> (Observatório do Clima): agropecuária (fermentação entérica do gado, solos e adubo, dejetos, arroz irrigado) e mudança de uso da terra (desmatamento e queima de vegetação), com a remoção por vegetação secundária e áreas protegidas.`,
     trab: () => `<b>RAIS</b>: empregos formais da agropecuária (subsetor IBGE 25) em 31 de dezembro; o emprego informal, a maior parte do trabalho no campo, não aparece. <b>CAGED</b>: admissões menos desligamentos na seção A da CNAE, de 2020 em diante (vermelho: fechou vagas). <b>CNEFE</b>: endereços de estabelecimentos agropecuários no Censo 2022. <b>CAFIR</b>: imóveis rurais ativos no cadastro da Receita, na data mais recente (a área do cadastro fica de fora: não fecha em nenhuma unidade).`,
-    imovel: () => `Cruzamento pelo <b>imóvel rural do CAR</b> (SICAR, foto de 2025-10-15, sem cancelados), feito fora da página; aqui só entram somas por município, no município do imóvel. O CAR é <b>autodeclarado</b>, tem imóveis sobrepostos e a mesma foto vale para todas as safras: um imóvel inscrito em 2024 aparece como se existisse em 2016. <b>Crédito</b> (SICOR): a operação vai para o imóvel pelo código do CAR que ela informa (de 2019 em diante) ou, antes, pela gleba financiada, e o valor se reparte entre os imóveis da operação. Sem nenhum dos dois, entra a gleba da perda comunicada ao Proagro. <b>Desmatamento durante a operação</b>: polígono do PRODES ou aviso do DETER que se sobrepõe ao imóvel (a área se reparte pela interseção), entre a emissão e o vencimento. <b>Embargo vigente</b>: termo do IBAMA não cancelado, lavrado antes da emissão e sem desembargo até ela, ou embargo do ICMBio (que não publica desembargo). <b>Perda no Proagro</b>: área com perda comprovada em operação cujo imóvel teve desmatamento durante a operação ou embargo vigente. Cada soma de crédito só aparece com ${M.min_celula} ou mais operações e ${M.min_celula} ou mais imóveis. TI, UC de proteção integral, floresta pública não destinada (CNFP 2025, tipo B), Lista de Desmatamento Ilegal do Pará (SEMAS-PA; só com 5 ou mais imóveis atingidos no município), SIGEF (metade ou mais do imóvel coberta por parcela certificada), assentamento, análise do CAR (na Bahia, todo imóvel aparece como aguardando análise no SICAR federal, então ela fica sem dado) e camadas declaradas (reserva legal, vegetação nativa) são o retrato atual; as áreas somam imóvel a imóvel, então o CAR sobreposto conta mais de uma vez (na floresta pública não destinada, 42,8 mi ha somados contra no máximo 36,1 mi ha de floresta tocada).`,
+    imovel: () => `Cruzamento pelo <b>imóvel rural do CAR</b> (SICAR, foto de 2025-10-15, sem cancelados), feito fora da página; aqui só entram somas por município, no município do imóvel. O CAR é <b>autodeclarado</b>, tem imóveis sobrepostos e a mesma foto vale para todas as safras: um imóvel inscrito em 2024 aparece como se existisse em 2016. <b>Crédito</b> (SICOR): a operação vai para o imóvel pelo código do CAR que ela informa (de 2019 em diante) ou, antes, pela gleba financiada, e o valor se reparte entre os imóveis da operação. Sem nenhum dos dois, entra a gleba da perda comunicada ao Proagro. <b>Desmatamento durante a operação</b>: polígono do PRODES ou aviso do DETER que se sobrepõe ao imóvel (a área se reparte pela interseção), entre a emissão e o vencimento. <b>Embargo vigente</b>: termo do IBAMA não cancelado, lavrado antes da emissão e sem desembargo até ela, ou embargo do ICMBio (que não publica desembargo). <b>Perda no Proagro</b>: área com perda comprovada em operação cujo imóvel teve desmatamento durante a operação ou embargo vigente. Cada soma de crédito só aparece com ${M.min_celula} ou mais operações e ${M.min_celula} ou mais imóveis. Na <b>grade de 0,05°</b> (o imóvel entra na célula do seu centro), o mesmo vale por célula, e uma célula também cai quando, somada às outras publicadas, deixaria calcular por diferença o que o município esconde: onde os imóveis são grandes e poucos por célula, como na Amazônia, a grade mostra só uma parte pequena do total. TI, UC de proteção integral, floresta pública não destinada (CNFP 2025, tipo B), Lista de Desmatamento Ilegal do Pará (SEMAS-PA; só com 5 ou mais imóveis atingidos no município), SIGEF (metade ou mais do imóvel coberta por parcela certificada), assentamento, análise do CAR (na Bahia, todo imóvel aparece como aguardando análise no SICAR federal, então ela fica sem dado) e camadas declaradas (reserva legal, vegetação nativa) são o retrato atual; as áreas somam imóvel a imóvel, então o CAR sobreposto conta mais de uma vez (na floresta pública não destinada, 42,8 mi ha somados contra no máximo 36,1 mi ha de floresta tocada).`,
     social: () => `Famílias inscritas no <b>Cadastro Único</b> por grupo (agricultores familiares, pescadores artesanais, extrativistas, assentados) e em domicílio rural, no último mês de cada ano. <b>Seguro-Defeso</b>: pescadores artesanais pagos no período em que a pesca é proibida (Portal da Transparência), contados pelo NIS; município com menos de ${M.min_celula} não aparece. População estimada pelo IBGE.`,
     clima: () => `<b>SISAM</b> (INPE): chuva e temperatura por município, de 2000 a 2019, a partir de modelo e satélite, não de pluviômetro: serve para comparar um ano com outro no mesmo lugar (a <b>anomalia</b>, contra a média de 2000–2019), menos para o valor absoluto. As <b>estações do INMET</b> são medição direta, de 2000 a 2025, desenhadas como pontos: só os anos com 90% ou mais das horas medidas. <b>S2ID</b> (Defesa Civil): situações de emergência ou calamidade reconhecidas e ainda vigentes; a fonte só guarda o retrato atual. Compare a seca de 2012–2016 no semiárido com as Perdas do Proagro e o Garantia-Safra.`,
     fogo: () => `Focos de calor do <b>satélite de referência</b> do INPE (AQUA, passagem da tarde), por ano: é a série comparável ao longo do tempo. Desde 2023 a fonte traz todos os satélites (30 vezes mais focos, o mesmo fogo visto várias vezes); só o de referência entra. Foco não é área queimada: a área vem da cicatriz de queimada do DETER (Amazônia, Cerrado, Pantanal).`,
@@ -2444,7 +2448,7 @@
       const linhas = [];
       for (const [k, nome, un] of def.medidas) {
         const S = B.meta.series[k];
-        if (!S) continue;
+        if (!S || S.grade) continue;   // a grade não tem valor por município
         let v = NaN, y = Math.min(a, S.anos[1]);
         for (; y >= S.anos[0]; y--) { v = valorSerie(B, k, m, y); if (Number.isFinite(v)) break; }
         if (!Number.isFinite(v)) continue;

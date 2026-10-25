@@ -18,11 +18,16 @@ Etapas no beelink, cada uma um parquet em ~/bragro_tmp/imovel/ que NÃO volta:
   auto      — autos de flora, pelo polígono da área autuada ou pelo ponto
   desmat    — polígonos do PRODES (2016–) e do DETER (desmatamento e supressão) cruzados
               com o imóvel: a área do alerta se reparte pela interseção
+  grade     — o crédito ligado a CAR e o crédito com desmatamento durante a operação
+              na grade de 0,05° (célula do centroide do imóvel), com a checagem de
+              diferença contra o município (ver a etapa)
   terra     — área do imóvel em TI, em UC de proteção integral e em floresta pública não
               destinada (CNFP tipo B) e na Lista de Desmatamento Ilegal do Pará; cobertura
               por parcelas do SIGEF; ponto do imóvel dentro de assentamento (polígonos do INCRA)
 
 Saídas em pipeline/dados/ (só agregados; nenhum id_imovel, CPF, CNPJ ou nome):
+  imovel_celula.parquet — k (ccar, desm), i, j (célula de 0,05°), ano, valor (R$), ops e
+                       imoveis (para a conferência do corte em monta_pagina.py)
   imovel_mun.parquet — id_municipio (o do imóvel) e o retrato do CAR: imoveis, area_car,
                        area_ti, area_ucpi, area_fpnd, area_ldi (só com 5+ imóveis atingidos), area_analisada, imoveis_sigef,
                        imoveis_assent, app, rl, veg_nativa, consolidada (ha); nulo onde há
@@ -50,6 +55,7 @@ br_rf_cafir):
     A divergência código × gleba cai no mesmo ano (≈20% → 6%): mudança de registro no
     SICOR, não do campo.
 """
+import subprocess
 import sys
 
 import polars as pl
@@ -61,6 +67,7 @@ CAR = f"read_parquet('{IM}/car/*/*.parquet', hive_partitioning = true)"
 ATIVO = f"(SELECT id_imovel, id_municipio, area_ha, geometria FROM {CAR} WHERE status <> 'CA')"
 BRASIL = "BETWEEN -74 AND -28"   # longitude; latitude vai em BETWEEN -34 AND 6
 MIN = 5   # o mesmo corte de privacidade das glebas e do crédito (MIN_CELULA)
+PASSO = 0.05   # a grade das glebas (baixa_credito.py), em graus
 
 
 def xy(lon, lat):
@@ -395,12 +402,16 @@ COPY (
     # Crédito: o valor e a área da operação repartidos pela fracao; o município é o do
     # imóvel. Desmatamento "durante a operação": alerta entre a emissão e o vencimento.
     # Embargo vigente: embargado antes da emissão e não desembargado até ela.
-    ano = roda("imovel_ano", f"""
+    # A marcação de cada par operação × imóvel fica no beelink (marca.parquet): dela saem
+    # o agregado por município e a grade, com a mesma base.
+    prepara("marca", f"""
+SET threads = 14;
 COPY (
   WITH op AS (
     SELECT b.id_referencia_bacen, b.numero_ordem, b.id_imovel, b.fracao, c.id_municipio,
            left(o.ano_safra_emissao, 4)::INTEGER ano, o.data_emissao, o.data_vencimento,
-           o.valor_parcela_credito * b.fracao v, o.area_financiada * b.fracao a
+           o.valor_parcela_credito * b.fracao v, o.area_financiada * b.fracao a,
+           floor(ST_X(ST_Centroid(c.geometria)) / {PASSO})::INTEGER i, floor(ST_Y(ST_Centroid(c.geometria)) / {PASSO})::INTEGER j
     FROM '{IM}/operacao.parquet' b
     JOIN br_bcb_sicor.operacao o USING (id_referencia_bacen, numero_ordem)
     JOIN {CAR} c USING (id_imovel)
@@ -413,13 +424,17 @@ COPY (
           AND e.dia <= o.data_emissao AND (e.desembargo IS NULL OR e.desembargo > o.data_emissao)),
   rcp AS (   -- perda comprovada no Proagro (ha), como em baixa_credito.py
     SELECT id_referencia_bacen, numero_ordem, sum(area) ha FROM br_bcb_sicor.proagro_rcp
-    WHERE area > 0 AND area < 50000 GROUP BY ALL),
-  marca AS (
-    SELECT op.*, dm.id_imovel IS NOT NULL desm, em.id_imovel IS NOT NULL emb,
-           rcp.ha * op.fracao p, rcp.ha IS NOT NULL AND (dm.id_imovel IS NOT NULL OR em.id_imovel IS NOT NULL) perda
-    FROM op LEFT JOIN dm USING (id_referencia_bacen, numero_ordem, id_imovel)
-    LEFT JOIN em USING (id_referencia_bacen, numero_ordem, id_imovel)
-    LEFT JOIN rcp USING (id_referencia_bacen, numero_ordem)),
+    WHERE area > 0 AND area < 50000 GROUP BY ALL)
+  SELECT op.* EXCLUDE (data_emissao, data_vencimento), dm.id_imovel IS NOT NULL desm, em.id_imovel IS NOT NULL emb,
+         rcp.ha * op.fracao p, rcp.ha IS NOT NULL AND (dm.id_imovel IS NOT NULL OR em.id_imovel IS NOT NULL) perda
+  FROM op LEFT JOIN dm USING (id_referencia_bacen, numero_ordem, id_imovel)
+  LEFT JOIN em USING (id_referencia_bacen, numero_ordem, id_imovel)
+  LEFT JOIN rcp USING (id_referencia_bacen, numero_ordem)
+) TO '{IM}/marca.parquet' (FORMAT parquet, COMPRESSION zstd);
+""")
+    ano = roda("imovel_ano", f"""
+COPY (
+  WITH marca AS (SELECT * FROM '{IM}/marca.parquet'),
   -- cada medida com o seu próprio corte (ver cortes())
   cr AS (SELECT id_municipio, ano, {cortes()}
     FROM marca GROUP BY ALL),
@@ -432,6 +447,76 @@ COPY (
   SELECT * FROM cr FULL JOIN ds USING (id_municipio, ano)
   WHERE ano BETWEEN 2001 AND year(current_date)
   ORDER BY ALL
+) TO '{{saida}}' (FORMAT parquet);
+""")
+
+
+@etapa
+def grade():
+    # Crédito ligado a CAR (ccar) e em imóvel com desmatamento durante a operação (desm)
+    # na grade de 0,05°, pela célula do centroide do imóvel. A célula sai com MIN ou mais
+    # operações e imóveis (e, no desm, com o resto da célula 0 ou MIN+). Como o município
+    # também é publicado, o que fica de fora em cada município × ano (as operações em
+    # células não publicadas) tem de ser 0 ou MIN+, senão o total do município menos as
+    # células revelaria a cortada: corta-se a menor célula publicada do município e
+    # repete-se até nenhuma violação sobrar.
+    ops = "count(DISTINCT (id_referencia_bacen, numero_ordem))"
+    imo = "count(DISTINCT id_imovel)"
+    prepara("grade0", f"""
+COPY (
+  SELECT k, i, j, ano FROM (
+    SELECT 'ccar' k, i, j, ano, {ops} o, {imo} n, NULL::BIGINT r FROM '{IM}/marca.parquet' GROUP BY ALL
+    UNION ALL
+    SELECT 'desm', i, j, ano, {ops} FILTER (WHERE desm), {imo} FILTER (WHERE desm),
+           {ops} - {ops} FILTER (WHERE desm) FROM '{IM}/marca.parquet' GROUP BY i, j, ano)
+  WHERE o >= {MIN} AND n >= {MIN} AND (r IS NULL OR r = 0 OR r >= {MIN})
+) TO '{IM}/grade_pub.parquet' (FORMAT parquet);
+""")
+    for rodada in range(1, 50):
+        out = prepara(f"grade{rodada}", f"""
+CREATE TEMP TABLE m AS
+  SELECT 'ccar' k, * FROM '{IM}/marca.parquet'
+  UNION ALL SELECT 'desm', * FROM '{IM}/marca.parquet' WHERE desm;
+CREATE TEMP TABLE pub AS SELECT * FROM '{IM}/grade_pub.parquet';
+CREATE TEMP TABLE viol AS   -- município × ano cujo resto fora das células publicadas tem 1 a {MIN - 1}
+  SELECT k, id_municipio, ano FROM m ANTI JOIN pub USING (k, i, j, ano)
+  GROUP BY ALL HAVING {ops} BETWEEN 1 AND {MIN - 1} OR {imo} BETWEEN 1 AND {MIN - 1};
+CREATE TEMP TABLE corta AS   -- em cada violação, a célula publicada de menos operações
+  SELECT DISTINCT k, i, j, ano FROM (
+    SELECT m.k, m.i, m.j, m.ano, count(DISTINCT (m.id_referencia_bacen, m.numero_ordem)) o
+    FROM m JOIN viol USING (k, id_municipio, ano) JOIN pub USING (k, i, j, ano)
+    GROUP BY m.k, m.id_municipio, m.ano, m.i, m.j
+    QUALIFY row_number() OVER (PARTITION BY m.k, m.id_municipio, m.ano ORDER BY o, m.i, m.j) = 1);
+COPY (SELECT * FROM pub ANTI JOIN corta USING (k, i, j, ano)) TO '{IM}/grade_pub2.parquet' (FORMAT parquet);
+SELECT (SELECT count(*) FROM viol) violacoes, (SELECT count(*) FROM corta) cortadas, (SELECT count(*) FROM pub) publicadas;
+""")
+        subprocess.run(["ssh", "beelink", f"mv {IM}/grade_pub2.parquet {IM}/grade_pub.parquet"], check=True)
+        v, c, n = map(int, out.splitlines()[-1].split(","))
+        print(f"  rodada {rodada}: {v} violações, {c} células cortadas, {n} publicadas")
+        if c == 0:
+            break
+    # sobra violação só onde nenhuma célula publicada há para cortar: aí o resto é o
+    # município × ano inteiro, com 1 a MIN − 1 operações ou imóveis, que cortes() não
+    # publica. Conferido aqui: nenhuma violação com célula publicada no município.
+    sobra = prepara("grade_confere", f"""
+CREATE TEMP TABLE m AS
+  SELECT 'ccar' k, * FROM '{IM}/marca.parquet'
+  UNION ALL SELECT 'desm', * FROM '{IM}/marca.parquet' WHERE desm;
+WITH viol AS (
+  SELECT k, id_municipio, ano FROM m ANTI JOIN '{IM}/grade_pub.parquet' USING (k, i, j, ano)
+  GROUP BY ALL HAVING {ops} BETWEEN 1 AND {MIN - 1} OR {imo} BETWEEN 1 AND {MIN - 1})
+SELECT count(*) FROM viol SEMI JOIN (SELECT DISTINCT k, id_municipio, ano FROM m
+                                     SEMI JOIN '{IM}/grade_pub.parquet' USING (k, i, j, ano)) USING (k, id_municipio, ano);
+""")
+    assert sobra.splitlines()[-1] == "0", f"violação com célula publicada no município: {sobra}"
+    global cel
+    cel = roda("imovel_celula", f"""
+COPY (
+  WITH m AS (SELECT 'ccar' k, * FROM '{IM}/marca.parquet'
+             UNION ALL SELECT 'desm', * FROM '{IM}/marca.parquet' WHERE desm)
+  SELECT k, i, j, ano, sum(v) valor, {ops} ops, {imo} imoveis
+  FROM m SEMI JOIN '{IM}/grade_pub.parquet' p USING (k, i, j, ano)
+  GROUP BY ALL ORDER BY ALL
 ) TO '{{saida}}' (FORMAT parquet);
 """)
 

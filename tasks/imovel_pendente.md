@@ -80,8 +80,9 @@ medidas, e só depois o Chão lê.
     - Antes, as perdas ligadas a imóvel eram 28% em 2016, 55% em 2017 e 84% em 2018.
   - Medida nova: "perda comprovada no Proagro em imóvel com desmatamento ou embargo (ha)",
     257 mil ha no total, com o mesmo corte de 5.
-- [ ] **Agregado por célula da grade** (0,05°, como glebas e perdas), além do município, com
-  o mesmo corte de 5 operações e 5 imóveis.
+- [x] **Agregado por célula da grade** (0,05°, como glebas e perdas), além do município, com
+  o mesmo corte de 5 operações e 5 imóveis. **Feito com a checagem de diferença** (ver
+  `decisoes_pendentes.md`, item 1).
   - **Não feito, por privacidade:** a célula e o município publicados juntos permitem
     diferença. Uma célula cortada sai do total do município menos as células publicadas
     quando os imóveis do município caem em poucas células.

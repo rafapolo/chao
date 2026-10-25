@@ -702,7 +702,16 @@ SER = series(bi, ima, {"cd_v": "cd_valor", "cd_a": "cd_area", "ce_v": "ce_valor"
 SER.update(series(bi, imm, {"ti": "ti", "ucpi": "ucpi", "fpnd": "fpnd", "ldi": "ldi", "ldi_ha": "area_ldi",
                             "sigef": "sigef", "assent": "assent",
                             "anl": "anl", "rlvn": "rlvn", "ncar": "imoveis"}, zero=("anl",)))
-bi.meta = {"series": SER}
+# grade de 0,05° (baixa_imovel.py, etapa grade): a checagem de diferença contra o
+# município roda no beelink; aqui, o corte de cada célula
+cel = pl.read_parquet(D / "imovel_celula.parquet")
+assert cel["ops"].min() >= MIN_CELULA and cel["imoveis"].min() >= MIN_CELULA
+delta_cel = []
+for chave, k in [("g_ccar", "ccar"), ("g_cd", "desm")]:
+    d = cel.filter(pl.col("k") == k)
+    delta_cel += grade(bi, chave + "_", d, "valor")
+    SER[chave] = {"anos": [int(d["ano"].min()), int(d["ano"].max())], "int": False, "grade": True}
+bi.meta = {"series": SER, "delta": delta_cel, "passo": PASSO}
 
 sedes = (pl.DataFrame({"id_municipio": IDS}).join(pl.read_parquet(D / "sedes.parquet"), on="id_municipio", how="left")
          .join(mun.select("id_municipio", pl.col("lon").alias("lon2"), pl.col("lat").alias("lat2")), on="id_municipio")
