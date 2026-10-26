@@ -21,7 +21,7 @@ Etapas no beelink, cada uma um parquet em ~/bragro_tmp/imovel/ que NÃO volta:
   grade     — o crédito ligado a CAR e o crédito com desmatamento durante a operação
               na grade de 0,05° (célula do centroide do imóvel), com a checagem de
               diferença contra o município (ver a etapa)
-  mapbiomas — (depois do zonal no beelink) floresta, pastagem, soja e agropecuária dentro
+  mapbiomas — (depois do zonal no beelink: pipeline/remoto/zonal_mapbiomas.py) floresta, pastagem, soja e agropecuária dentro
               do CAR, por município × ano, 2016–2024
   terra     — área do imóvel em TI, em UC de proteção integral e em floresta pública não
               destinada (CNFP tipo B) e na Lista de Desmatamento Ilegal do Pará; cobertura
