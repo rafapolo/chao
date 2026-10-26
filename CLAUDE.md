@@ -156,7 +156,12 @@ para o primeiro mapa são 6,6 MB (HTML e 1ª etapa), e o resto vem por etapa.
   operações. Quem confere esse corte é um assert no `monta_pagina.py`, com as contagens que
   não entram na página. A grade do imóvel é de 0,25°; a de 0,05° já foi publicada, então a
   etapa `grade` também corta a célula de 0,25° cujo resíduo contra as de 0,05° publicadas
-  (`celulas_publicadas.py`, no beelink) tem 1 a 4 operações ou imóveis. O teste só confere que o bloco não traz nada além das séries.
+  (`celulas_publicadas.py`, no beelink) tem 1 a 4 operações ou imóveis.
+  O mesmo vale entre versões: com a entrada da SEMA-MT (2026-10-25), o `ce` de hoje menos o
+  de antes revelaria o grupo acrescentado em 37 município × safra do MT, e eles ficam sem
+  `ce` (`imovel_ce_corta.parquet`). As versões de antes saíram do histórico do git
+  (`git filter-repo`, 2026-10-26). Ao mudar a definição de uma medida já publicada, meça o
+  grupo que muda antes de publicar. O teste só confere que o bloco não traz nada além das séries.
 - **PRODES:** começa em 2002. O incremento de 2001 sai da diferença contra a linha de base de
   2000 e infla (101 mil km², contra 73–79 mil em 2002–2004).
 - **SICOR em R$:** só o crédito de recurso controlado ou equalizado tem município (R$ 136 de
