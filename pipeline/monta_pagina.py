@@ -510,6 +510,7 @@ be.meta = {"anos": [int(pb["ano"].min()), int(pb["ano"].max())]}
 
 # ---------- terra e fogo (3ª etapa) ----------
 PASSO_TERRA = 0.1   # o de baixa_terra.py
+PASSO_IMOVEL = 0.25   # o de baixa_imovel.py (GRADE × PASSO)
 
 
 def grade(bloco, pre, df, col):
@@ -712,7 +713,7 @@ if (D / "imovel_uso.parquet").exists():
     SER.update(series(bi, uso, {"u_flo": "u_floresta", "u_pas": "u_pastagem", "u_soja": "u_soja", "u_agro": "u_agro"}))
 else:
     print("    sem imovel_uso.parquet: uso do solo dentro do CAR fica de fora")
-# grade de 0,05° (baixa_imovel.py, etapa grade): a checagem de diferença contra o
+# grade de 0,25° (baixa_imovel.py, etapa grade, GRADE × PASSO): a checagem de diferença contra o
 # município roda no beelink; aqui, o corte de cada célula
 cel = pl.read_parquet(D / "imovel_celula.parquet")
 assert cel["ops"].min() >= MIN_CELULA and cel["imoveis"].min() >= MIN_CELULA
@@ -721,7 +722,7 @@ for chave, k in [("g_ccar", "ccar"), ("g_cd", "desm")]:
     d = cel.filter(pl.col("k") == k)
     delta_cel += grade(bi, chave + "_", d, "valor")
     SER[chave] = {"anos": [int(d["ano"].min()), int(d["ano"].max())], "int": False, "grade": True}
-bi.meta = {"series": SER, "delta": delta_cel, "passo": PASSO}
+bi.meta = {"series": SER, "delta": delta_cel, "passo": PASSO_IMOVEL}
 
 sedes = (pl.DataFrame({"id_municipio": IDS}).join(pl.read_parquet(D / "sedes.parquet"), on="id_municipio", how="left")
          .join(mun.select("id_municipio", pl.col("lon").alias("lon2"), pl.col("lat").alias("lat2")), on="id_municipio")

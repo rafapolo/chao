@@ -17,10 +17,11 @@ Na Amazônia, a grade de 0,05° mostra só R$ 0,4 bi dos R$ 12 bi de crédito co
 em 2021: cada célula precisa de 5 operações e 5 imóveis, e lá os imóveis são grandes e poucos
 por célula.
 
-- [ ] Testar 0,25° (~28 km) com a mesma checagem de diferença contra o município (etapa
-  `grade` de `baixa_imovel.py`, constante `PASSO`), e mostrar o antes e depois do total
-  publicado por UF.
-- [ ] Se valer, decidir entre trocar a grade ou oferecer as duas.
+- [x] Testado em 2026-10-26 (`baixa_imovel.py grade:N`). Crédito com desmatamento publicado:
+  R$ 0,4 → 5,2 bi de 13,1 bi em 2021 (PA 0,0 → 0,39 de 1,68; MT 0,0 → 0,11 de 0,87; GO 0,0 →
+  0,49 de 1,43); ligado a CAR: 55,9 → 96,9 de 108,2 bi.
+- [x] Trocada a grade (constante `GRADE = 5`), sem oferecer as duas: a célula grande menos as
+  pequenas publicadas revelaria a pequena cortada. O bloco `imovel` caiu de 1,0 para 0,5 MB.
 
 ## 3. Teste intermitente do service worker
 
