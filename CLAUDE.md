@@ -58,7 +58,7 @@ python3 monta_pagina.py      # parquet -> blocos -> ../site/ (index.html e dados
 cd .. && bun run build       # site/ -> dist/: HTML, CSS e JS minificados + service worker (é o que o Pages publica)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
-bun test                                   # 121 testes nos 3 motores (3 pulados: offline no WebKit, file:// fora do Chromium), ~3 min; CHAO_MOTORES=chromium para um só
+bun test                                   # 124 testes nos 3 motores (3 pulados: offline no WebKit, file:// fora do Chromium), ~3 min; CHAO_MOTORES=chromium para um só
 bun testes/_perf.ts                        # primeiro mapa e tudo pronto com rede 4G simulada
 ```
 
@@ -215,6 +215,11 @@ para o primeiro mapa são 6,6 MB (HTML e 1ª etapa), e o resto vem por etapa.
   tempo com o ano); a linha do tempo é compacta, no centro de baixo, e abre e fecha; o
   painel esquerdo tem a altura do conteúdo e recolhe só no título. No celular, filtros e
   legenda são folhas de baixo, uma por vez.
+- Ficha: cabeçalho fixo com um atalho por tema (os de `SECOES`, achados pelo começo do
+  título em `TEMA_FICHA`); as seções vêm agrupadas na ordem das abas, e ao abrir o
+  município ou trocar de modo a ficha rola até o tema do modo. Em tela de até 1700 px ela
+  recolhe a legenda ao abrir e a reabre ao fechar (só se foi ela quem recolheu), e a linha
+  do tempo sai de baixo dela. `/` leva à busca de município; os atalhos estão no `sobre`.
 
 ## Testes
 

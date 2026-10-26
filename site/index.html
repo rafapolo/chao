@@ -210,6 +210,7 @@
   .sobre::backdrop { background: color-mix(in srgb, var(--fundo) 70%, transparent); }
   .sobre h2 { margin: 0 0 12px; font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
   .sobre .nota { margin: 0; font-size: 13.5px; line-height: 1.55; }
+  .sobre kbd { font-family: "Mono", monospace; font-size: 10.5px; padding: 0 4px; border: 1px solid var(--linha); border-radius: 3px; color: var(--ink-2); }
   .sobre .fino { margin-top: 16px; font-family: "Mono", monospace; font-size: 10.5px; line-height: 1.7; color: var(--ink-3); }
   .sobre .fechar { position: absolute; top: 10px; right: 12px; border: 0; background: none; font-size: 22px; color: var(--ink-3); cursor: pointer; }
 
@@ -228,6 +229,8 @@
     display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 10px; padding: 8px 12px;
   }
   .tempo[hidden] { display: none; }
+  body:has(.ficha.aberta) .tempo { right: 404px; width: min(620px, calc(100% - 770px)); }
+  @media (min-width: 1001px) and (max-width: 1200px) { body:has(.ficha.aberta) .velocidade { display: none; } }
   .tocar { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--linha); background: color-mix(in srgb, var(--acento) 18%, transparent); cursor: pointer; display: grid; place-items: center; }
   .tocar:hover { border-color: var(--acento); }
   .tocar svg { width: 13px; height: 13px; fill: var(--ink); }
@@ -244,11 +247,20 @@
   .ficha {
     position: fixed; top: 12px; right: 12px; bottom: 58px; width: 380px; z-index: 3;
     background: var(--painel); border: 1px solid var(--linha); border-radius: 10px;
-    overflow-y: auto; padding: 16px; display: none;
+    overflow-y: auto; padding: 0 16px 16px; display: none;
   }
   .ficha.aberta { display: block; }
   .ficha h2 { margin: 0; font-size: 19px; font-weight: 650; padding-right: 28px; }
   .ficha .sub { color: var(--ink-2); font-size: 12px; margin-top: 2px; }
+  /* cabeçalho fixo da ficha: nome e um atalho por tema, que acompanha a rolagem */
+  .ficha .cab-ficha { position: sticky; top: 0; z-index: 1; margin: 0 -16px; padding: 16px 16px 0; background: var(--painel); border-bottom: 1px solid var(--linha); }
+  .ficha .temas { display: flex; gap: 2px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
+  .ficha .temas button { flex: 1 0 auto; padding: 6px 6px 7px; border: 0; border-bottom: 2px solid transparent; background: none; cursor: pointer;
+    font-family: "Mono", monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+  .ficha .temas button:hover { color: var(--ink); }
+  .ficha .temas button[aria-current="true"] { color: var(--ink); border-bottom-color: var(--acento); }
+  .ficha .temas button:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
+  .ficha > details:first-of-type { border-top: 0; }
   .ficha .fechar { position: absolute; top: 10px; right: 10px; border: none; background: none; cursor: pointer; font-size: 20px; color: var(--ink-3); }
   .ficha h3 { font-family: "Mono", monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); margin: 18px 0 6px; font-weight: 500; }
   .barras { display: grid; gap: 4px; }
@@ -299,7 +311,7 @@
     .painel-legenda { width: 232px; }
     .ficha.aberta ~ .painel-legenda { right: 12px; }
     .ficha { width: 340px; z-index: 4; }
-    .tempo { left: 12px; right: 12px; bottom: 54px; width: auto; margin: 0; }
+    .tempo, body:has(.ficha.aberta) .tempo { left: 12px; right: 12px; bottom: 54px; width: auto; margin: 0; }
   }
 
   /* ---------- celular: o painel vira gaveta de baixo ---------- */
@@ -307,7 +319,7 @@
     .painel { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 62vh; border-radius: 14px 14px 0 0;
       transform: translateY(100%); transition: transform .25s ease; z-index: 6; }
     .painel.aberta { transform: none; }
-    .tempo { left: 8px; right: 8px; bottom: 8px; width: auto; margin: 0; gap: 8px; padding: 6px 10px; }
+    .tempo, body:has(.ficha.aberta) .tempo { left: 8px; right: 8px; bottom: 8px; width: auto; margin: 0; gap: 8px; padding: 6px 10px; }
     .rodape { right: 8px; bottom: 92px; }
     body:has(.tempo[hidden]) .rodape { bottom: 8px; }
     .painel .recolhe { display: none; }
@@ -425,6 +437,7 @@
   <form method="dialog"><button class="fechar" aria-label="Fechar">×</button></form>
   <h2 id="sobre-tit">Sobre os dados</h2>
   <div class="nota" id="nota"></div>
+  <p class="fino">Teclado: <kbd>espaço</kbd> toca a linha do tempo · <kbd>←</kbd> <kbd>→</kbd> trocam o ano · <kbd>/</kbd> busca um município · <kbd>Esc</kbd> fecha a ficha.</p>
   <p class="fino">Fontes: IBGE (PAM, PPM, PEVS, PIB, população, malha 2022, setores 2010, CNEFE) · MapBiomas coleção 11 · Banco Central (SICOR, Proagro, ESTBAN, SCR) · BNDES · INPE (PRODES, DETER, queimadas, SISAM) · INMET · Defesa Civil (S2ID) · IBAMA · INCRA · CGU (Garantia-Safra, Seguro-Defeso) · MDS (CadÚnico) · MTE (RAIS, CAGED) · Receita (CAFIR) · MDIC (Comex Stat) · Trase · SEEG · Serviço Florestal Brasileiro (SICAR) · FUNAI · MMA (CNUC). Todas pelo espelho do projeto rodado.</p>
 </dialog>
 <div class="tip" id="tip"></div>
@@ -2011,6 +2024,7 @@
     $('dobra-legenda').setAttribute('aria-expanded', !recolhe);
   };
   $('dobra-legenda').onclick = () => {
+    legendaAuto = false;
     if (celular()) { $('painel-legenda').classList.remove('aberta'); $('abre-legenda').setAttribute('aria-pressed', false); inertes(); }
     else dobraLegenda(!$('painel-legenda').classList.contains('recolhida'));
   };
@@ -2360,6 +2374,11 @@
     if (e.key === 'ArrowRight') defineAno(Math.min(a1, est.ano + passo));
     if (e.key === 'ArrowLeft') defineAno(Math.max(a0, est.ano - passo));
     if (e.key === 'Escape') seleciona(-1);
+    if (e.key === '/' && !celular()) {
+      e.preventDefault();
+      if ($('painel').classList.contains('recolhido')) $('recolhe-painel').click();
+      $('busca-mun').focus();
+    }
   });
 
   /* ---------- orquestração ---------- */
@@ -2422,11 +2441,19 @@
   }
 
   /* ---------- ficha do município ---------- */
+  /* Em tela de até 1700 px, ficha e legenda abertas deixam o mapa num corredor: a ficha
+     recolhe a legenda ao abrir e a reabre ao fechar, se quem a recolheu foi ela. */
+  let legendaAuto = false;
   function seleciona(m) {
     est.mun = m;
     const f = $('ficha');
-    if (m < 0) { f.classList.remove('aberta'); f.innerHTML = ''; }
-    else { f.classList.add('aberta'); garante(['prodqv']); montaFicha(); }
+    if (m < 0) {
+      f.classList.remove('aberta'); f.innerHTML = ''; fichaChave = '';
+      if (legendaAuto) { dobraLegenda(false); legendaAuto = false; }
+    } else {
+      if (!f.classList.contains('aberta') && !celular() && innerWidth <= 1700 && !$('painel-legenda').classList.contains('recolhida')) { dobraLegenda(true); legendaAuto = true; }
+      f.classList.add('aberta'); garante(['prodqv']); montaFicha();
+    }
     gravaUrl(); pede();
   }
   const barra = (nome, v, max, txt, cor) =>
@@ -2683,25 +2710,68 @@
      vem até o próximo. Quem foi fechado continua fechado de um município a outro
      (a chave é o título sem números). */
   const FECHADAS = new Set();
+  /* Cada seção pertence a um tema das abas de fonte (pelo começo do título); a ficha
+     agrupa as seções por tema, na ordem das abas, e o cabeçalho leva a cada uma. */
+  const TEMA_FICHA = [
+    [/^(Lavoura e pasto novos|Desmatamento|Emissões|Imóvel|Cadastro Ambiental)/, 'Terra'],
+    [/^(Crédito|Quem empresta|Economia|Exportação)/, 'Dinheiro'],
+    [/^(Perdas|Garantia-Safra|Clima|Fogo)/, 'Clima e fogo'],
+    [/^(Trabalho|Famílias)/, 'Gente'],
+  ];
+  const temaFicha = t => TEMA_FICHA.find(([re]) => re.test(t))?.[1] || 'Produção';
   function recolhiveis(f) {
+    const fontes = f.querySelector(':scope > .fontes'), extras = f.querySelector(':scope > .carrega-extras');
+    if (extras) fontes.before(extras);
     for (const h3 of [...f.querySelectorAll(':scope > h3')]) {
       const d = document.createElement('details'), s = document.createElement('summary');
       const chave = h3.textContent.replace(/[\d/–→,.]+/g, '').trim();
       s.innerHTML = h3.innerHTML; d.append(s);
+      d.dataset.sec = temaFicha(h3.textContent); d.dataset.chave = chave;
       d.open = !FECHADAS.has(chave);
       d.ontoggle = () => { d.open ? FECHADAS.delete(chave) : FECHADAS.add(chave); };
-      while (h3.nextSibling && !(h3.nextSibling.nodeName === 'H3' || h3.nextSibling.classList?.contains('fontes'))) d.append(h3.nextSibling);
+      while (h3.nextSibling && !(h3.nextSibling.nodeName === 'H3' || h3.nextSibling.classList?.contains('fontes') || h3.nextSibling.classList?.contains('carrega-extras'))) d.append(h3.nextSibling);
       h3.replaceWith(d);
     }
+    // a ordem das abas; o sort é estável, então dentro do tema fica a ordem de antes
+    const ds = [...f.querySelectorAll(':scope > details')].sort((x, y) => SECOES.indexOf(x.dataset.sec) - SECOES.indexOf(y.dataset.sec));
+    (extras || fontes).before(...ds);
+    const nav = f.querySelector('.temas');
+    for (const sec of SECOES.filter(sc => ds.some(d => d.dataset.sec === sc))) {
+      const b = document.createElement('button');
+      b.dataset.sec = sec; b.textContent = ABAS[sec][0]; b.title = sec;
+      b.onclick = () => { const d = f.querySelector(`details[data-sec="${sec}"]`); d.open = true; vaiParaSecao(d, true); };
+      nav.append(b);
+    }
   }
+  const movimento = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function vaiParaSecao(d, suave) {
+    const f = $('ficha');
+    // a margem de cima da seção fica escondida, e a primeira seção volta ao topo
+    f.scrollTo({ top: Math.max(0, d.offsetTop - parseFloat(getComputedStyle(d).marginTop) - f.querySelector('.cab-ficha').offsetHeight), behavior: suave && movimento() ? 'smooth' : 'instant' });
+  }
+  // o tema marcado no cabeçalho é o da seção no alto da ficha
+  function marcaTema() {
+    const f = $('ficha'), cab = f.querySelector('.cab-ficha');
+    if (!cab) return;
+    let atual = '';
+    for (const d of f.querySelectorAll(':scope > details')) if (d.offsetTop - cab.offsetHeight - 24 <= f.scrollTop) atual = d.dataset.sec;
+    if (f.scrollTop + f.clientHeight >= f.scrollHeight - 4) atual = [...f.querySelectorAll(':scope > details')].at(-1)?.dataset.sec;
+    cab.querySelectorAll('.temas button').forEach(b => b.setAttribute('aria-current', b.dataset.sec === (atual || SECOES[0])));
+  }
+  $('ficha').addEventListener('scroll', marcaTema, { passive: true });
+  /* Ao abrir um município, ou trocar de modo com ele aberto, a ficha rola até o tema do
+     modo (crédito vai a Dinheiro); nas outras remontagens (ano, cultura) fica onde estava.
+     Se o tema ainda não chegou (bloco da 3ª etapa), rola quando ele chegar. */
+  let fichaChave = '', alvoFicha = '';
   function montaFicha() {
     const m = est.mun, f = $('ficha');
     if (m < 0) return;
     const km2 = M.mun.km2[m], rural = RURAL_KM2[m], a = est.ano;
     const aP = Math.min(a, M.anos.prod[1] - 1);
-    let h = `<button class="fechar" aria-label="Fechar ficha">×</button>
+    let h = `<div class="cab-ficha"><button class="fechar" aria-label="Fechar ficha">×</button>
       <h2>${M.mun.nome[m]}</h2>
-      <div class="sub">${M.mun.uf[m]} · ${M.mun.bioma[m] || '—'} · ${fmt(km2)} km² · código IBGE ${M.mun.id[m]}</div>`;
+      <div class="sub">${M.mun.uf[m]} · ${M.mun.bioma[m] || '—'} · ${fmt(km2)} km² · código IBGE ${M.mun.id[m]}</div>
+      <nav class="temas" aria-label="Temas da ficha"></nav></div>`;
 
     h += `<h3>Área do município</h3><div class="kv">
       <span>Rural (o que sobra)</span><span>${fmt(rural)} km² · ${fmt(rural / km2 * 100, 0)}%</span>
@@ -2863,8 +2933,26 @@
     }
     }
     h += `<div class="fontes">Fontes: IBGE (PAM, PPM, PEVS, PIB, população, malha 2022, setores 2010, CNEFE) · MapBiomas coleção 11 · Banco Central (SICOR, Proagro, ESTBAN, SCR) · BNDES · INPE (PRODES, DETER, queimadas, SISAM) · INMET · Defesa Civil (S2ID) · IBAMA · INCRA · CGU (Garantia-Safra, Seguro-Defeso) · MDS (CadÚnico) · MTE (RAIS, CAGED) · Receita (CAFIR) · MDIC (Comex Stat) · Trase · SEEG · Serviço Florestal Brasileiro (SICAR) · FUNAI · MMA (CNUC).</div>`;
+    const chave = m + '|' + est.modo, topo = f.scrollTop;
+    // a seção no alto antes de remontar: bloco que chega acrescenta seção acima, e a
+    // rolagem acompanha a seção, não os pixels
+    const cabH = f.querySelector('.cab-ficha')?.offsetHeight || 0;
+    const ancora = [...f.querySelectorAll(':scope > details')].find(d => d.offsetTop + d.offsetHeight > topo + cabH);
+    const ancoraChave = ancora?.dataset.chave, ancoraDelta = ancora ? topo - ancora.offsetTop : 0;
+    const nova = chave !== fichaChave, md = MODOS.find(x => x.id === est.modo);
+    if (nova) { fichaChave = chave; alvoFicha = md.sec; }
     f.innerHTML = h;
     recolhiveis(f);
+    const alvo = alvoFicha && f.querySelector(`details[data-sec="${alvoFicha}"]`);
+    if (alvo) { vaiParaSecao(alvo, false); alvoFicha = ''; }
+    else if (nova) f.scrollTop = 0;
+    else {
+      const d = ancoraChave && [...f.querySelectorAll(':scope > details')].find(x => x.dataset.chave === ancoraChave);
+      f.scrollTop = d ? d.offsetTop + ancoraDelta : topo;
+    }
+    // com tudo do modo já carregado, o tema que não apareceu não tem dado aqui: desiste
+    if (alvoFicha && pronto && (md.blocos || []).every(id => SOB[id])) alvoFicha = '';
+    marcaTema();
     f.querySelector('.fechar').onclick = () => seleciona(-1);
     const ce = f.querySelector('#carrega-extras');
     if (ce) ce.onclick = () => { ce.textContent = 'carregando…'; ce.disabled = true; garante(EXTRAS, true); };

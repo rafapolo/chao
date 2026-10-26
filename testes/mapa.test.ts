@@ -508,6 +508,41 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("ficha: abre no tema do modo, o cabeçalho leva a cada tema e a legenda recolhida volta ao fechar", async () => {
+      const x = await abre(nav, "?f=cred&mun=5107925");
+      const p = x.p;
+      await p.waitForSelector("#ficha .temas button[data-sec='Dinheiro']");
+      const temas = () => p.locator("#ficha .temas button").evaluateAll(bs => bs.map(b => [b.textContent, b.getAttribute("aria-current")]));
+      // a seção no alto da ficha é de Dinheiro, e o tema marcado também
+      expect(await p.evaluate(() => { const f = document.getElementById("ficha")!; return f.scrollTop > 0; })).toBe(true);
+      expect((await temas()).find(([, c]) => c === "true")![0]).toBe("Dinheiro");
+      // as seções vêm agrupadas na ordem das abas
+      const ordem = await p.locator("#ficha > details").evaluateAll(ds => [...new Set(ds.map(d => (d as HTMLElement).dataset.sec))]);
+      expect(ordem.slice(0, 3)).toEqual(["Produção", "Terra", "Dinheiro"]);
+      await p.click("#ficha .temas button[data-sec='Produção']");
+      await p.waitForFunction(() => document.getElementById("ficha")!.scrollTop === 0);
+      // rolada à mão, a ficha fica onde está quando o ano muda
+      await p.evaluate(() => { document.getElementById("ficha")!.scrollTop = 300; });
+      await roda(p, "T.defineAno(2020)");
+      expect(await p.evaluate(() => document.getElementById("ficha")!.scrollTop)).toBe(300);
+      // a 1440 px a ficha recolheu a legenda; ao fechar, ela volta
+      expect(await p.locator("#painel-legenda").getAttribute("class")).toContain("recolhida");
+      // aberta à mão, a legenda não recolhe de novo ao trocar de município
+      await p.click("#dobra-legenda");
+      await roda(p, "T.seleciona(T.M.mun.id.indexOf('5106240'))");
+      expect(await p.locator("#painel-legenda").getAttribute("class")).not.toContain("recolhida");
+      // ao fechar, a legenda que a ficha recolheu volta
+      await roda(p, "T.seleciona(-1); T.seleciona(T.M.mun.id.indexOf('5107925'))");
+      expect(await p.locator("#painel-legenda").getAttribute("class")).toContain("recolhida");
+      await p.keyboard.press("Escape");
+      expect(await p.locator("#painel-legenda").getAttribute("class")).not.toContain("recolhida");
+      // "/" leva à busca de município
+      await p.keyboard.press("/");
+      expect(await p.evaluate(() => document.activeElement?.id)).toBe("busca-mun");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
     test("privacidade: nenhuma célula ou município embutido tem menos de 5 glebas ou perdas", async () => {
       const x = await abre(nav, "");
       const minimos = await roda<number[]>(x.p, `
