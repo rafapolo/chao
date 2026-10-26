@@ -344,6 +344,7 @@ inst = prod.filter(pl.col("item").str.starts_with("R|")).group_by("m").agg(pl.co
 inst_arr = np.full(NMUN, ANO0_PROD, dtype=np.int32)
 inst_arr[inst["m"].to_numpy()] = inst["ano"].to_numpy()
 anos_prod = (int(prod["ano"].min()), int(prod["ano"].max()))
+ULT_PAM_AREA = int(prod.filter(pl.col("item").str.starts_with("T|") & pl.col("area").is_not_null())["ano"].max())   # a última PAM com lavoura
 
 print("mapbiomas")
 mb = idx_mun(pl.read_parquet(D / "mapbiomas.parquet")).with_columns(
@@ -428,6 +429,18 @@ for c in SICAR_COLS:
     arr[sc["m"].to_numpy()] = sc[c].fill_null(0).to_numpy()
     bk.add("car_" + c, np.round(arr), "u32")
 anos_gs = (int(gs["ano"].min()), int(gs["ano"].max()))
+# LSPA (baixa_lspa.py): a previsão da safra por UF, nos anos depois da última PAM. Vai neste
+# bloco (2ª etapa) por ser pequeno; o índice da UF é o da lista ordenada de siglas, a do JS
+lsp = pl.read_parquet(D / "lspa_uf.parquet").filter(pl.col("ano") > ULT_PAM_AREA)
+UFS_ORD = sorted(set(mun["sigla_uf"].to_list()))
+lsp = lsp.with_columns(pl.col("sigla_uf").replace_strict({u: i for i, u in enumerate(UFS_ORD)}, return_dtype=pl.Int32).alias("u"),
+                       pl.col("item").replace_strict(IIDX, return_dtype=pl.Int32).alias("i")).sort("u", "ano", "i")
+bk.add("ls_u", lsp["u"], "u8"); bk.add("ls_a", lsp["ano"] - 2000, "u8"); bk.add("ls_i", lsp["i"], "u8")
+bk.add("ls_area", log16(lsp["area_plantada"].fill_null(0).to_numpy()), "u16")
+bk.add("ls_q", log16(lsp["producao"].fill_null(0).to_numpy()), "u16")
+LSPA = {"mes": str(lsp["mes"][0]), "anos": [int(lsp["ano"].min()), int(lsp["ano"].max())],
+        "itens": sorted(set(lsp["i"].to_list()))}
+print(f"    LSPA {LSPA['mes']}: {lsp.height} linhas, {len(LSPA['itens'])} itens, anos {LSPA['anos']}")
 
 # ---------- dinheiro (3ª etapa): crédito do SICOR, ESTBAN, BNDES, SCR e PIB ----------
 print("crédito em R$")
@@ -672,7 +685,16 @@ SER.update(series(bg, som, {"cad_agri": "agricultores", "cad_pesc": "pescadores"
                             "def_v": "defeso_valor", "pop": "populacao"}))
 SER.update(series(bg, imv.rename({"ano_cafir": "ano"}), {"cafir": "imoveis_cafir"}))
 SER.update(series(bg, imv.rename({"ano_cnefe": "ano"}), {"cnefe": "estabelecimentos_agro"}))
-bg.meta = {"series": SER}
+# Lista Suja: sem o corte de MIN_CELULA (decisão de 2026-10-26: a lista é pública e nominal)
+lsm = idx_mun(pl.read_parquet(D / "listasuja.parquet"))
+SER.update(series(bg, lsm, {"le_trab": "trab", "le_trab_ac": "trab_ac", "le_casos": "casos", "le_casos_ac": "casos_ac"},
+                  inteiro=("trab", "trab_ac", "casos", "casos_ac")))
+lsa = idx_mun(pl.read_parquet(D / "listasuja_ativ.parquet"))
+ATIVIDADES = [""] + sorted(lsa["atividade"].unique().to_list())   # 0 = sem caso
+ativ = np.zeros(NMUN)
+ativ[lsa["m"].to_numpy()] = lsa["atividade"].replace_strict({a: i for i, a in enumerate(ATIVIDADES)}, return_dtype=pl.Int32).to_numpy()
+bg.add("le_ativ", ativ, "u8")
+bg.meta = {"series": SER, "atividades": ATIVIDADES}
 
 print("imóvel")
 bi = Bloco()
@@ -756,7 +778,7 @@ meta = {
     "anos": {"prod": anos_prod, "mb": anos_mb, "safra": safras, "gsafra": anos_gs,
              "trans": [2000, 2010, 2020]},
     "k": K_LOG, "q": Q, "passo": PASSO, "ano0": {"prod": ANO0_PROD, "mb": ANO0_MB},
-    "min_celula": MIN_CELULA,
+    "min_celula": MIN_CELULA, "lspa": LSPA,
 }
 bm.meta = meta
 
@@ -801,6 +823,9 @@ fix["series"] = {
 sc_ = cal.filter((pl.col("id_municipio") == "5107925") & (pl.col("produto") == "SOJA") & (pl.col("f") == 0))
 fix["calendario"] = {"mun": "5107925", "mes_moda": int(sc_.sort(["operacoes", "mes"], descending=[True, False])["mes"][0]),
                      "n": int(sc_["operacoes"].sum())}
+fix["listasuja"] = {"ano": int(lsm["ano"].max()), "trab_ac": int(lsm.filter(pl.col("ano") == lsm["ano"].max())["trab_ac"].sum())}
+fix["lspa"] = (lambda r: {"uf": "MT", "item": IIDX["T|Soja (em grão)"], "ano": LSPA["anos"][1], "area": float(r["area_plantada"][0])})(
+    lsp.filter((pl.col("sigla_uf") == "MT") & (pl.col("item") == "T|Soja (em grão)") & (pl.col("ano") == LSPA["anos"][1])))
 fix["pib"] = {"mun": "5107925", "ano": 2021,
               "va_agro": float(pb.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2021))["va_agro"][0])}
 (RAIZ / "testes" / "fixture.json").write_text(json.dumps(fix, ensure_ascii=False, indent=1))

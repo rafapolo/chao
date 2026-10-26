@@ -822,7 +822,7 @@
 
   function anosDoModo() {
     switch (est.modo) {
-      case 'pam': return ITENS[est.itens[0]]?.area ? [A0, M.anos.prod[1] - 1] : [A0, M.anos.prod[1]];
+      case 'pam': return ITENS[est.itens[0]]?.area ? [A0, lspaVale() ? M.lspa.anos[1] : M.anos.prod[1] - 1] : [A0, M.anos.prod[1]];
       case 'sat': return M.anos.mb;
       case 'cmp': return [M.anos.mb[0], M.anos.prod[1] - 1];
       case 'exp': return [2000, 2020];
@@ -919,7 +919,11 @@
       ['se_rem', 'Remoção por vegetação (tCO₂e)', 'tCO₂e']] },
     trab: { bloco: 'gente', titulo: 'Trabalho e estrutura', medidas: [
       ['rais', 'Empregos formais na agropecuária (RAIS, 31/12)', 'empregos'], ['caged', 'Saldo de empregos no ano (CAGED)', 'vagas'],
-      ['cnefe', 'Estabelecimentos agropecuários (CNEFE, Censo 2022)', 'estabelecimentos'], ['cafir', 'Imóveis rurais ativos (CAFIR, Receita)', 'imóveis']] },
+      ['cnefe', 'Estabelecimentos agropecuários (CNEFE, Censo 2022)', 'estabelecimentos'], ['cafir', 'Imóveis rurais ativos (CAFIR, Receita)', 'imóveis'],
+      ['le_trab', 'Trabalhadores do campo resgatados em ação fiscal no ano (Lista Suja, MTE)', 'resgatados'],
+      ['le_trab_ac', 'Trabalhadores do campo resgatados, acumulado desde 2020 (Lista Suja)', 'resgatados'],
+      ['le_casos', 'Empregadores do campo incluídos na Lista Suja (ação fiscal no ano)', 'empregadores'],
+      ['le_casos_ac', 'Empregadores do campo na Lista Suja, acumulado desde 2020', 'empregadores']] },
     social: { bloco: 'gente', titulo: 'Famílias do campo', medidas: [
       ['cad_agri', 'Famílias de agricultores familiares (CadÚnico)', 'famílias'], ['cad_pesc', 'Famílias de pescadores artesanais (CadÚnico)', 'famílias'],
       ['cad_extr', 'Famílias extrativistas (CadÚnico)', 'famílias'], ['cad_asse', 'Famílias assentadas da reforma agrária (CadÚnico)', 'famílias'],
@@ -1038,6 +1042,7 @@
     const mt = est.metrica;
     if (est.modo === 'pam') {
       if (est.disputa) return calculaDisputa(ano);
+      if (lspaAno(ano)) return calculaLspa(ano);
       const it = ITENS[est.itens[0]];
       if (mt === 'porcab') {
         // produto ÷ rebanho que o produz (leite ÷ vacas ordenhadas), os dois repartidos por AMC
@@ -1189,6 +1194,36 @@
   let PONTOS = [];
   const DIVERGENTE = () => (est.modo === 'clima' && (est.metrica === 'anom' || est.metrica === 'estanom')) || (est.modo === 'trab' && est.metrica === 'caged');
   const emPontos = () => est.modo === 'clima' && (est.metrica === 'est' || est.metrica === 'estanom');
+  /* LSPA: depois da última PAM, a previsão da safra por UF (levantamento mensal do IBGE). Só
+     na soma de lavouras em % da área rural: a UF inteira pinta com a mesma cor, e em ha ou t
+     o total da UF não caberia na escala dos municípios. A lavoura principal não ganha esses
+     anos (por UF ela perde o sentido). */
+  const lspaVale = () => est.modo === 'pam' && !est.disputa && est.metrica === 'pct' && !!CAD && ITENS[est.itens[0]]?.area;
+  const lspaAno = (a = est.ano) => lspaVale() && a > M.anos.prod[1] - 1;
+  const LSPA_ITENS = new Set(M.lspa.itens);
+  const MESES_LSPA = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const lspaMes = () => `${MESES_LSPA[+M.lspa.mes.slice(4) - 1]} de ${M.lspa.mes.slice(0, 4)}`;
+  const RURAL_UF = new Float64Array(64);
+  for (let m = 0; m < NM; m++) RURAL_UF[UF_IDX[m]] += RURAL_KM2[m];
+  // área prevista (ha) por UF das lavouras escolhidas; campo 'ls_area' ou 'ls_q'
+  function lspaPorUF(ano, campo = 'ls_area', itens = est.itens) {
+    const A = CAD.A, s = new Float64Array(64), quer = new Set(itens);
+    for (let r = 0; r < A.ls_u.length; r++) if (A.ls_a[r] === ano - 2000 && quer.has(A.ls_i[r])) s[A.ls_u[r]] += LUT[A[campo][r]];
+    return s;
+  }
+  function calculaLspa(ano) {
+    if (!est.itens.some(i => LSPA_ITENS.has(i))) return;
+    const s = lspaPorUF(ano);
+    for (let m = 0; m < NM; m++) { const u = UF_IDX[m]; VAL[m] = s[u] > 0 ? s[u] / RURAL_UF[u] : NaN; }
+  }
+  /* Lista Suja: uns 270 municípios com 1 a 3 casos sumiriam num mapa de cores; cada um vira
+     um círculo na sede, com área proporcional ao valor (o maior de todos os anos tem SEDE_R px). */
+  const emSedes = () => est.modo === 'trab' && est.metrica.startsWith('le_');
+  const SEDE_R = 16;
+  function maxSedes() {
+    const B = SOB.gente, V_ = B?.A[est.metrica + '_v'];
+    return V_ ? V_.reduce((x, v) => Math.max(x, v), 1) : 1;
+  }
   function calculaClima(ano) {
     const C = SOB.clima, mt = est.metrica;
     PONTOS = [];
@@ -1354,6 +1389,7 @@
     const [a0, a1] = anosDoModo(), amostra = [];
     const passo = est.modo === 'exp' ? 10 : Math.max(1, Math.round((a1 - a0) / 12));
     for (let a = a1; a >= a0; a -= passo) {
+      if (lspaAno(a)) continue;   // a previsão por UF usa a escala dos municípios
       calcula(a);
       for (let m = 0; m < NM; m++) if (VAL[m] > 0 && Number.isFinite(VAL[m])) amostra.push(VAL[m]);
       for (const pt of PONTOS) if (pt.v > 0) amostra.push(pt.v);
@@ -1485,7 +1521,7 @@
     ctx.fillStyle = COR.fundo; ctx.fillRect(0, 0, W, H);
     ctx.setTransform(dpr * vista.k, 0, 0, dpr * vista.k, dpr * vista.x, dpr * vista.y);
     const vis = [(0 - vista.x) / vista.k, (0 - vista.y) / vista.k, (W - vista.x) / vista.k, (H - vista.y) / vista.k];
-    const C = GEO.caixa, celulas = emCelulas() || emPontos(), costura = !celulas && agrupavel();
+    const C = GEO.caixa, celulas = emCelulas() || emPontos() || emSedes(), costura = !celulas && (agrupavel() || lspaAno());
     if (costura) ctx.lineWidth = 1.2 / vista.k;
     const ano = est.ano;
     for (let m = 0; m < NM; m++) {
@@ -1526,6 +1562,18 @@
       for (const pt of PONTOS) {
         ctx.fillStyle = DIVERGENTE() ? COR.d[classe(pt.v)] : COR.s[classe(pt.v)];
         ctx.beginPath(); ctx.arc(pt.x, pt.y, r, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      }
+    }
+    if (emSedes()) {
+      // os maiores primeiro, para o pequeno ficar por cima do grande
+      const vmax = maxSedes(), ms = [];
+      for (let m = 0; m < NM; m++) if (VAL[m] > 0 && noRecorte(m)) ms.push(m);
+      ms.sort((a, b) => VAL[b] - VAL[a]);
+      ctx.lineWidth = 1 / vista.k; ctx.strokeStyle = COR.fundo;
+      for (const m of ms) {
+        const r = Math.max(2.5, SEDE_R * Math.sqrt(VAL[m] / vmax)) / vista.k;
+        ctx.fillStyle = COR.s[4]; ctx.globalAlpha = 0.85;
+        ctx.beginPath(); ctx.arc(SEDE_X[m], SEDE_Y[m], r, 0, 2 * Math.PI); ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
       }
     }
     if (est.mun >= 0) {
@@ -1716,6 +1764,7 @@
 
   function textoValor(m) {
     const v = VAL[m], it = ITENS[est.itens[0]], mt = est.metrica;
+    if (lspaAno()) return Number.isFinite(v) ? `${M.mun.uf[m]} inteiro: ${fmt(v, v < 1 ? 2 : 1)}% da área rural (previsão do LSPA)` : 'sem previsão do LSPA para estas lavouras';
     if (est.modo === 'pam' && est.disputa) {
       if (!(v >= 1)) return 'nenhuma cultura ligada passa de 1% da área rural';
       return `${FAMILIAS[CAT[m]].nome} · ${fmt(v, 1)}% da área rural<br>maior lavoura: ${ITENS[VENCE[m]].nome}`;
@@ -1743,6 +1792,11 @@
     }
     const ms = medidaSerie();
     if (ms) {
+      if (emSedes()) {
+        if (!(v > 0)) return mt.endsWith('_ac') ? 'nenhum caso na lista até este ano' : 'nenhum caso na lista com ação fiscal neste ano';
+        const at = SOB.gente.meta.atividades[SOB.gente.A.le_ativ[m]];
+        return fmt(v) + ' ' + ms[2] + (at ? ' · ' + at : '');
+      }
       if (!Number.isFinite(v)) return 'sem registro';
       return ms[2] === 'US$' || ms[2] === 'R$' ? ms[2] + ' ' + curto(v) : (est.metrica === 'caged' && v > 0 ? '+' : '') + curto(v) + ' ' + ms[2];
     }
@@ -2067,7 +2121,8 @@
           + `<span class="n">${off ? '—' : CONT_ITEM[i] ? n(CONT_ITEM[i]) : ''}</span></button>`;
       }
       const outra = !compativeis(u0, ITENS[i]);
-      return `<button class="item sub${outra ? ' outra' : ''}" data-item="${i}" aria-pressed="${est.itens.includes(i)}"${outra ? ' title="Outra unidade: escolher troca a seleção"' : ''}>`
+      const semLspa = lspaAno() && !LSPA_ITENS.has(i);
+      return `<button class="item sub${outra || semLspa ? ' outra' : ''}" data-item="${i}" aria-pressed="${est.itens.includes(i)}"${outra ? ' title="Outra unidade: escolher troca a seleção"' : semLspa ? ' title="Sem previsão no LSPA: o IBGE não levanta esta lavoura todo mês"' : ''}>`
         + `<i></i><span class="rot">${ITENS[i].nome}</span><span class="n">${tot && tot(i) ? textoTotal(tot(i)) : ''}</span></button>`;
     };
     // a linha de um nó (grupo, família no grupo ou outro galho), que liga e desliga os seus itens
@@ -2148,7 +2203,7 @@
     } else if (est.modo === 'cmp') {
       html += `<div class="faixa">${COR.d.map(c => `<span style="background:${c}"></span>`).join('')}</div>
         <div class="rotulos"><span>satélite vê ½</span><span>igual</span><span>vê 2×</span></div>`;
-    } else if (quebras.length || (emCelulas() && celQuebras.length)) {
+    } else if (!emSedes() && (quebras.length || (emCelulas() && celQuebras.length))) {
       const celulas = emCelulas();
       const q = celulas ? celQuebras : quebras, ramp = est.modo === 'gleba' ? COR.b : COR.s;
       html += `<div class="faixa">${ramp.map(c => `<span style="background:${c}"></span>`).join('')}</div>
@@ -2156,7 +2211,8 @@
     }
     const extras = [`<div><i style="background:${COR.semdado}"></i>Sem registro</div>`];
     if (emPontos()) extras.push(`<div><i style="background:${COR.s[4]};border-radius:50%"></i>Estação com o ano ≥ 90% medido</div>`);
-    if (est.mascara && !emCelulas() && !emPontos())
+    if (emSedes()) extras.push(`<div><i style="background:${COR.s[4]};border-radius:50%"></i>Círculo na sede do município, com área proporcional (o maior: ${fmt(maxSedes())} ${medidaSerie()?.[2] || ''})</div>`);
+    if (est.mascara && !emCelulas() && !emPontos() && !emSedes())
       extras.push(`<div><i style="background:${COR.mascara}"></i>Não rural: área urbana, terra indígena, UC de proteção integral</div>`);
     $('leg-escala').innerHTML = html;
     $('leg-extra').innerHTML = `<div class="extra">${extras.join('')}</div>`;
@@ -2185,10 +2241,11 @@
     if (est.modo === 'clima') return 'Clima · ' + mt;
     if (SERIES[est.modo]) return SERIES[est.modo].titulo + ' · ' + mt;
     if (est.modo === 'cal') return 'Calendário · ' + nomes + ' · ' + mt;
+    if (lspaAno()) return `${nomes} · ${mt} · estimativa do LSPA, levantamento de ${lspaMes()}, por estado`;
     return nomes + ' · ' + mt;
   }
   const NOTAS = {
-    pam: () => (est.disputa ? `<b>Lavoura principal:</b> cada município na cor da família de lavouras que ocupa mais área no ano (cereais, oleaginosas, frutas…). Abra uma família na legenda para ver e desligar cada lavoura; tire uma e veja o que vem por baixo. A contagem é de municípios no recorte. ` : '') + `Área plantada e produção <b>declaradas</b> ao IBGE (Produção Agrícola e da Pecuária Municipal). A área rural de cada município exclui setor censitário urbano de 2010, mancha urbana, terra indígena e UC de proteção integral. De 1974 a 1987 a área é a <b>colhida</b>: a PAM só pergunta a plantada desde 1988. Município que ainda não existia recebe a parte do território de origem: o total do grupo comparável (AMC) repartido pela área rural. Valor só a partir de 1994 (antes, em moeda da época); produção das lavouras permanentes só a partir de 2001, quando o IBGE trocou a unidade das frutas.`,
+    pam: () => (est.disputa ? `<b>Lavoura principal:</b> cada município na cor da família de lavouras que ocupa mais área no ano (cereais, oleaginosas, frutas…). Abra uma família na legenda para ver e desligar cada lavoura; tire uma e veja o que vem por baixo. A contagem é de municípios no recorte. ` : '') + `Área plantada e produção <b>declaradas</b> ao IBGE (Produção Agrícola e da Pecuária Municipal). A área rural de cada município exclui setor censitário urbano de 2010, mancha urbana, terra indígena e UC de proteção integral. De 1974 a 1987 a área é a <b>colhida</b>: a PAM só pergunta a plantada desde 1988. Município que ainda não existia recebe a parte do território de origem: o total do grupo comparável (AMC) repartido pela área rural. Valor só a partir de 1994 (antes, em moeda da época); produção das lavouras permanentes só a partir de 2001, quando o IBGE trocou a unidade das frutas.` + (lspaVale() ? ` Depois de ${M.anos.prod[1] - 1}, a <b>previsão</b> do Levantamento Sistemático da Produção Agrícola (LSPA, IBGE, levantamento de ${lspaMes()}): só por estado, e o número muda a cada mês. Lavoura sem levantamento mensal fica apagada.` : ''),
     sat: () => `Área vista pelo <b>satélite</b> (MapBiomas, coleção 11, pixel de 30 m). O satélite separa soja, cana, arroz, algodão, café, citros e dendê; milho, feijão, trigo e o resto entram juntos em "outras temporárias" ou "outras perenes".` + aviso(),
     cmp: () => `Razão entre a área vista pelo satélite e a declarada ao IBGE, para a mesma classe. Laranja, limão e tangerina são comparados juntos com "citros"; culturas sem classe própria, contra a soma das outras. Municípios com menos de 50 ha declarados ficam de fora. Divergência grande costuma ser safrinha (o milho de 2ª safra ocupa a terra da soja), área declarada desatualizada ou classe que o satélite confunde.` + aviso(),
     exp: () => `Área que <b>virou</b> a classe da cultura na década (1990→2000, 2000→2010, 2010→2020), pela transição do MapBiomas. Use a origem para separar o que veio de floresta, de cerrado ou de pastagem.` + aviso(),
@@ -2199,7 +2256,7 @@
     cal: () => `Quando se planta e se colhe: as datas de início do plantio e de fim da colheita que o produtor declara no <b>custeio agrícola</b> do SICOR, todas as safras de 2012 a 2025 juntas. O mês típico é a média circular dos meses de plantio (dezembro e janeiro ficam vizinhos), numa escala de cores que gira com o ano. O milho plantado de janeiro a abril é a <b>2ª safra</b> (safrinha), depois da soja: é o que faz a área declarada passar da área vista pelo satélite. Só o crédito com município, e só o município com ${M.min_celula} ou mais operações datadas da cultura.`,
     expo: () => `<b>Trase</b>: a exportação de soja (2004–2020, em equivalente de grão) e de carne bovina (2015–2017) ligada ao <b>município onde foi produzida</b>, com a exposição da soja ao desmatamento (área desmatada atribuída à soja exportada). <b>Comex Stat</b>: exportação de produtos do agro (capítulos 01–24 do SH, mais couro, celulose e algodão) e importação de fertilizantes e defensivos, pelo <b>domicílio fiscal da empresa</b>: a soja de Sorriso pode sair por Rondonópolis ou por São Paulo. Compare as duas.`,
     emis: () => `Emissões de gases de efeito estufa por município, em tCO₂e (GWP-AR5), estimadas pelo <b>SEEG</b> (Observatório do Clima): agropecuária (fermentação entérica do gado, solos e adubo, dejetos, arroz irrigado) e mudança de uso da terra (desmatamento e queima de vegetação), com a remoção por vegetação secundária e áreas protegidas.`,
-    trab: () => `<b>RAIS</b>: empregos formais da agropecuária (subsetor IBGE 25) em 31 de dezembro; o emprego informal, a maior parte do trabalho no campo, não aparece. <b>CAGED</b>: admissões menos desligamentos na seção A da CNAE, de 2020 em diante (vermelho: fechou vagas). <b>CNEFE</b>: endereços de estabelecimentos agropecuários no Censo 2022. <b>CAFIR</b>: imóveis rurais ativos no cadastro da Receita, na data mais recente (a área do cadastro fica de fora: não fecha em nenhuma unidade).`,
+    trab: () => `<b>RAIS</b>: empregos formais da agropecuária (subsetor IBGE 25) em 31 de dezembro; o emprego informal, a maior parte do trabalho no campo, não aparece. <b>CAGED</b>: admissões menos desligamentos na seção A da CNAE, de 2020 em diante (vermelho: fechou vagas). <b>CNEFE</b>: endereços de estabelecimentos agropecuários no Censo 2022. <b>CAFIR</b>: imóveis rurais ativos no cadastro da Receita, na data mais recente (a área do cadastro fica de fora: não fecha em nenhuma unidade). <b>Lista Suja</b> (MTE): empregadores flagrados com trabalho análogo ao de escravo e os trabalhadores resgatados, pelo ano da ação fiscal e só na agropecuária, na produção florestal e na pesca (CNAE 01 a 03). A lista só traz quem já foi julgado em processo administrativo, e começa nas ações fiscais de 2020: antes disso não há dado, o que não quer dizer zero. O município vem do endereço da fiscalização, não da sede da empresa. A lista é pública e nominal; aqui só entram as somas.`,
     imovel: () => `Cruzamento pelo <b>imóvel rural do CAR</b> (SICAR, foto de 2025-10-15, sem cancelados), feito fora da página; aqui só entram somas por município, no município do imóvel. O CAR é <b>autodeclarado</b>, tem imóveis sobrepostos e a mesma foto vale para todas as safras: um imóvel inscrito em 2024 aparece como se existisse em 2016. <b>Crédito</b> (SICOR): a operação vai para o imóvel pelo código do CAR que ela informa (de 2019 em diante) ou, antes, pela gleba financiada, e o valor se reparte entre os imóveis da operação. Sem nenhum dos dois, entra a gleba da perda comunicada ao Proagro. <b>Desmatamento durante a operação</b>: polígono do PRODES ou aviso do DETER que se sobrepõe ao imóvel (a área se reparte pela interseção), entre a emissão e o vencimento. <b>Embargo vigente</b>: termo do IBAMA não cancelado, lavrado antes da emissão e sem desembargo até ela, ou embargo do ICMBio ou da SEMA-MT (que não publicam data de desembargo: vale da lavratura em diante). <b>Perda no Proagro</b>: área com perda comprovada em operação cujo imóvel teve desmatamento durante a operação ou embargo vigente. Cada soma de crédito só aparece com ${M.min_celula} ou mais operações e ${M.min_celula} ou mais imóveis. Na <b>grade de 0,25°</b> (~28 km; o imóvel entra na célula do seu centro), o mesmo vale por célula, e uma célula também cai quando, somada às outras publicadas, deixaria calcular por diferença o que o município esconde: a grade mostra parte do total (crédito com desmatamento em 2021: R$ 5,3 de 13,1 bi), e menos onde os imóveis são grandes e poucos por célula, como no Mato Grosso. <b>Uso do solo dentro do CAR</b>: a fração de cada classe do MapBiomas (coleção 10, 30 m) em cada imóvel, ano a ano de 2016 a 2024, vezes a área declarada. TI, UC de proteção integral, floresta pública não destinada (CNFP 2025, tipo B), Lista de Desmatamento Ilegal do Pará (SEMAS-PA; só com 5 ou mais imóveis atingidos no município), SIGEF (metade ou mais do imóvel coberta por parcela certificada), assentamento, análise do CAR (na Bahia, todo imóvel aparece como aguardando análise no SICAR federal, então ela fica sem dado) e camadas declaradas (reserva legal, vegetação nativa) são o retrato atual; as áreas somam imóvel a imóvel, então o CAR sobreposto conta mais de uma vez (na floresta pública não destinada, 42,8 mi ha somados contra no máximo 36,1 mi ha de floresta tocada). Crédito a imóvel do Pará com área na <b>Lista de Desmatamento Ilegal</b> desmatada antes da safra de emissão: R$ 32,9 mi em 2021 (0,7% do crédito ligado a CAR no estado) e cerca de R$ 98 mi de 2016 a 2025. É aproximado, porque a lista dá o ano do desmatamento, não a data do embargo, e com poucos imóveis por município não vira medida no mapa.`,
     social: () => `Famílias inscritas no <b>Cadastro Único</b> por grupo (agricultores familiares, pescadores artesanais, extrativistas, assentados) e em domicílio rural, no último mês de cada ano. <b>Seguro-Defeso</b>: pescadores artesanais pagos no período em que a pesca é proibida (Portal da Transparência), contados pelo NIS; município com menos de ${M.min_celula} não aparece. População estimada pelo IBGE.`,
     clima: () => `<b>SISAM</b> (INPE): chuva e temperatura por município, de 2000 a 2019, a partir de modelo e satélite, não de pluviômetro: serve para comparar um ano com outro no mesmo lugar (a <b>anomalia</b>, contra a média de 2000–2019), menos para o valor absoluto. As <b>estações do INMET</b> são medição direta, de 2000 a 2025, desenhadas como pontos: só os anos com 90% ou mais das horas medidas. <b>S2ID</b> (Defesa Civil): situações de emergência ou calamidade reconhecidas e ainda vigentes; a fonte só guarda o retrato atual. Compare a seca de 2012–2016 no semiárido com as Perdas do Proagro e o Garantia-Safra.`,
@@ -2258,6 +2315,7 @@
      não se somam, então nesses modos ela mostra a área por trás delas. */
   function valorAbsoluto(m, a) {
     if (est.modo === 'pam') {
+      if (lspaAno(a)) return VAL[m] * RURAL_KM2[m];
       if (est.metrica === 'porcab') return serieItem(est.itens[0]).q[m * NA + a - A0];
       if (!ITENS[est.itens[0]].area) return VAL[m] * RURAL_KM2[m];
       let s = 0;
@@ -2285,7 +2343,11 @@
       const x = (a - a0) * bw;
       fctx.fillStyle = a === est.ano ? COR.acento : COR.ink3;
       fctx.globalAlpha = a === est.ano ? 1 : 0.55;
-      fctx.fillRect(x + bw * 0.12, r.height - h, Math.max(1, bw * (est.modo === 'exp' ? 0.3 : 0.76)), h);
+      if (lspaAno(a)) {   // previsão: só o contorno, tracejado
+        fctx.strokeStyle = fctx.fillStyle; fctx.lineWidth = 1; fctx.setLineDash([2, 2]);
+        fctx.strokeRect(x + bw * 0.12 + 0.5, r.height - h + 0.5, Math.max(1, bw * 0.76) - 1, h - 1);
+        fctx.setLineDash([]);
+      } else fctx.fillRect(x + bw * 0.12, r.height - h, Math.max(1, bw * (est.modo === 'exp' ? 0.3 : 0.76)), h);
     }
     fctx.globalAlpha = 1;
     const atual = serieNacional.find(s => s[0] === est.ano);
@@ -2335,7 +2397,7 @@
     $('ano').value = a;
     $('ano-txt').textContent = $('chip-ano').textContent = est.modo === 'exp' ? `${a - 10}→${a}` : a;
     const safra = 'safra ' + a + '/' + String(a + 1).slice(2);
-    $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
+    $('ano-sub').textContent = lspaAno(a) ? 'previsão (LSPA)' : { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
       clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', expo: 'ano', emis: 'ano', social: 'ano',
       imovel: ['ti', 'ucpi', 'fpnd', 'ldi', 'ldi_ha', 'sigef', 'assent', 'anl', 'rlvn', 'ncar'].includes(est.metrica) ? 'retrato atual' : ['dcar', 'dpct'].includes(est.metrica) ? 'ago→jul (PRODES)' : est.metrica.startsWith('u_') ? 'ano (MapBiomas)' : safra, cal: 'safras 2012–2025',
       trab: est.metrica === 'cnefe' ? 'Censo 2022' : est.metrica === 'cafir' ? 'retrato atual' : 'ano', desm: ['emb', 'embha', 'autos', 'multas'].includes(est.metrica) ? 'ano' : ['deter', 'degr', 'miner'].includes(est.metrica) ? deterSub(a) : 'ago→jul (PRODES)', fogo: 'ano',
@@ -2537,6 +2599,7 @@
         const txt = un === 'US$' || un === 'R$' ? un + ' ' + curto(v) : (k === 'caged' && v > 0 ? '+' : '') + curto(v) + ' ' + un;
         linhas.push(`<span>${nome.replace(/ \(.*\)$/, '')}${y !== a ? ` <small>(${y})</small>` : ''}</span><span>${txt}</span>`);
       }
+      if (id === 'trab' && B.A.le_ativ && B.A.le_ativ[m] > 0) linhas.push(`<span>Atividade dos resgates (Lista Suja)</span><span>${B.meta.atividades[B.A.le_ativ[m]]}</span>`);
       if (id === 'expo') {
         const A = B.A, ps = [];
         for (let r = 0; r < A.tp_m.length; r++) if (A.tp_m[r] === m) ps.push(`${B.meta.paises[A.tp_p[r]]} ${curto(LUT[A.tp_t[r]])} t`);
@@ -2792,6 +2855,12 @@
         barra(ITENS[i].nome, v, max, `${curto(v)} ha`, est.itens.includes(i) ? COR.acento : COR.ink3)).join('') + '</div>';
       const tot = lav.reduce((s, [, v]) => s + v, 0);
       h += `<div class="nota">${lav.length} lavouras, ${curto(tot)} ha somados — ${fmt(tot / (rural * 100) * 100, 1)}% da área rural (a soma passa de 100% onde há duas safras no ano).</div>`;
+      // a previsão do LSPA para a UF, na maior lavoura do município (sem dado por município)
+      const iL = lav.map(([i]) => i).find(i => LSPA_ITENS.has(i));
+      if (CAD && iL !== undefined) {
+        const [l0, l1] = M.lspa.anos, u = UF_IDX[m], x0 = lspaPorUF(l0, 'ls_area', [iL])[u], x1 = lspaPorUF(l1, 'ls_area', [iL])[u];
+        if (x0 > 0 && x1 > 0) h += `<div class="nota">Previsão do LSPA para ${M.mun.uf[m]} (${lspaMes()}): ${ITENS[iL].nome.toLowerCase()} de ${curto(x0)} ha em ${l0} para ${curto(x1)} ha em ${l1} (${x1 >= x0 ? '+' : ''}${fmt((x1 / x0 - 1) * 100, 1)}% de área).</div>`;
+      }
     } else h += '<div class="vazio">Nenhuma lavoura declarada.</div>';
 
     // série: declarado × satélite. O select troca a cultura só aqui, sem mexer no mapa;

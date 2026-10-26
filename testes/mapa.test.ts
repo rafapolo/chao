@@ -494,6 +494,40 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("Lista Suja: círculos na sede somam o acumulado do pipeline, e o tooltip diz a atividade", async () => {
+      const F = FIXTURE.listasuja;
+      const x = await abre(nav, `?f=trab&m=le_trab_ac&a=${F.ano}`);
+      await x.p.waitForFunction(() => (window as any).__T.SOB.gente && (window as any).__T.est.metrica === "le_trab_ac", null, { timeout: 60_000 });
+      await quadro(x.p);
+      const tot = await roda<number>(x.p, "let s = 0; for (const v of T.VAL) if (v > 0) s += v; return s;");
+      expect(tot).toBe(F.trab_ac);
+      // sem faixa de cores: a legenda explica o círculo
+      expect(await x.p.locator("#legenda .faixa").count()).toBe(0);
+      expect(await x.p.locator("#leg-extra").textContent()).toContain("Círculo na sede");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
+    test("LSPA: depois da última PAM, a soja em % da área rural vira previsão por UF, e só nessa medida", async () => {
+      const F = FIXTURE.lspa;
+      const x = await abre(nav, `?f=pam&c=soja&m=pct&a=${F.ano}`);
+      await x.p.waitForFunction(a => (window as any).__T.est.ano === a && (window as any).__T.CAD, F.ano, { timeout: 60_000 });
+      await quadro(x.p);
+      // todo município do MT com o mesmo valor, e a soma (valor × área rural) dá a área prevista da UF
+      const [n, area] = await roda<number[]>(x.p, `const vs = new Set(); let s = 0;
+        for (let m = 0; m < T.M.mun.id.length; m++) if (T.M.mun.uf[m] === 'MT') { vs.add(T.VAL[m].toFixed(9)); s += T.VAL[m] * T.RURAL_KM2[m]; }
+        return [vs.size, s];`);
+      expect(n).toBe(1);
+      expect(Math.abs(area / F.area - 1)).toBeLessThan(0.005);
+      expect(await x.p.locator("#ano-sub").textContent()).toContain("LSPA");
+      expect(await x.p.locator("#tit-legenda").textContent()).toContain("LSPA");
+      // em ha, a linha do tempo volta a parar na última PAM
+      await x.p.selectOption("#metrica", "area");
+      expect(await roda<number>(x.p, "return T.est.ano")).toBeLessThan(F.ano - 1);
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
     test("ficha: o select da série histórica troca a cultura sem mexer no mapa", async () => {
       const x = await abre(nav, "?c=soja&a=2020&mun=5107925");
       await quadro(x.p);
@@ -577,6 +611,10 @@ for (const motor of ESCOLHIDOS) {
       const imv = await roda<string[]>(x.p, `return T.carrega('imovel').then(b =>
         Object.keys(b.A).filter(k => !/^(cd_v|cd_a|ce_v|ce_a|pp_a|ccar|dcar|dpct|ti|ucpi|fpnd|ldi|ldi_ha|sigef|assent|anl|u_flo|u_pas|u_soja|u_agro|rlvn|ncar)_[mav]$|^(g_ccar|g_cd)_[aijv]$/.test(k)))`);
       expect(imv).toEqual([]);
+      // Lista Suja: sem o corte de 5, por decisão (a lista é pública e nominal). O bloco só traz
+      // somas por município × ano e a atividade CNAE; nada por empregador
+      const ls = await roda<string[]>(x.p, `return T.carrega('gente').then(b => Object.keys(b.A).filter(k => k.startsWith('le_')))`);
+      expect(ls.sort()).toEqual(["le_ativ", ...["le_casos", "le_casos_ac", "le_trab", "le_trab_ac"].flatMap(k => ["_a", "_m", "_v"].map(s => k + s))].sort());
       await fecha(x);
     }, LENTO);
 

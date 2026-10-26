@@ -71,3 +71,11 @@ Nada foi commitado.
 mudado no commit `7f1c0a6` (2026-10-20); isso não foi conferido.
 
 - [x] **Feito (`13e55a6`):** a renomeação foi de propósito (`59eb91e`, 2026-10-13).
+
+## 9. Lista Suja sem o corte de 5 (decidido em 2026-10-26)
+
+A página publica os resgates da Lista Suja (MTE) por município e ano **sem** o corte de
+`MIN_CELULA`: a lista é pública e nominal por lei, e a soma por município não revela nada além
+dela. Com o corte, 270 municípios com 1 a 3 casos cada sumiriam. Continua valendo que só saem
+somas: nome, CPF e CNPJ ficam no beelink. O teste de privacidade confere que o bloco `gente` só
+traz as séries `le_*` e a atividade CNAE.
