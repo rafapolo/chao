@@ -21,7 +21,7 @@ O uso do solo dentro do imóvel, ano a ano, é a fase 9 do plano de dados. O cus
 - uns 800 MB por ano, cerca de 32 GB para 1985–2024;
 - o recorte por 8 mi de polígonos do CAR no beelink.
 
-- [x] **Decidido: 2016–2024.** São cerca de 7 GB no beelink; o zonal é feito por imóvel, e a página recebe só a área de pastagem, soja e floresta por município, com corte de 5.
+- [x] **Feito (2026-10-26):** exactextract no beelink, 27 UFs × 9 anos. Dentro do CAR (somado imóvel a imóvel), a soja passa de 33,9 mi ha (2016) a 42,8 (2024), a floresta cai de 266,6 a 254,5 e a agropecuária sobe de 252,0 a 273,2. **Decidido: 2016–2024.** São cerca de 7 GB no beelink; o zonal é feito por imóvel, e a página recebe só a área de pastagem, soja e floresta por município, com corte de 5.
 
 ## 3. MapBiomas Alerta: criar conta?
 

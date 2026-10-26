@@ -64,10 +64,11 @@ medidas, e só depois o Chão lê.
     - 181 mi ha estão em condição "Analisado...".
   - Virou a medida "Área do CAR já analisada (%)".
   - A adesão ao PRA não está no espelho e não foi buscada.
-- [ ] **Raster do MapBiomas, 30 m** (fase 9 do plano de dados, ~800 MB por ano): uso do solo
+- [x] **Raster do MapBiomas, 30 m** (fase 9 do plano de dados, ~800 MB por ano): uso do solo
   dentro do imóvel, ano a ano.
-  - **Não começado:** custa ~800 MB por ano (~32 GB para 1985–2024) mais o recorte por
-    8 mi de polígonos. Espera decisão.
+  - **Feito para 2016–2024** (decisão em `decisoes_pendentes.md`): `zonal.py` em
+    `beelink:~/scrap_tmp/mapbiomas_raster/` e a etapa `mapbiomas` do `baixa_imovel.py`. São 4
+    medidas na página: floresta, pastagem, soja e agropecuária dentro do CAR.
 
 ## 2. Cruzamentos que dá para fazer com o que já está no espelho
 

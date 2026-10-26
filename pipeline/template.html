@@ -2328,7 +2328,7 @@
     const safra = 'safra ' + a + '/' + String(a + 1).slice(2);
     $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
       clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', expo: 'ano', emis: 'ano', social: 'ano',
-      imovel: ['ti', 'ucpi', 'fpnd', 'ldi', 'ldi_ha', 'sigef', 'assent', 'anl', 'rlvn', 'ncar'].includes(est.metrica) ? 'retrato atual' : ['dcar', 'dpct'].includes(est.metrica) ? 'ago→jul (PRODES)' : safra, cal: 'safras 2012–2025',
+      imovel: ['ti', 'ucpi', 'fpnd', 'ldi', 'ldi_ha', 'sigef', 'assent', 'anl', 'rlvn', 'ncar'].includes(est.metrica) ? 'retrato atual' : ['dcar', 'dpct'].includes(est.metrica) ? 'ago→jul (PRODES)' : est.metrica.startsWith('u_') ? 'ano (MapBiomas)' : safra, cal: 'safras 2012–2025',
       trab: est.metrica === 'cnefe' ? 'Censo 2022' : est.metrica === 'cafir' ? 'retrato atual' : 'ano', desm: ['emb', 'embha', 'autos', 'multas'].includes(est.metrica) ? 'ano' : ['deter', 'degr', 'miner'].includes(est.metrica) ? deterSub(a) : 'ago→jul (PRODES)', fogo: 'ano',
       cred: est.metrica === 'estban' ? 'dezembro' : est.metrica === 'bndes' ? 'ano' : safra }[est.modo];
     calcula();
