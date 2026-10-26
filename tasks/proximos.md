@@ -51,7 +51,7 @@ os de antes e o cache de quem já visitou continua valendo.
 `pages/mcp*.html` e `docs/context/join_keys.md` ficaram sem commit: outra sessão mexia nos
 mesmos arquivos (`br_mma_cnuc`, `br_prf_infracoes`, `br_ans_operadoras`, `br_tse_eleicoes`).
 
-- [ ] Quando ela terminar, rodar a sequência de regeneração do `../rodado/AGENTS.md` e commitar
+- [x] (2026-10-26) Regenerado e commitado no rodado; os 7 datasets aparecem em datasets.md, catalog.md, schema_graph.json e mcp.html. O `gera_dicionario_coverage.py` e os passos seguintes não rodaram (trava de escrita de outro processo no beelink) e só precisam rodar quando um dicionário mudar. Antes: quando ela terminar, rodar a sequência de regeneração do `../rodado/AGENTS.md` e commitar
   tudo junto. Os datasets novos desta rodada que precisam aparecer: `br_icmbio_embargos`,
   `br_sfb_cnfp`, `br_semas_pa_ldi`, `br_sema_mt_embargos` e os polígonos de
   `br_inpe_prodes_acumulado`, `br_inpe_deter` e `br_incra_acervo`.
