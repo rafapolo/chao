@@ -31,13 +31,46 @@ t…)".
 - [ ] Achar a causa (provavelmente uma corrida entre o cache do SW e o reload) em vez de
   rodar de novo até passar.
 
-## 4. Peso do `index.html`
+## 4. Dados fora do `index.html`, em `.json.gz` (decidido em 2026-10-26)
 
-São 38,4 MB, contra o orçamento de 25 MB da spec; o modo Imóvel cresceu nesta rodada (bloco
-`imovel` 4,4 MB cru, 1,0 MB gz).
+O `index.html` tem 38,4 MB, contra o orçamento de 25 MB da spec, porque embute os blocos em
+base64 para abrir por `file://`. **Decisão: tirar os dados do HTML e servi-los como
+`.json.gz`**, buscados por `fetch`, na web e com servidor local. Isso derruba o requisito
+de abrir por `file://` (dois cliques) que está no CLAUDE.md.
 
-- [ ] Aplicar o caminho que o CLAUDE.md já aponta: a 3ª etapa (sob demanda) só no `site/`, fora
-  do arquivo único, e medir o resultado.
+Medido em 2026-10-26, decodificando os blocos de `site/dados/` e regravando em JSON (gzip -9):
+
+| | binário gz (hoje) | json | json.gz |
+|---|---|---|---|
+| total | 28,8 MB | 220 MB | 36,0 MB (1,25×) |
+| prod (1ª etapa) | 3,29 MB | 64,1 MB | 3,59 MB (1,09×) |
+| malha (1ª etapa) | 2,87 MB | 10,7 MB | 3,37 MB (1,17×) |
+| prodqv (sob demanda) | 10,12 MB | 48,6 MB | 12,82 MB (1,27×) |
+| emis | 1,46 MB | 16,0 MB | 2,07 MB (1,42×) |
+
+O JSON custa +7,2 MB (+25%) transferidos, e a 1ª etapa vai de 6,2 para ~7,0 MB. Em memória o
+navegador ainda tem de converter as listas em arrays tipados (o `prod` cru tem 64 MB de texto).
+
+- [ ] Gerar em `monta_pagina.py` um `<bloco>.<hash>.json.gz` por bloco, com
+  `{"meta": ..., "arrays": {nome: [...]}}`, no lugar do `.bin` (ou ao lado, durante a troca).
+  - Manter o que o binário já faz e não depende do formato: escala log em u16, colunas em
+    diferença, saída determinística (hash estável).
+- [ ] No template, trocar a leitura dos blocos (cabeçalho + planos de bytes) por
+  `DecompressionStream('gzip')` → `JSON.parse` → `TypedArray.from`, com o mesmo
+  `{A, meta}` de saída, para o resto da página não mudar.
+- [ ] Tirar os blocos embutidos do `index.html`: a página passa a ser o HTML de `site/` com
+  `dados/` ao lado. O `fetch` da 1ª etapa no `<head>` (`window.__pre`) e o service worker
+  seguem iguais, só com a extensão nova.
+- [ ] Release: em vez do `index.html` único, um zip da pasta, com instrução de abrir por
+  `python3 -m http.server`. Ou só a web, e a release deixa de levar a página.
+- [ ] Testes: a suíte principal abre o `index.html` por `file://` (`testes/comum.ts`,
+  `URL_INDEX`); passa a subir um servidor local. Ajustar os testes de `site/` que conferem o
+  `.bin`.
+- [ ] Atualizar o CLAUDE.md: o requisito de `file://`, a seção "Duas saídas", o formato de
+  cada bloco e o orçamento.
+- [ ] Medir de novo, com rede 4G simulada, o primeiro mapa e o tudo pronto (hoje 3,0 s e 4,2 s).
+- [ ] Se o +25% pesar, a alternativa medida é ficar com o `.bin` e só tirá-lo do HTML: o
+  ganho de tamanho é o mesmo, sem o custo do JSON.
 
 ## 5. Arquivos gerados do rodado
 
