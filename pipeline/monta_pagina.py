@@ -685,6 +685,13 @@ for col, marca in [("cd_valor", "desm"), ("cd_area", "desm"), ("ce_valor", "emb"
     assert d[f"ops_{marca}"].min() >= MIN_CELULA and d[f"imo_{marca}"].min() >= MIN_CELULA, col
     resto = d["ops_car"] - d[f"ops_{marca}"]
     assert ((resto == 0) | (resto >= MIN_CELULA)).all(), col
+# o ce de antes da SEMA-MT já saiu: onde o grupo que ela acrescentou tem 1 a 4 operações ou
+# imóveis, hoje − antes o revelaria, e o ce fica sem dado (celulas_publicadas.py)
+corta_ce = pl.read_parquet(D / "imovel_ce_corta.parquet").with_columns(pl.lit(True).alias("corta_ce"))
+ima = (ima.join(corta_ce, on=["id_municipio", "ano"], how="left")
+       .with_columns(pl.when(pl.col("corta_ce")).then(None).otherwise(pl.col(c)).alias(c) for c in ("ce_valor", "ce_area"))
+       .drop("corta_ce"))
+print(f"    ce sem dado em {corta_ce.height} município × safra (grupo da SEMA-MT com menos de {MIN_CELULA})")
 ima = ima.with_columns((100 * pl.col("desm_car_km2") / pl.col("desm_km2")).alias("dpct"))
 imm = idx_mun(pl.read_parquet(D / "imovel_mun.parquet")).with_columns(
     pl.lit(2025).alias("ano"),   # a foto do CAR é de 2025-10-15

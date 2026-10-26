@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""As células da grade de 0,05° do crédito por imóvel que já foram publicadas (no git, no
-Pages e na release v2026.10.26), tiradas de cada versão do bloco `imovel` no histórico e
-levadas ao beelink, para a etapa `grade` de baixa_imovel.py cortar a célula de 0,25° cuja
-diferença contra elas revelaria uma célula de 0,05° cortada.
+"""O que versões antigas do bloco `imovel` já publicaram (no git, no Pages e na release
+v2026.10.26) e que, subtraído do que se publica hoje, revelaria um grupo cortado.
 
-    python3 celulas_publicadas.py   # grava ~/bragro_tmp/imovel/grade_005_publicada.parquet
+1. As células da grade de 0,05°, levadas ao beelink para a etapa `grade` de
+   baixa_imovel.py cortar a célula de 0,25° cuja diferença contra elas revelaria uma
+   célula de 0,05° cortada.
+2. O crédito com embargo vigente (ce_valor, ce_area) de antes da SEMA-MT (versão
+   dd4d1e88d891, até 2026-10-25 19:57). Onde ele saiu e o grupo que a SEMA-MT acrescentou
+   tem 1 a 4 operações ou imóveis, hoje − antes revelaria esse grupo: o município × safra
+   vai para pipeline/dados/imovel_ce_corta.parquet, e monta_pagina.py anula o ce dele
+   (37 em 2026-10-26). Rode de novo depois de refazer a etapa `agrega` ou `embargo`.
+
+    python3 celulas_publicadas.py   # ~/bragro_tmp/imovel/grade_005_publicada.parquet e imovel_ce_corta
 
 Lê o formato binário antigo do bloco (u32 tamanho | cabeçalho JSON | arrays com os bytes em
 planos), o de antes dos .json.gz. Saída: k (ccar, desm), i, j (célula de 0,05°), ano.
 """
+import glob
 import gzip
 import json
 import subprocess
@@ -17,7 +25,7 @@ import tempfile
 import numpy as np
 import polars as pl
 
-from beelink import REMOTO
+from beelink import REMOTO, roda
 
 TIPOS = {"u8": np.uint8, "i8": np.int8, "u16": np.uint16, "i16": np.int16, "u32": np.uint32, "i32": np.int32}
 
@@ -59,3 +67,34 @@ print(df.group_by("k").len().sort("k"))
 with tempfile.NamedTemporaryFile(suffix=".parquet") as t:
     df.write_parquet(t.name)
     subprocess.run(["scp", "-q", t.name, f"beelink:{REMOTO}/imovel/grade_005_publicada.parquet"], check=True)
+
+# 2. ce de antes da SEMA-MT: as chaves publicadas, e o grupo que ela acrescentou
+IM = f"{REMOTO}/imovel"
+ANTES = "dd4d1e88d891"
+rev = git("rev-list", "--all", "-1", "--", f"../site/dados/imovel.{ANTES}.bin").decode().strip()
+blob = subprocess.run(["git", "cat-file", "blob", f"{rev}:site/dados/imovel.{ANTES}.bin"], capture_output=True)
+if blob.returncode:
+    blob = subprocess.run(["git", "cat-file", "blob", f"{rev}^:site/dados/imovel.{ANTES}.bin"], capture_output=True, check=True)
+A, _ = arrays(blob.stdout)
+_, mm = arrays(open(sorted(glob.glob("../site/dados/malha.*.bin"))[0], "rb").read())   # a malha só teve uma versão
+ids = mm["mun"]["id"]
+ant = pl.concat([pl.DataFrame({"id_municipio": [ids[i] for i in A[k + "_m"]], "ano": A[k + "_a"].astype(np.int32) + 1970})
+                 for k in ("ce_v", "ce_a")]).unique()
+with tempfile.NamedTemporaryFile(suffix=".parquet") as t:
+    ant.write_parquet(t.name)
+    subprocess.run(["scp", "-q", t.name, f"beelink:{IM}/ce_publicado_sem_sema.parquet"], check=True)
+corta = roda("imovel_ce_corta", f"""
+COPY (
+  WITH mm AS (SELECT * FROM '{IM}/marca.parquet' WHERE emb),
+  velho AS (   -- embargo vigente sem as áreas da SEMA-MT, como na versão {ANTES}
+    SELECT DISTINCT mm.id_referencia_bacen, mm.numero_ordem, mm.id_imovel
+    FROM mm JOIN br_bcb_sicor.operacao o USING (id_referencia_bacen, numero_ordem)
+    JOIN '{IM}/embargo.parquet' e ON e.id_imovel = mm.id_imovel
+     AND e.dia <= o.data_emissao AND (e.desembargo IS NULL OR e.desembargo > o.data_emissao)
+    WHERE NOT starts_with(e.seq_tad, 'sema_mt:')),
+  g AS (SELECT id_municipio::VARCHAR id_municipio, ano FROM mm ANTI JOIN velho USING (id_referencia_bacen, numero_ordem, id_imovel)
+        GROUP BY ALL
+        HAVING count(DISTINCT (id_referencia_bacen, numero_ordem)) BETWEEN 1 AND 4 OR count(DISTINCT id_imovel) BETWEEN 1 AND 4)
+  SELECT * FROM g SEMI JOIN '{IM}/ce_publicado_sem_sema.parquet' USING (id_municipio, ano) ORDER BY ALL
+) TO '{{saida}}' (FORMAT parquet);
+""")
