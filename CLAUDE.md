@@ -82,8 +82,8 @@ gzip; a página remonta cada lista no array tipado de `t`.
 
 ## A saída: `site/`
 
-- Release: um zip de `site/` com a instrução de abrir por `python3 -m http.server` (ou só a
-  web; a decidir). O `index.html` único das releases até `v2026.10.26` não é mais gerado.
+- Sem release a partir de 2026-10-26: a página é só a web (e `site/` servido localmente). O
+  `index.html` único das releases até `v2026.10.26` não é mais gerado.
 - `site/`: a fonte da versão web, e o que a suíte principal testa (`testes/comum.ts` a serve
   por HTTP). O workflow `.github/workflows/pages.yml` roda `bun run
   build`, que minifica o HTML (−27%) em `dist/` e escreve o `sw.js`, como no `../swissviz`, e
@@ -155,7 +155,9 @@ para o primeiro mapa são 7,2 MB (HTML e 1ª etapa), e o resto vem por etapa.
   (`~/bragro_tmp/imovel/`) e só voltam somas por município. Cada soma de crédito precisa de 5
   ou mais operações e 5 ou mais imóveis, e o resto do crédito em CAR, de 0 ou 5 ou mais
   operações. Quem confere esse corte é um assert no `monta_pagina.py`, com as contagens que
-  não entram na página. O teste só confere que o bloco não traz nada além das séries.
+  não entram na página. A grade do imóvel é de 0,25°; a de 0,05° já foi publicada, então a
+  etapa `grade` também corta a célula de 0,25° cujo resíduo contra as de 0,05° publicadas
+  (`celulas_publicadas.py`, no beelink) tem 1 a 4 operações ou imóveis. O teste só confere que o bloco não traz nada além das séries.
 - **PRODES:** começa em 2002. O incremento de 2001 sai da diferença contra a linha de base de
   2000 e infla (101 mil km², contra 73–79 mil em 2002–2004).
 - **SICOR em R$:** só o crédito de recurso controlado ou equalizado tem município (R$ 136 de

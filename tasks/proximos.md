@@ -21,7 +21,10 @@ por célula.
   R$ 0,4 → 5,2 bi de 13,1 bi em 2021 (PA 0,0 → 0,39 de 1,68; MT 0,0 → 0,11 de 0,87; GO 0,0 →
   0,49 de 1,43); ligado a CAR: 55,9 → 96,9 de 108,2 bi.
 - [x] Trocada a grade (constante `GRADE = 5`), sem oferecer as duas: a célula grande menos as
-  pequenas publicadas revelaria a pequena cortada. O bloco `imovel` caiu de 1,0 para 0,5 MB.
+  pequenas publicadas revelaria a pequena cortada. Como a de 0,05° já saiu (Pages, release
+  v2026.10.26, git), `celulas_publicadas.py` leva ao beelink as células dela, e a etapa
+  `grade` corta a de 0,25° cujo resíduo contra elas tem 1 a 4 operações ou imóveis. Depois
+  do corte: R$ 5,3 de 13,1 bi com desmatamento em 2021, 93,3 de 108,2 bi ligados a CAR.
 
 ## 3. Teste intermitente do service worker
 
@@ -62,7 +65,7 @@ navegador ainda tem de converter as listas em arrays tipados (o `prod` cru tem 6
   pulados. CLAUDE.md e README atualizados.
 - [x] Medido com 4G (`testes/_perf.ts`, 3 rodadas): primeiro mapa 3,05 → 3,34 s, tudo
   pronto 4,24 → 5,17 s, 9,9 → 11,9 MB. Total em `site/dados/`: 28,4 → 35,4 MB.
-- [ ] Release: zip de `site/` com instrução de `python3 -m http.server`, ou só a web?
+- [x] Release: só a web (decidido em 2026-10-26).
 - [ ] Depois do push, conferir que o Pages serve o `.json.gz` (o `.bin` ia como
   `application/octet-stream`, sem Content-Encoding).
 - [ ] Se o +22% no "tudo pronto" pesar, a alternativa medida é voltar ao `.bin`, só fora do

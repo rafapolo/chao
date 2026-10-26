@@ -74,8 +74,9 @@ MIN = 5   # o mesmo corte de privacidade das glebas e do crédito (MIN_CELULA)
 PASSO = 0.05   # a grade das glebas (baixa_credito.py), em graus
 # a grade do crédito por imóvel junta 5 × 5 células de PASSO (0,25°, ~28 km). Na de 0,05°,
 # com 5 operações e 5 imóveis por célula, a Amazônia mostrava R$ 0,4 de 13,1 bi do crédito
-# com desmatamento de 2021; na de 0,25°, R$ 5,2 bi (medido em 2026-10-26). Uma só grade:
-# publicar as duas deixaria a célula grande menos as pequenas revelar a pequena cortada.
+# com desmatamento de 2021; na de 0,25°, R$ 5,3 bi (medido em 2026-10-26). Uma só grade:
+# publicar as duas deixaria a célula grande menos as pequenas revelar a pequena cortada, e
+# como a de 0,05° já saiu, a etapa corta a célula grande cujo resíduo contra ela tem 1 a 4.
 GRADE = 5
 
 
@@ -480,6 +481,17 @@ def grade(fator=GRADE):
     marca = (f"(SELECT * REPLACE (floor(i / {fator})::INTEGER AS i, floor(j / {fator})::INTEGER AS j) FROM '{IM}/marca.parquet')"
              if fator > 1 else f"'{IM}/marca.parquet'")
     pubf = f"'{IM}/grade_pub{suf}.parquet'"
+    # a grade de 0,05° já foi publicada (celulas_publicadas.py): a célula grande menos as
+    # pequenas publicadas dentro dela dá o que ficou nas cortadas, que também tem de ser 0
+    # ou MIN+ operações e imóveis
+    residuo = "" if fator == 1 else f"""
+    AND (k, i, j, ano) NOT IN (
+      SELECT (k, floor(i / {fator})::INTEGER, floor(j / {fator})::INTEGER, ano) FROM (
+        SELECT 'ccar' k, * FROM '{IM}/marca.parquet' UNION ALL SELECT 'desm', * FROM '{IM}/marca.parquet' WHERE desm)
+      ANTI JOIN '{IM}/grade_005_publicada.parquet' USING (k, i, j, ano)
+      GROUP BY k, floor(i / {fator})::INTEGER, floor(j / {fator})::INTEGER, ano
+      HAVING count(DISTINCT (id_referencia_bacen, numero_ordem)) BETWEEN 1 AND {MIN - 1}
+          OR count(DISTINCT id_imovel) BETWEEN 1 AND {MIN - 1})"""
     ops = "count(DISTINCT (id_referencia_bacen, numero_ordem))"
     imo = "count(DISTINCT id_imovel)"
     prepara(f"grade0{suf}", f"""
@@ -489,7 +501,7 @@ COPY (
     UNION ALL
     SELECT 'desm', i, j, ano, {ops} FILTER (WHERE desm), {imo} FILTER (WHERE desm),
            {ops} - {ops} FILTER (WHERE desm) FROM {marca} GROUP BY i, j, ano)
-  WHERE o >= {MIN} AND n >= {MIN} AND (r IS NULL OR r = 0 OR r >= {MIN})
+  WHERE o >= {MIN} AND n >= {MIN} AND (r IS NULL OR r = 0 OR r >= {MIN}){residuo}
 ) TO {pubf} (FORMAT parquet);
 """)
     for rodada in range(1, 50):
