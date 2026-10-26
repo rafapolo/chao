@@ -5,11 +5,9 @@ Aberto em 2026-10-26, depois de fechar o [`imovel_pendente.md`](imovel_pendente.
 
 ## 1. Publicar (pede o seu ok: deixa o trabalho público)
 
-- [ ] Push do Chão: os commits de `a32a3ed` a `6f419b8` estão só na máquina local. O push
-  atualiza a versão web pelo GitHub Pages (`.github/workflows/pages.yml`).
-- [ ] Release nova com o `index.html` (`gh release create vAAAA.MM.DD index.html`, como diz o
-  CLAUDE.md).
-- [ ] Push do rodado: `13e55a6`, `cc93df2` e `a494dc1` (gotchas e o teste do MCP).
+- [x] Push do Chão (2026-10-26, depois de juntar com a mineração do DETER do remoto).
+- [x] Release `v2026.10.26` com o `index.html` (a última com o arquivo único).
+- [x] Push do rodado: os três commits já estavam no remoto.
 
 ## 2. Grade mais grossa no modo Imóvel
 
@@ -66,8 +64,8 @@ navegador ainda tem de converter as listas em arrays tipados (o `prod` cru tem 6
 - [x] Medido com 4G (`testes/_perf.ts`, 3 rodadas): primeiro mapa 3,05 → 3,34 s, tudo
   pronto 4,24 → 5,17 s, 9,9 → 11,9 MB. Total em `site/dados/`: 28,4 → 35,4 MB.
 - [x] Release: só a web (decidido em 2026-10-26).
-- [ ] Depois do push, conferir que o Pages serve o `.json.gz` (o `.bin` ia como
-  `application/octet-stream`, sem Content-Encoding).
+- [x] Pages conferido depois do push: `.json.gz` como `application/gzip`, sem
+  Content-Encoding; o modo Imóvel abre sem erro.
 - [ ] Se o +22% no "tudo pronto" pesar, a alternativa medida é voltar ao `.bin`, só fora do
   HTML.
 
