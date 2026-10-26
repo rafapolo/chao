@@ -53,26 +53,20 @@ Medido em 2026-10-26, decodificando os blocos de `site/dados/` e regravando em J
 O JSON custa +7,2 MB (+25%) transferidos, e a 1ª etapa vai de 6,2 para ~7,0 MB. Em memória o
 navegador ainda tem de converter as listas em arrays tipados (o `prod` cru tem 64 MB de texto).
 
-- [ ] Gerar em `monta_pagina.py` um `<bloco>.<hash>.json.gz` por bloco, com
-  `{"meta": ..., "arrays": {nome: [...]}}`, no lugar do `.bin` (ou ao lado, durante a troca).
-  - Manter o que o binário já faz e não depende do formato: escala log em u16, colunas em
-    diferença, saída determinística (hash estável).
-- [ ] No template, trocar a leitura dos blocos (cabeçalho + planos de bytes) por
-  `DecompressionStream('gzip')` → `JSON.parse` → `TypedArray.from`, com o mesmo
-  `{A, meta}` de saída, para o resto da página não mudar.
-- [ ] Tirar os blocos embutidos do `index.html`: a página passa a ser o HTML de `site/` com
-  `dados/` ao lado. O `fetch` da 1ª etapa no `<head>` (`window.__pre`) e o service worker
-  seguem iguais, só com a extensão nova.
-- [ ] Release: em vez do `index.html` único, um zip da pasta, com instrução de abrir por
-  `python3 -m http.server`. Ou só a web, e a release deixa de levar a página.
-- [ ] Testes: a suíte principal abre o `index.html` por `file://` (`testes/comum.ts`,
-  `URL_INDEX`); passa a subir um servidor local. Ajustar os testes de `site/` que conferem o
-  `.bin`.
-- [ ] Atualizar o CLAUDE.md: o requisito de `file://`, a seção "Duas saídas", o formato de
-  cada bloco e o orçamento.
-- [ ] Medir de novo, com rede 4G simulada, o primeiro mapa e o tudo pronto (hoje 3,0 s e 4,2 s).
-- [ ] Se o +25% pesar, a alternativa medida é ficar com o `.bin` e só tirá-lo do HTML: o
-  ganho de tamanho é o mesmo, sem o custo do JSON.
+- [x] Feito em 2026-10-26: `monta_pagina.py` grava `site/dados/<bloco>.<hash>.json.gz`
+  (`{"meta", "arrays": {nome: {"t", "v"}}}`, diferenças com sinal), o template lê com
+  `JSON.parse` → `TypedArray.from` e o `index.html` único saiu. Por `file://` a página
+  explica como abrir com `python3 -m http.server`; se o servidor mandar
+  `Content-Encoding: gzip`, ela lê o JSON direto.
+- [x] Testes servem `site/` por HTTP (`testes/comum.ts`); 118 passam nos 3 motores, 3
+  pulados. CLAUDE.md e README atualizados.
+- [x] Medido com 4G (`testes/_perf.ts`, 3 rodadas): primeiro mapa 3,05 → 3,34 s, tudo
+  pronto 4,24 → 5,17 s, 9,9 → 11,9 MB. Total em `site/dados/`: 28,4 → 35,4 MB.
+- [ ] Release: zip de `site/` com instrução de `python3 -m http.server`, ou só a web?
+- [ ] Depois do push, conferir que o Pages serve o `.json.gz` (o `.bin` ia como
+  `application/octet-stream`, sem Content-Encoding).
+- [ ] Se o +22% no "tudo pronto" pesar, a alternativa medida é voltar ao `.bin`, só fora do
+  HTML.
 
 ## 5. Arquivos gerados do rodado
 

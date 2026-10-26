@@ -50,7 +50,7 @@ for (const motor of ESCOLHIDOS) {
       let solta!: () => void;
       const portao = new Promise<void>(r => { solta = r; });
       const pedidos: string[] = [];
-      await ctx.route("**/dados/*.bin", async rota => {
+      await ctx.route("**/dados/*.json.gz", async rota => {
         const nome = new URL(rota.request().url()).pathname.split("/").pop()!.split(".")[0];
         pedidos.push(nome);
         if (!["malha", "prod"].includes(nome)) await portao;
@@ -95,7 +95,7 @@ for (const motor of ESCOLHIDOS) {
       const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark", serviceWorkers: "block" });
       await ctx.addInitScript(() => { (window as any).__testes = (o: any) => { (window as any).__T = o; }; });
       let falhas = 0;
-      await ctx.route("**/dados/econ.*.bin", async rota => { if (falhas++ === 0) await rota.abort(); else await rota.continue(); });
+      await ctx.route("**/dados/econ.*.json.gz", async rota => { if (falhas++ === 0) await rota.abort(); else await rota.continue(); });
       const p = await ctx.newPage();
       await p.goto(BASE + "?c=soja&a=2020");
       await p.waitForFunction(() => !!(window as any).__T, null, { timeout: 60_000 });

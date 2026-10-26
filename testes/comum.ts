@@ -1,16 +1,27 @@
 /* Peças que os testes compartilham.
  *
- * O index.html tem ~26 MB; cada motor abre a página uma vez por arquivo de teste
- * e quem mexe no estado volta ao ponto de partida pela URL. O package.json é só
+ * A página é site/ servida por HTTP (os blocos chegam por fetch); cada motor abre a
+ * página uma vez por arquivo de teste e quem mexe no estado volta ao ponto de partida
+ * pela URL. O package.json é só
  * de desenvolvimento: nada dele entra na página publicada. */
 import { chromium, firefox, webkit, type Browser, type BrowserContext, type Page } from "playwright";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 
 export const RAIZ = join(import.meta.dir, "..");
-export const INDEX = join(RAIZ, "index.html");
-export const URL_INDEX = pathToFileURL(INDEX).href;
+const SITE = join(RAIZ, "site");
+/* site/ cru, sem service worker (o registro só entra em dist/, ver site.test.ts) */
+export const servidor = Bun.serve({
+  port: 0,
+  idleTimeout: 0,
+  async fetch(req) {
+    const caminho = decodeURIComponent(new URL(req.url).pathname);
+    const arq = Bun.file(join(SITE, caminho === "/" ? "index.html" : caminho));
+    return (await arq.exists()) ? new Response(arq) : new Response("não achei", { status: 404 });
+  },
+});
+export const ORIGEM = `http://localhost:${servidor.port}`;
+export const URL_INDEX = ORIGEM + "/";
 export const FIXTURE = JSON.parse(readFileSync(join(import.meta.dir, "fixture.json"), "utf8"));
 export const LENTO = 120_000;
 
@@ -26,7 +37,8 @@ export async function abre(nav: Browser, busca = "", opcoes: Parameters<Browser[
   const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark", ...opcoes });
   await ctx.addInitScript(() => { (window as any).__testes = (o: any) => { (window as any).__T = o; }; });
   const pedidosRede: string[] = [];
-  ctx.on("request", r => { if (!r.url().startsWith("file:") && !r.url().startsWith("data:") && !r.url().startsWith("blob:")) pedidosRede.push(r.url()); });
+  // pedidos para fora do servidor local (os blocos vêm dele)
+  ctx.on("request", r => { if (!r.url().startsWith(ORIGEM) && !r.url().startsWith("data:") && !r.url().startsWith("blob:")) pedidosRede.push(r.url()); });
   const p = await ctx.newPage();
   const erros: string[] = [];
   p.on("pageerror", e => erros.push(e.message));

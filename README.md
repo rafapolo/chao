@@ -6,8 +6,9 @@ O campo brasileiro, município a município: o que se planta e se cria de 1974 a
 terra, o dinheiro, o clima e quem vive dele.
 
 - **Na web:** https://rafapolo.github.io/chao/
-- **Sem internet:** baixe o `index.html` da [última release](https://github.com/rafapolo/chao/releases/latest)
-  (37 MB, todos os dados embutidos) e abra com dois cliques.
+- **Sem internet:** depois da primeira visita, a página abre do cache do navegador. Para
+  rodar localmente, sirva a pasta `site/` (`cd site && python3 -m http.server`) e abra
+  http://localhost:8000/; por `file://` os dados não abrem.
 
 ## O que dá para ver
 

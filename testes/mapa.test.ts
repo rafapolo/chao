@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { type Browser } from "playwright";
-import { ESCOLHIDOS, FIXTURE, LENTO, MOTORES, abre, digital, fecha, quadro, roda } from "./comum";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { ESCOLHIDOS, FIXTURE, LENTO, MOTORES, RAIZ, abre, digital, fecha, quadro, roda } from "./comum";
 
 for (const motor of ESCOLHIDOS) {
   describe(motor, () => {
@@ -8,7 +10,7 @@ for (const motor of ESCOLHIDOS) {
     beforeAll(async () => { nav = await MOTORES[motor].launch(); }, LENTO);
     afterAll(async () => { await nav?.close(); });
 
-    test("abre por file:// sem pedir nada à rede e sem erro", async () => {
+    test("abre sem pedir nada fora do servidor e sem erro", async () => {
       const x = await abre(nav, "?c=soja&a=2024");
       expect(x.erros).toEqual([]);
       expect(x.pedidosRede).toEqual([]);
@@ -19,6 +21,17 @@ for (const motor of ESCOLHIDOS) {
       expect(n[1]).toBeGreaterThan(80);
       expect(n[2]).toBeGreaterThan(1000);
       await fecha(x);
+    }, LENTO);
+
+    // os blocos chegam por fetch, que o Chromium não faz em file://; os outros motores
+    // variam (o WebKit do Playwright abre arquivo local), então só ele confere o aviso
+    test.if(motor === "chromium")("por file://, a página explica que precisa de um servidor", async () => {
+      const ctx = await nav.newContext();
+      const p = await ctx.newPage();
+      await p.goto(pathToFileURL(join(RAIZ, "site", "index.html")).href);
+      await p.waitForSelector("#carregando.erro", { timeout: 30_000 });
+      expect(await p.locator("#carregando").textContent()).toContain("python3 -m http.server");
+      await ctx.close();
     }, LENTO);
 
     test("cultura, ano, medida e fonte mudam o desenho e a URL", async () => {

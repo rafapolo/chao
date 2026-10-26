@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Lê os parquets de pipeline/dados/, codifica em blocos binários e escreve index.html.
+"""Lê os parquets de pipeline/dados/, codifica em blocos e escreve site/ (index.html e
+dados/<bloco>.<hash>.json.gz).
 
-Formato de cada bloco (um <script type="text/plain"> por bloco, gzip + base64):
-  u32 tamanho do cabeçalho | cabeçalho JSON | bytes dos arrays
-O cabeçalho diz, para cada array, tipo, tamanho e posição. Inteiros de mais de um
-byte vão com os bytes em planos separados (todos os bytes baixos, depois os
-altos): o gzip comprime muito melhor assim, porque os bytes altos de séries
-parecidas se repetem. Valores de magnitude (área, produção, valor) vão em u16 na
-escala log: código = round(ln(1 + v) · K) + 1, com K = 200 — passo de 0,5%, folga
+Formato de cada bloco (JSON em gzip, buscado por fetch):
+  {"meta": {...}, "arrays": {nome: {"t": "u16", "v": [...]}}}
+`t` é o tipo do array tipado que a página remonta. Colunas em diferença (meta.delta) vão
+como inteiros com sinal (-1, não 65535), e a página as soma no tipo sem sinal, que dá a
+volta. Valores de magnitude (área, produção, valor) vão em u16 na escala log: código = round(ln(1 + v) · K) + 1, com K = 200 — passo de 0,5%, folga
 de sobra para cor e para os números da ficha (que mostram 3 algarismos). Com
 K = 2800 (0,04%) o bloco de produção passava de 21 MB em base64.
 
@@ -15,7 +14,6 @@ Privacidade: célula da grade com menos de MIN_CELULA glebas (ou perdas) por
 produto × safra não entra, e o mesmo corte vale para o agregado por município —
 o teste de privacidade em testes/mapa.test.ts confere os quatro.
 """
-import base64
 import gzip
 import hashlib
 import json
@@ -53,15 +51,14 @@ class Bloco:
         self.arrays.append((nome, tipo, a))
 
     def bytes(self):
-        cab, corpo, off = {"arrays": {}, "meta": self.meta}, [], 0
+        delta = set(self.meta.get("delta", []))
+        arrays = {}
         for nome, tipo, a in self.arrays:
-            larg = a.dtype.itemsize
-            planos = a.view(np.uint8).reshape(-1, larg).T.tobytes() if larg > 1 else a.tobytes()
-            cab["arrays"][nome] = {"t": tipo, "n": int(a.size), "o": off}
-            corpo.append(planos)
-            off += len(planos)
-        j = json.dumps(cab, ensure_ascii=False, separators=(",", ":")).encode()
-        return len(j).to_bytes(4, "little") + j + b"".join(corpo)
+            # a diferença sem sinal guarda -1 como 65535: com sinal, o texto fica mais curto
+            if nome in delta and tipo[0] == "u":
+                a = a.view({1: np.int8, 2: np.int16, 4: np.int32}[a.dtype.itemsize])
+            arrays[nome] = {"t": tipo, "v": a.tolist()}
+        return json.dumps({"meta": self.meta, "arrays": arrays}, ensure_ascii=False, separators=(",", ":")).encode()
 
 
 def log16(v):
@@ -809,24 +806,16 @@ BLOCOS = [("MALHA", "malha", bm), ("PROD", "prod", bp), ("PRODQV", "prodqv", bq)
           ("IMOVEL", "imovel", bi)]
 GZ = {nome: comprime(nome, bloco) for _, nome, bloco in BLOCOS}
 
-# 1. index.html: arquivo único, abre por file:// (os blocos em base64 dentro dele)
-pagina = tpl
-for marca, nome, _ in BLOCOS:
-    pagina = pagina.replace(f"/*__{marca}__*/", base64.b64encode(GZ[nome]).decode())
-out = RAIZ / "index.html"
-out.write_text(pagina)
-print(f"{out} — {out.stat().st_size / 1e6:.1f} MB")
-
-# 2. site/: a versão do GitHub Pages (publicada por .github/workflows/pages.yml). HTML leve e um arquivo gzip por bloco, com o
-# hash do conteúdo no nome: dado que não mudou mantém o nome (e o cache do
-# navegador), e só a primeira etapa (malha + área) é baixada antes do mapa.
-# O GitHub Pages não comprime .bin de novo nem serve Content-Encoding pré-pronto,
-# então o navegador baixa o gzip cru e o abre com DecompressionStream.
+# site/: a página (publicada por .github/workflows/pages.yml). HTML leve e um JSON em gzip
+# por bloco, com o hash do conteúdo no nome: dado que não mudou mantém o nome (e o cache
+# do navegador), e só a primeira etapa (malha + área) é baixada antes do mapa. O GitHub
+# Pages serve o .gz cru, sem Content-Encoding, e o navegador o abre com
+# DecompressionStream. Sem servidor (file://) o fetch não abre os blocos.
 WEB = RAIZ / "site"
 (WEB / "dados").mkdir(parents=True, exist_ok=True)
 web, nomes = tpl, set()
 for marca, nome, _ in BLOCOS:
-    arq = f"{nome}.{hashlib.sha256(GZ[nome]).hexdigest()[:12]}.bin"
+    arq = f"{nome}.{hashlib.sha256(GZ[nome]).hexdigest()[:12]}.json.gz"
     nomes.add(arq)
     if not (WEB / "dados" / arq).exists():
         (WEB / "dados" / arq).write_bytes(GZ[nome])
@@ -836,14 +825,14 @@ for marca, nome, _ in BLOCOS:
 # a primeira etapa começa a baixar com o <head>, antes de o script ser lido. Um fetch no
 # <head>, e não <link rel=preload>: o WebKit não casa o preload com o fetch da página e
 # baixava a malha duas vezes (medido 2026-10-22)
-pre = ",".join(f'{nome}:fetch("dados/{nome}.{hashlib.sha256(GZ[nome]).hexdigest()[:12]}.bin")' for nome in ("malha", "prod"))
+pre = ",".join(f'{nome}:fetch("dados/{nome}.{hashlib.sha256(GZ[nome]).hexdigest()[:12]}.json.gz")' for nome in ("malha", "prod"))
 web = web.replace('<meta charset="utf-8">', f'<meta charset="utf-8">\n<script>window.__pre={{{pre}}}</script>', 1)
 assert "/*__" not in web, "marcador sem bloco na versão web"
 (WEB / "index.html").write_text(web)
 (WEB / ".nojekyll").write_text("")
 (WEB / "favicon.svg").write_text((RAIZ / "favicon.svg").read_text())
 # blocos de montagens anteriores: gerados por este script, saem quando o hash muda
-for velho in (WEB / "dados").glob("*.bin"):
+for velho in [*(WEB / "dados").glob("*.bin"), *(WEB / "dados").glob("*.json.gz")]:
     if velho.name not in nomes:
         velho.unlink()
 tam = {a: (WEB / "dados" / a).stat().st_size for a in nomes}

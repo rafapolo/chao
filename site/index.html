@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR">
 <meta charset="utf-8">
-<script>window.__pre={malha:fetch("dados/malha.162f657dbd54.bin"),prod:fetch("dados/prod.35547fee29de.bin")}</script>
+<script>window.__pre={malha:fetch("dados/malha.0d81d9c44778.json.gz"),prod:fetch("dados/prod.1079ca841be2.json.gz")}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chão</title>
 <meta name="description" content="O campo brasileiro, município a município: o que se planta e se cria, a terra, o dinheiro, o clima e quem vive dele.">
@@ -432,91 +432,69 @@
 <div id="carregando">carregando dados…</div>
 <noscript><div id="sem-js">Este mapa precisa de JavaScript para abrir os dados. Ligue o JavaScript no navegador e recarregue a página.</div></noscript>
 
-<script id="b-malha" type="text/plain" data-src="dados/malha.162f657dbd54.bin"></script>
-<script id="b-prod" type="text/plain" data-src="dados/prod.35547fee29de.bin"></script>
-<script id="b-prodqv" type="text/plain" data-etapa="sob-demanda" data-src="dados/prodqv.eba874568462.bin"></script>
-<script id="b-mapb" type="text/plain" data-src="dados/mapb.16bafbae7911.bin"></script>
-<script id="b-cred" type="text/plain" data-src="dados/cred.4ee17c9598a3.bin"></script>
-<script id="b-cad" type="text/plain" data-src="dados/cad.563efcf6a65a.bin"></script>
+<script id="b-malha" type="text/plain" data-src="dados/malha.0d81d9c44778.json.gz"></script>
+<script id="b-prod" type="text/plain" data-src="dados/prod.1079ca841be2.json.gz"></script>
+<script id="b-prodqv" type="text/plain" data-etapa="sob-demanda" data-src="dados/prodqv.865bcc1ba647.json.gz"></script>
+<script id="b-mapb" type="text/plain" data-src="dados/mapb.398e3ae179ea.json.gz"></script>
+<script id="b-cred" type="text/plain" data-src="dados/cred.de6d97cad2f9.json.gz"></script>
+<script id="b-cad" type="text/plain" data-src="dados/cad.a9bf88889529.json.gz"></script>
 <!-- 3ª etapa: blocos sob demanda, pedidos só quando um modo ou a ficha precisa deles -->
-<script id="b-contornos" type="text/plain" data-etapa="sob-demanda" data-src="dados/contornos.2b5c2484bb76.bin"></script>
-<script id="b-credrs" type="text/plain" data-etapa="sob-demanda" data-src="dados/credrs.915ebc397622.bin"></script>
-<script id="b-econ" type="text/plain" data-etapa="sob-demanda" data-src="dados/econ.85c4445614ff.bin"></script>
-<script id="b-terra" type="text/plain" data-etapa="sob-demanda" data-src="dados/terra.0f72dcea9bd3.bin"></script>
-<script id="b-fogo" type="text/plain" data-etapa="sob-demanda" data-src="dados/fogo.70af1ef7ac93.bin"></script>
-<script id="b-clima" type="text/plain" data-etapa="sob-demanda" data-src="dados/clima.fd9f419205c4.bin"></script>
-<script id="b-calend" type="text/plain" data-etapa="sob-demanda" data-src="dados/calend.3f9f62bad159.bin"></script>
-<script id="b-mercado" type="text/plain" data-etapa="sob-demanda" data-src="dados/mercado.eb9a42af0b78.bin"></script>
-<script id="b-emis" type="text/plain" data-etapa="sob-demanda" data-src="dados/emis.0bc9b97fda67.bin"></script>
-<script id="b-gente" type="text/plain" data-etapa="sob-demanda" data-src="dados/gente.8cf7a5c876b4.bin"></script>
-<script id="b-imovel" type="text/plain" data-etapa="sob-demanda" data-src="dados/imovel.f2ed7c7ef89e.bin"></script>
+<script id="b-contornos" type="text/plain" data-etapa="sob-demanda" data-src="dados/contornos.816a4061acfa.json.gz"></script>
+<script id="b-credrs" type="text/plain" data-etapa="sob-demanda" data-src="dados/credrs.b7939c3eb7c7.json.gz"></script>
+<script id="b-econ" type="text/plain" data-etapa="sob-demanda" data-src="dados/econ.39e23b6a766b.json.gz"></script>
+<script id="b-terra" type="text/plain" data-etapa="sob-demanda" data-src="dados/terra.f87625823f5c.json.gz"></script>
+<script id="b-fogo" type="text/plain" data-etapa="sob-demanda" data-src="dados/fogo.fdcf580f75c3.json.gz"></script>
+<script id="b-clima" type="text/plain" data-etapa="sob-demanda" data-src="dados/clima.49629ec98485.json.gz"></script>
+<script id="b-calend" type="text/plain" data-etapa="sob-demanda" data-src="dados/calend.2abe5e0607bc.json.gz"></script>
+<script id="b-mercado" type="text/plain" data-etapa="sob-demanda" data-src="dados/mercado.1f533fb041e1.json.gz"></script>
+<script id="b-emis" type="text/plain" data-etapa="sob-demanda" data-src="dados/emis.a8a04ca77136.json.gz"></script>
+<script id="b-gente" type="text/plain" data-etapa="sob-demanda" data-src="dados/gente.b8cce55a84c1.json.gz"></script>
+<script id="b-imovel" type="text/plain" data-etapa="sob-demanda" data-src="dados/imovel.6a44040f0387.json.gz"></script>
 <script>
 (async function () {
   'use strict';
   const $ = id => document.getElementById(id);
 
   /* ---------- leitura dos blocos ----------
-     u32 tamanho do cabeçalho | cabeçalho JSON | arrays com os bytes em planos
-     (todos os bytes 0, depois todos os 1…), como monta_pagina.py escreve. */
+     um JSON em gzip por bloco, {meta, arrays: {nome: {t, v}}}, como monta_pagina.py
+     escreve; cada lista vira o array tipado do seu tipo. */
   const PARADO = window.__parado || 20000;   // ms sem receber nada antes de dar o download por parado
-  const TIPOS = { u8: [Uint8Array, 1], i8: [Int8Array, 1], u16: [Uint16Array, 2], i16: [Int16Array, 2],
-                  u32: [Uint32Array, 4], i32: [Int32Array, 4] };
+  const TIPOS = { u8: Uint8Array, i8: Int8Array, u16: Uint16Array, i16: Int16Array, u32: Uint32Array, i32: Int32Array };
   async function bloco(id) {
-    const el = $(id), src = el.dataset.src;
+    const src = $(id).dataset.src;
     let parou = null;
-    let fonte;
-    if (src) {
-      // versão web: o bloco é um arquivo gzip com o hash do conteúdo no nome
-      // a primeira etapa já foi pedida no <head> (window.__pre, só na versão web)
-      const pedido = window.__pre?.[id.slice(2)];
-      if (pedido) delete window.__pre[id.slice(2)];
-      const r = await (pedido || fetch(src));
-      if (!r.ok) throw new Error(`${src}: HTTP ${r.status}`);
-      // a página guarda o bloco no cache que o service worker serve: a visita seguinte,
-      // mesmo sem rede, não baixa de novo (o nome tem o hash, o conteúdo nunca muda)
-      if (window.caches && location.protocol.startsWith('http')) {
-        const copia = r.clone();
-        caches.open('chao-dados').then(c => c.put(new URL(src, location.href).href, copia)).catch(() => {});
-      }
-      /* vigia: se nenhum pedaço chega por PARADO ms, o download parou (rede que cai no
-         meio) e a página desiste com aviso, em vez de girar para sempre */
-      let vigia;
-      const arma = c => { clearTimeout(vigia); vigia = setTimeout(() => { parou = new Error('o download de ' + src + ' parou'); c.error(parou); }, PARADO); };
-      fonte = r.body.pipeThrough(new TransformStream({
-        start: arma, transform(pedaco, c) { arma(c); c.enqueue(pedaco); }, flush() { clearTimeout(vigia); },
-      }));
-    } else {
-      const t = el.textContent.trim();
-      if (!t || t.startsWith('/*')) throw new Error('bloco vazio: ' + id);
-      const s = atob(t);
-      const bin = new Uint8Array(s.length);
-      for (let i = 0; i < s.length; i++) bin[i] = s.charCodeAt(i);
-      fonte = new Blob([bin]).stream();
+    // a primeira etapa já foi pedida no <head> (window.__pre)
+    const pedido = window.__pre?.[id.slice(2)];
+    if (pedido) delete window.__pre[id.slice(2)];
+    const r = await (pedido || fetch(src));
+    if (!r.ok) throw new Error(`${src}: HTTP ${r.status}`);
+    // a página guarda o bloco no cache que o service worker serve: a visita seguinte,
+    // mesmo sem rede, não baixa de novo (o nome tem o hash, o conteúdo nunca muda)
+    if (window.caches && location.protocol.startsWith('http')) {
+      const copia = r.clone();
+      caches.open('chao-dados').then(c => c.put(new URL(src, location.href).href, copia)).catch(() => {});
     }
-    const fluxo = fonte.pipeThrough(new DecompressionStream('gzip'));
+    /* vigia: se nenhum pedaço chega por PARADO ms, o download parou (rede que cai no
+       meio) e a página desiste com aviso, em vez de girar para sempre */
+    let vigia;
+    const arma = c => { clearTimeout(vigia); vigia = setTimeout(() => { parou = new Error('o download de ' + src + ' parou'); c.error(parou); }, PARADO); };
+    const fonte = r.body.pipeThrough(new TransformStream({
+      start: arma, transform(pedaco, c) { arma(c); c.enqueue(pedaco); }, flush() { clearTimeout(vigia); },
+    }));
     // o Chromium troca o erro do vigia por um "Failed to fetch" genérico: repassa o do vigia
-    const buf = await new Response(fluxo).arrayBuffer().catch(e => { throw parou || e; });
-    const u8 = new Uint8Array(buf);
-    const n = new DataView(buf).getUint32(0, true);
-    const cab = JSON.parse(new TextDecoder().decode(u8.subarray(4, 4 + n)));
-    const base = 4 + n, A = {};
-    for (const [nome, d] of Object.entries(cab.arrays)) {
-      const [Tipo, w] = TIPOS[d.t];
-      const src = u8.subarray(base + d.o, base + d.o + d.n * w);
-      if (w === 1) { A[nome] = new Tipo(src.buffer, src.byteOffset, d.n); continue; }
-      const out = new Uint8Array(d.n * w);
-      for (let p = 0; p < w; p++) {
-        const plano = src.subarray(p * d.n, (p + 1) * d.n);
-        for (let i = 0, j = p; i < d.n; i++, j += w) out[j] = plano[i];
-      }
-      A[nome] = new Tipo(out.buffer);
-    }
-    // colunas gravadas em diferença (módulo 2^16): soma acumulada devolve o valor
-    for (const nome of (cab.meta && cab.meta.delta) || []) {
+    const gz = new Uint8Array(await new Response(fonte).arrayBuffer().catch(e => { throw parou || e; }));
+    // um servidor que mande Content-Encoding: gzip entrega o JSON já aberto
+    const cru = gz[0] === 0x1f && gz[1] === 0x8b
+      ? await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
+      : new TextDecoder().decode(gz);
+    const { meta, arrays } = JSON.parse(cru), A = {};
+    for (const [nome, d] of Object.entries(arrays)) A[nome] = TIPOS[d.t].from(d.v);
+    // colunas gravadas em diferença (com sinal; o tipo sem sinal dá a volta): soma acumulada devolve o valor
+    for (const nome of (meta && meta.delta) || []) {
       const a = A[nome];
       for (let i = 1; i < a.length; i++) a[i] = a[i] + a[i - 1];
     }
-    return { A, meta: cab.meta };
+    return { A, meta };
   }
 
   if (typeof DecompressionStream === 'undefined') {
@@ -529,7 +507,9 @@
      chegam por trás. Até lá as fontes e medidas que dependem deles ficam
      desligadas, e um estado inicial que precise deles (pela URL) espera tudo. */
   const falha = e => {
-    $('carregando').textContent = 'Não foi possível abrir os dados do mapa (' + e.message + '). Nada foi desenhado pela metade.';
+    $('carregando').textContent = location.protocol === 'file:'
+      ? 'Os dados do mapa só abrem por um servidor. Na pasta da página, rode python3 -m http.server e abra http://localhost:8000/.'
+      : 'Não foi possível abrir os dados do mapa (' + e.message + '). Nada foi desenhado pela metade.';
     $('carregando').classList.add('erro');
   };
   /* Cada bloco é pedido e decodificado uma vez só: carrega(id) guarda a promessa.
