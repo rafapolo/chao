@@ -1903,7 +1903,7 @@
   $('alterna-disputa').addEventListener('click', e => {
     const b = e.target.closest('button[data-d]');
     if (!b || est.disputa === (b.dataset.d === '1')) return;
-    est.disputa = b.dataset.d === '1';
+    est.disputa = disputaPam = b.dataset.d === '1';
     aoMudarSelecao();
   });
 
@@ -2367,9 +2367,12 @@
   });
 
   /* ---------- orquestração ---------- */
+  // a última escolha Soma | Principal da produção declarada; começa na principal, como a página
+  let disputaPam = true;
   function aoMudarModo() {
     para();
-    if (est.modo !== 'pam') est.disputa = false;
+    // Soma | Principal só existe na produção declarada; ao voltar a ela, vale a última escolha
+    est.disputa = est.modo === 'pam' && disputaPam;
     est.metrica = '';   // cada modo abre na sua primeira medida
     // mantém só os itens que o modo sabe mostrar; se nenhum, a soja
     est.itens = est.itens.filter(i => itemValidoNoModo(ITENS[i]));
@@ -2907,6 +2910,7 @@
     });
     if (cs.length) est.itens = [...new Set(cs)];
     if (p.get('d') === '1') est.disputa = true;
+    if (est.modo === 'pam') disputaPam = est.disputa;
     for (const sl of (p.get('dx') || '').split(',')) if (ITEM_POR_SLUG[sl] !== undefined && ITENS[ITEM_POR_SLUG[sl]].area) est.desligadas.add(ITEM_POR_SLUG[sl]);
     if (p.get('a')) est.ano = +p.get('a');
     if (p.get('m')) est.metrica = p.get('m');

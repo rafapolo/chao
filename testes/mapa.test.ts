@@ -427,6 +427,24 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("ao sair da produção declarada e voltar, a legenda fica em Soma ou Principal como estava", async () => {
+      const x = await abre(nav, "");
+      await quadro(x.p);
+      const ida = async () => {
+        await x.p.click('[data-modo="sat"]'); await quadro(x.p);
+        await x.p.click('[data-modo="pam"]'); await quadro(x.p);
+      };
+      await ida();
+      expect(await roda<boolean>(x.p, "return T.est.disputa")).toBe(true);
+      expect(await x.p.locator("#legenda .fam.grupo").count()).toBe(2);
+      await x.p.click('#alterna-disputa [data-d="0"]'); await quadro(x.p);
+      await ida();
+      expect(await roda<boolean>(x.p, "return T.est.disputa")).toBe(false);
+      expect(await x.p.locator('#alterna-disputa [data-d="0"]').getAttribute("aria-pressed")).toBe("true");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
     test("soma: o grupo lavoura temporária entra inteiro como uma unidade", async () => {
       const x = await abre(nav, "?c=soja&a=2020");
       await quadro(x.p);
