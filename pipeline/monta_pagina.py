@@ -696,6 +696,18 @@ ativ[lsa["m"].to_numpy()] = lsa["atividade"].replace_strict({a: i for i, a in en
 bg.add("le_ativ", ativ, "u8")
 bg.meta = {"series": SER, "atividades": ATIVIDADES}
 
+print("censo agropecuário")
+bce = Bloco()
+cen = idx_mun(pl.read_parquet(D / "censo_agro.parquet"))
+# dado público do IBGE, já agregado: o sigilo (X) vem da fonte e fica sem valor, sem outro corte
+CENSO = {"ce_estab": "estab", "ce_fam": "p_estab_fam", "ce_amed": "area_media", "ce_prop": "p_c_prop", "ce_mulher": "p_mulher",
+         "ce_pessoal": "pessoal", "ce_pest": "pessoal_estab", "ce_agrotox": "p_agrotox", "ce_irrig": "p_irrig",
+         "ce_airrig": "area_irrig", "ce_orient": "p_orient", "ce_assoc": "p_assoc", "ce_financ": "p_financ", "ce_dap": "p_dap",
+         "ce_arre": "p_c_arre", "ce_parc": "p_c_parc", "ce_como": "p_c_como", "ce_ocup": "p_c_ocup", "ce_asse": "p_c_asse",
+         "ce_sem": "p_c_sem", "ce_ogov": "p_o_gov", "ce_oprop": "p_o_propria", "ce_ocoop": "p_o_coop", "ce_ointeg": "p_o_integ",
+         "ce_area": "area", "ce_efam": "estab_fam"}
+bce.meta = {"series": series(bce, cen, CENSO, zero=tuple(c for c in CENSO.values() if c.startswith("p_")))}
+
 print("imóvel")
 bi = Bloco()
 ima = idx_mun(pl.read_parquet(D / "imovel_ano.parquet"))
@@ -826,6 +838,8 @@ fix["calendario"] = {"mun": "5107925", "mes_moda": int(sc_.sort(["operacoes", "m
 fix["listasuja"] = {"ano": int(lsm["ano"].max()), "trab_ac": int(lsm.filter(pl.col("ano") == lsm["ano"].max())["trab_ac"].sum())}
 fix["lspa"] = (lambda r: {"uf": "MT", "item": IIDX["T|Soja (em grão)"], "ano": LSPA["anos"][1], "area": float(r["area_plantada"][0])})(
     lsp.filter((pl.col("sigla_uf") == "MT") & (pl.col("item") == "T|Soja (em grão)") & (pl.col("ano") == LSPA["anos"][1])))
+fix["censo"] = {"mun": "5107925", "estab": int(cen.filter(pl.col("id_municipio") == "5107925")["estab"][0]),
+                "estab_br": int(cen["estab"].sum())}
 fix["pib"] = {"mun": "5107925", "ano": 2021,
               "va_agro": float(pb.filter((pl.col("id_municipio") == "5107925") & (pl.col("ano") == 2021))["va_agro"][0])}
 (RAIZ / "testes" / "fixture.json").write_text(json.dumps(fix, ensure_ascii=False, indent=1))
@@ -837,7 +851,7 @@ BLOCOS = [("MALHA", "malha", bm), ("PROD", "prod", bp), ("PRODQV", "prodqv", bq)
           ("CRED", "cred", bc), ("CAD", "cad", bk), ("CONTORNOS", "contornos", bt), ("CREDRS", "credrs", br),
           ("ECON", "econ", be), ("TERRA", "terra", bd), ("FOGO", "fogo", bf), ("CLIMA", "clima", bcl), ("CALEND", "calend", bca),
           ("MERCADO", "mercado", bx), ("EMIS", "emis", bs), ("GENTE", "gente", bg),
-          ("IMOVEL", "imovel", bi)]
+          ("IMOVEL", "imovel", bi), ("CENSO", "censo", bce)]
 GZ = {nome: comprime(nome, bloco) for _, nome, bloco in BLOCOS}
 
 # site/: a página (publicada por .github/workflows/pages.yml). HTML leve e um arquivo gzip

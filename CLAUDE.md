@@ -42,6 +42,9 @@ Este repositório não guarda dado: `pipeline/dados/` fica fora do git.
 | `baixa_clima.py` | `br_inpe_sisam`, `br_inmet_bdmep`, `br_sedec_desastres` | `clima_ano`, `clima_normal`, `estacoes`, `desastres` |
 | `baixa_mercado_gente.py` | Trase, Comex, SEEG, RAIS, CAGED, CadÚnico, Seguro-Defeso, população, CAFIR, CNEFE | `trase*`, `logistica`, `comex`, `seeg`, `trabalho`, `social`, `imoveis` |
 | `baixa_calendario.py` | SICOR (datas de plantio e colheita) | `calendario` |
+| `baixa_censo_agro.py` | `br_ibge_censo_agropecuario.sidra_municipio` (recortes do Censo 2017 por município) | `censo_agro` |
+| `baixa_listasuja.py` | `br_mte_listasuja.empregadores_municipio` (município derivado do texto, no rodado) | `listasuja`, `listasuja_ativ` |
+| `baixa_lspa.py` | `br_ibge_lspa.sidra` (tabela 1618, último levantamento) | `lspa_uf` |
 | `baixa_imovel.py` | CAR (SICAR) × SICOR e Proagro, embargos (IBAMA, ICMBio), polígonos do PRODES/DETER, TI/UC, florestas públicas (CNFP), polígonos do INCRA (SIGEF, assentamentos); cruzamento no beelink, só agregados voltam | `imovel_mun`, `imovel_ano` |
 
 `baixa_producao.py` também traz a PEVS (itens `E|` extração e `S|` silvicultura) e vacas
@@ -52,13 +55,14 @@ e em `../rodado/docs/context/gotchas/`.
 
 ```bash
 cd pipeline
-for s in malha producao mapbiomas credito cadastros regioes dinheiro terra clima mercado_gente calendario imovel; do
+for s in malha producao mapbiomas credito cadastros regioes dinheiro terra clima mercado_gente calendario imovel \
+         censo_agro listasuja lspa; do
   python3 baixa_$s.py || break; done                          # ~3 min no total
 python3 monta_pagina.py      # parquet -> blocos -> ../site/ (index.html e dados/*.bin)
 cd .. && bun run build       # site/ -> dist/: HTML, CSS e JS minificados + service worker (é o que o Pages publica)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
-bun test                                   # 124 testes nos 3 motores (3 pulados: offline no WebKit, file:// fora do Chromium), ~3 min; CHAO_MOTORES=chromium para um só
+bun test                                   # 133 testes nos 3 motores (3 pulados: offline no WebKit, file:// fora do Chromium), ~3 min; CHAO_MOTORES=chromium para um só
 bun testes/_perf.ts                        # primeiro mapa e tudo pronto com rede 4G simulada
 ```
 
@@ -166,6 +170,20 @@ para o primeiro mapa são 6,6 MB (HTML e 1ª etapa), e o resto vem por etapa.
   2000 e infla (101 mil km², contra 73–79 mil em 2002–2004).
 - **SICOR em R$:** só o crédito de recurso controlado ou equalizado tem município (R$ 136 de
   422 bi em 2023/24). O mapa mostra essa parte, e a UF mostra o total.
+- **Censo Agropecuário 2017** (`baixa_censo_agro.py`): por município o SIDRA só cabe em
+  recortes (uma classificação aberta, as outras no Total; `ibge_sidra.py recorte` no rodado).
+  O IBGE põe `X` (sigilo) onde há 1 ou 2 informantes: o valor vem nulo, e a porcentagem com
+  numerador ou denominador em `X` fica sem valor, não 0. Estabelecimento não é imóvel, e
+  "familiar" é a tipologia do Censo (Lei 11.326), não a DAP. Um ano só: a linha do tempo fica
+  em 2017.
+- **Lista Suja** (`baixa_listasuja.py`): o MTE não publica município; o rodado o tira do texto
+  do estabelecimento (344 de 345 casos do campo casam). O `empregadores_historico` soma os
+  retratos de cada coleta: conte caso distinto, senão os trabalhadores dobram. Ações fiscais
+  de 2020 a 2026. **Sem o corte de 5**, por decisão (`tasks/decisoes_pendentes.md`, item 9).
+  No mapa, círculo na sede (`emSedes`), não cor.
+- **LSPA** (`baixa_lspa.py`): só por UF, e muda a cada levantamento mensal. A PAM do espelho
+  vai até 2024, então o LSPA acrescenta 2025 e 2026 ao modo Declarado, só na soma de lavouras
+  em % da área rural (`lspaVale`): a UF inteira pinta com a mesma cor. Vai no bloco `cad`.
 - **Desmembramentos:** 1.624 municípios foram instalados depois de 1974. Antes de existir, o
   filho não tem dado, e o pai traz o território inteiro da época, desenhado menor na malha
   atual.

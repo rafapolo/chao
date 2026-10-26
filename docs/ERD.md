@@ -11,7 +11,7 @@ O objetivo é deixar à vista o que juntaria com o quê numa integração futura
 vêm dos esquemas reais (`../rodado/docs/context/schemas.json`, 2026-10-22). Os nomes
 `chao.*`, as chaves substitutas e os tipos são propostos.
 
-Os cinco diagramas numa imagem só: [`ERD.png`](ERD.png).
+Os diagramas numa imagem só: [`ERD.png`](ERD.png).
 
 Legenda das tabelas de fato:
 - **✓** já entra na página (`index.html` e `site/`);
@@ -133,6 +133,8 @@ erDiagram
     dim_municipio ||--o{ fato_alerta_deter : "GEOCODIBGE"
     dim_municipio ||--o{ fato_foco : "id_municipio"
     dim_celula ||--o{ fato_foco : "id_celula"
+    dim_uf ||--o{ fato_lspa_uf : "sigla_uf"
+    dim_item ||--o{ fato_lspa_uf : "id_produto_lspa"
     dim_municipio ||--o{ fato_emissao : "id_municipio"
     dim_item ||--o{ fato_lavoura_principal : "maior lavoura"
     dim_familia ||--o{ fato_lavoura_principal : "família que vence"
@@ -151,6 +153,15 @@ erDiagram
         smallint ano PK
         float vacas_ordenhadas
         float ovinos_tosquiados
+    }
+    fato_lspa_uf {
+        char sigla_uf PK,FK
+        smallint ano_safra PK
+        int mes_levantamento PK "aaaamm: a previsão muda todo mês"
+        smallint id_item PK,FK
+        float area_plantada_ha
+        float area_colhida_ha
+        float producao
     }
     fato_lavoura_principal {
         varchar id_municipio PK,FK
@@ -217,6 +228,7 @@ erDiagram
 | `fato_producao` | `br_ibge_pam.lavoura_temporaria`, `lavoura_permanente`; `br_ibge_ppm.efetivo_rebanhos`, `producao_origem_animal`, `producao_aquicultura`; `br_ibge_pevs.producao_extracao_vegetal`, `producao_silvicultura` | `id_municipio` direto; `produto`/`tipo_rebanho` → `id_item` pelo `rotulo()` de `monta_pagina.py` | ✓ |
 | `fato_rebanho_produtivo` | `br_ibge_ppm.producao_pecuaria` | direto | ✓ (por cabeça) |
 | `fato_lavoura_principal` | derivada de `fato_producao` | — | ✓ (calculada no navegador) |
+| `fato_lspa_uf` | `br_ibge_lspa.sidra` (tabela 1618, último `periodo`) | `id_localidade` = código da UF; produto → `id_item` pelo `DE_PARA` de `baixa_lspa.py` (`dim_item` ganha `id_produto_lspa`; safras e café somados) | ✓ (só % da área rural, depois da última PAM) |
 | `fato_cobertura` | `br_mapbiomas_estatisticas.cobertura_municipio_classe` (+ `classe` para os rótulos) | direto | ✓ (`classe` ◻) |
 | `fato_cobertura_uf` | `cobertura_uf_classe`, `transicao_uf_de_para_anual`/`quinquenal`/`decenal` | `sigla_uf` | ◻ |
 | `fato_transicao` | `transicao_municipio_de_para_decenal` | direto | ✓ |
@@ -378,7 +390,15 @@ erDiagram
     dim_estacao ||--o{ fato_estacao : "id_estacao"
     dim_municipio ||--o{ fato_desastre : "id_municipio"
     dim_municipio ||--o{ fato_censo_2022 : "id_municipio"
+    dim_municipio ||--o{ fato_trabalho_escravo : "nome/UF do estabelecimento"
 
+    fato_trabalho_escravo {
+        varchar id_municipio PK,FK
+        smallint ano_acao_fiscal PK
+        char cnae_divisao PK "01, 02, 03 = campo"
+        int casos "empregadores distintos"
+        int trabalhadores "resgatados"
+    }
     fato_trabalho {
         varchar id_municipio PK,FK
         smallint ano PK
@@ -454,10 +474,46 @@ erDiagram
 | `fato_energia_uf` | `br_mme_consumo_energia_eletrica.uf` | `sigla_uf` | ◻ |
 | `fato_munic` | `br_ibge_munic.meio_ambiente` | direto | ◻ |
 | `fato_transferencias` | `br_cgu_beneficios_cidadao.*` | direto | ◻ |
-| `fato_trabalho_escravo` | `br_mte_listasuja.empregadores` | `sigla_uf` (sem município) | ◻ |
+| `fato_trabalho_escravo` | `br_mte_listasuja.empregadores_municipio` (derivada de `empregadores_historico`) | município pelo texto `estabelecimento` (nome/UF) contra o diretório, conferido pelo CNPJ em `br_me_cnpj` (que é a sede: diverge em 88 de 216) | ✓ (só o campo, sem corte de 5) |
 | `fato_diesel` | `br_anp_precos_combustiveis.microdados` | direto | ◻ |
 | `fato_solar_rural` | `br_aneel_dadosabertos.empreendimento_geracao_distribuida` | `CodUFibge` e município da usina (medir) | ◻ |
 | `fato_agua` | `br_ana_outorgas.captacoes` | nome + UF: `upper(trim(ing_nm_municipio))` contra o diretório | ◻ |
+
+## Estrutura dos estabelecimentos (Censo Agropecuário)
+
+O estabelecimento não é imóvel nem município: um imóvel pode ter vários estabelecimentos, e
+um estabelecimento pode juntar vários imóveis. Os diagramas acima não o tinham. O grão é
+município × ano do Censo × recorte; cada recorte abre uma classificação e deixa as outras no
+Total.
+
+```mermaid
+erDiagram
+    dim_municipio ||--o{ fato_censo_agro : "id_municipio"
+    fato_censo_agro }o--o{ fato_trabalho : "estabelecimentos (CNEFE 2022)"
+    fato_censo_agro }o--o{ fato_familias : "familiares"
+    fato_censo_agro }o--o{ sicor_operacao : "financiamento, 2017"
+
+    fato_censo_agro {
+        varchar id_municipio PK,FK
+        smallint ano_censo PK "2006, 2017"
+        varchar tipologia PK "familiar, não familiar, total"
+        varchar condicao_produtor PK "proprietário, arrendatário, ocupante..."
+        int estabelecimentos
+        float area_ha
+        int pessoal_ocupado
+        int com_agrotoxico
+        int com_irrigacao
+        float area_irrigada_ha
+        int com_orientacao_tecnica
+        int com_financiamento
+        int com_dap
+        varchar simbolo "X = sigilo"
+    }
+```
+
+| Fato | Origem no rodado | Chave de origem → hub | No Chão |
+|---|---|---|---|
+| `fato_censo_agro` | `br_ibge_censo_agropecuario.sidra_municipio` (recortes por município das tabelas 6753, 6770, 6846, 6851, 6857, 6885, 6895, 6962) | `id_localidade` é o `id_municipio` | ✓ (2017; 2006 ◻) |
 
 ## Terra e imóvel: o hub que ainda falta
 
@@ -568,6 +624,10 @@ erDiagram
 5. **Produção × crédito por cultura.** `dim_item.produto_sicor` liga a área declarada (PAM)
    à área financiada (SICOR) da mesma cultura, município e safra. É o que o modo Calendário
    já usa só para as datas.
+
+6. **Quem produz × o que se financia.** `fato_censo_agro` (familiar, % com financiamento)
+   contra o crédito do Pronaf no SICOR, no mesmo município, em 2017: quem diz ao Censo que
+   obteve financiamento, e quanto do crédito público chegou à agricultura familiar.
 
 Toda junção por pessoa (CPF, NIS, CNPJ de pessoa física) precisa passar pelo mesmo corte
 de privacidade que a página usa: só agregado, com 5 ou mais por célula.

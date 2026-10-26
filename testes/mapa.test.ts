@@ -528,6 +528,24 @@ for (const motor of ESCOLHIDOS) {
       await fecha(x);
     }, LENTO);
 
+    test("Quem produz (Censo 2017): estabelecimentos batem com o pipeline, a linha do tempo trava em 2017 e a ficha traz a condição do produtor", async () => {
+      const F = FIXTURE.censo;
+      const x = await abre(nav, `?f=censo&m=ce_estab&mun=${F.mun}`);
+      await x.p.waitForFunction(() => (window as any).__T.SOB.censo && (window as any).__T.est.metrica === "ce_estab", null, { timeout: 60_000 });
+      await quadro(x.p);
+      expect(await roda<number>(x.p, "return T.est.ano")).toBe(2017);
+      expect(await x.p.locator("#ano").evaluate((e: HTMLInputElement) => [e.min, e.max])).toEqual(["2017", "2017"]);
+      expect(await x.p.locator("#ano-sub").textContent()).toContain("Censo é de 2017");
+      const [v, tot] = await roda<number[]>(x.p, `let s = 0; for (const v of T.VAL) if (v > 0) s += v; return [T.VAL[T.M.mun.id.indexOf('${F.mun}')], s];`);
+      expect(Math.abs(v / F.estab - 1)).toBeLessThan(0.005);
+      expect(Math.abs(tot / F.estab_br - 1)).toBeLessThan(0.005);
+      const ficha = await x.p.locator("#ficha").textContent();
+      expect(ficha).toContain("Quem produz (Censo 2017)");
+      expect(ficha).toContain("proprietário");
+      expect(x.erros).toEqual([]);
+      await fecha(x);
+    }, LENTO);
+
     test("ficha: o select da série histórica troca a cultura sem mexer no mapa", async () => {
       const x = await abre(nav, "?c=soja&a=2020&mun=5107925");
       await quadro(x.p);

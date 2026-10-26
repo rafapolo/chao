@@ -463,6 +463,7 @@
 <script id="b-emis" type="text/plain" data-etapa="sob-demanda" data-src="dados/emis.0bc9b97fda67.bin"></script>
 <script id="b-gente" type="text/plain" data-etapa="sob-demanda" data-src="dados/gente.3018e110f898.bin"></script>
 <script id="b-imovel" type="text/plain" data-etapa="sob-demanda" data-src="dados/imovel.0533dc9a6629.bin"></script>
+<script id="b-censo" type="text/plain" data-etapa="sob-demanda" data-src="dados/censo.d4d44bedd98e.bin"></script>
 <script>
 (async function () {
   'use strict';
@@ -784,6 +785,7 @@
     { id: 'fogo', nome: 'Fogo', sub: 'focos do INPE · 2003–2026', sec: 'Clima e fogo', blocos: ['fogo'] },
     { id: 'trab', nome: 'Trabalho e estrutura', sub: 'RAIS, CAGED, CNEFE, CAFIR', sec: 'Gente', blocos: ['gente'] },
     { id: 'social', nome: 'Famílias do campo', sub: 'CadÚnico, Seguro-Defeso', sec: 'Gente', blocos: ['gente'] },
+    { id: 'censo', nome: 'Quem produz', sub: 'Censo Agropecuário · 2017', sec: 'Gente', blocos: ['censo'] },
   ];
   const UFS = [...new Set(M.mun.uf)].sort();
   const BIOMAS = [...new Set(M.mun.bioma.filter(b => b && b !== '0'))].sort();
@@ -837,7 +839,7 @@
       }
       case 'econ': return SOB.econ?.meta.anos || [1999, 2021];
       case 'cal': return [2012, 2025];
-      case 'expo': case 'emis': case 'trab': case 'social': case 'imovel':
+      case 'expo': case 'emis': case 'trab': case 'social': case 'imovel': case 'censo':
         return SOB[SERIES[est.modo].bloco]?.meta.series[est.metrica]?.anos || [2000, 2024];
       case 'desm': {
         const A = SOB.terra?.meta.anos;
@@ -925,6 +927,14 @@
       ['le_trab_ac', 'Trabalhadores do campo resgatados, acumulado desde 2020 (Lista Suja)', 'resgatados'],
       ['le_casos', 'Empregadores do campo incluídos na Lista Suja (ação fiscal no ano)', 'empregadores'],
       ['le_casos_ac', 'Empregadores do campo na Lista Suja, acumulado desde 2020', 'empregadores']] },
+    censo: { bloco: 'censo', titulo: 'Quem produz (Censo 2017)', medidas: [
+      ['ce_estab', 'Estabelecimentos agropecuários', 'estabelecimentos'], ['ce_fam', '% de agricultura familiar (estabelecimentos)', '%'],
+      ['ce_amed', 'Área média do estabelecimento (ha)', 'ha'], ['ce_prop', '% de produtores proprietários da terra', '%'],
+      ['ce_mulher', '% dirigidos por mulher', '%'], ['ce_pessoal', 'Pessoal ocupado', 'pessoas'],
+      ['ce_pest', 'Pessoal ocupado por estabelecimento', 'pessoas'], ['ce_agrotox', '% que usou agrotóxico', '%'],
+      ['ce_irrig', '% com irrigação', '%'], ['ce_airrig', 'Área irrigada (ha)', 'ha'],
+      ['ce_orient', '% com orientação técnica', '%'], ['ce_assoc', '% associados a cooperativa ou entidade de classe', '%'],
+      ['ce_financ', '% que obteve financiamento', '%'], ['ce_dap', '% com DAP (Pronaf)', '%']] },
     social: { bloco: 'gente', titulo: 'Famílias do campo', medidas: [
       ['cad_agri', 'Famílias de agricultores familiares (CadÚnico)', 'famílias'], ['cad_pesc', 'Famílias de pescadores artesanais (CadÚnico)', 'famílias'],
       ['cad_extr', 'Famílias extrativistas (CadÚnico)', 'famílias'], ['cad_asse', 'Famílias assentadas da reforma agrária (CadÚnico)', 'famílias'],
@@ -1871,6 +1881,7 @@
     cal: '<rect x="2.5" y="3.5" width="13" height="12" rx="1.5"/><path d="M2.5 7h13M6 2v3M12 2v3M5.5 10h2M10.5 10h2M5.5 12.8h2"/>',
     expo: '<path d="M2 12.5h14l-2 3.5H4zM4.5 12.5V8h9v4.5M7 8V5h4v3M9 2.5V5"/>',
     emis: '<path d="M4.5 13a3 3 0 0 1 .4-6 4.3 4.3 0 0 1 8.2 1A2.6 2.6 0 0 1 13 13z"/><path d="M7 10.5h1.6M10 9.7v1.6"/>',
+    censo: '<circle cx="9" cy="5" r="2.4"/><path d="M4.5 15.5c0-2.8 2-4.8 4.5-4.8s4.5 2 4.5 4.8M2 16.5h14"/>',
     trab: '<path d="M3 15.5V9l6-4 6 4v6.5zM7 15.5v-4h4v4"/>',
     imovel: '<path d="M2.5 15.5l2-9 6-3.5 5 4-1.5 8.5z"/><path d="M6 9.5l4 1.5 2.5-2"/>',
     social: '<circle cx="6.5" cy="6" r="2.2"/><circle cx="12" cy="7" r="1.8"/><path d="M2.5 15c0-2.6 1.8-4.5 4-4.5s4 1.9 4 4.5M10.5 11.2c.5-.3 1-.4 1.5-.4 1.9 0 3.5 1.6 3.5 4.2"/>',
@@ -2185,7 +2196,7 @@
     el.innerHTML = html + '</div>' + (algum ? '' : '<div class="vazio">Nada com esse nome.</div>');
   }
   function montaLegenda() {
-    const comItens = !['perda', 'gs', 'cred', 'econ', 'desm', 'fogo', 'clima', 'expo', 'emis', 'trab', 'social', 'imovel'].includes(est.modo);
+    const comItens = !['perda', 'gs', 'cred', 'econ', 'desm', 'fogo', 'clima', 'expo', 'emis', 'trab', 'social', 'imovel', 'censo'].includes(est.modo);
     $('alterna-disputa').hidden = est.modo !== 'pam';
     $('alterna-disputa').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', est.disputa === (b.dataset.d === '1')));
     $('busca-item').hidden = $('leg-arvore').hidden = !comItens;
@@ -2258,6 +2269,7 @@
     expo: () => `<b>Trase</b>: a exportação de soja (2004–2020, em equivalente de grão) e de carne bovina (2015–2017) ligada ao <b>município onde foi produzida</b>, com a exposição da soja ao desmatamento (área desmatada atribuída à soja exportada). <b>Comex Stat</b>: exportação de produtos do agro (capítulos 01–24 do SH, mais couro, celulose e algodão) e importação de fertilizantes e defensivos, pelo <b>domicílio fiscal da empresa</b>: a soja de Sorriso pode sair por Rondonópolis ou por São Paulo. Compare as duas.`,
     emis: () => `Emissões de gases de efeito estufa por município, em tCO₂e (GWP-AR5), estimadas pelo <b>SEEG</b> (Observatório do Clima): agropecuária (fermentação entérica do gado, solos e adubo, dejetos, arroz irrigado) e mudança de uso da terra (desmatamento e queima de vegetação), com a remoção por vegetação secundária e áreas protegidas.`,
     trab: () => `<b>RAIS</b>: empregos formais da agropecuária (subsetor IBGE 25) em 31 de dezembro; o emprego informal, a maior parte do trabalho no campo, não aparece. <b>CAGED</b>: admissões menos desligamentos na seção A da CNAE, de 2020 em diante (vermelho: fechou vagas). <b>CNEFE</b>: endereços de estabelecimentos agropecuários no Censo 2022. <b>CAFIR</b>: imóveis rurais ativos no cadastro da Receita, na data mais recente (a área do cadastro fica de fora: não fecha em nenhuma unidade). <b>Lista Suja</b> (MTE): empregadores flagrados com trabalho análogo ao de escravo e os trabalhadores resgatados, pelo ano da ação fiscal e só na agropecuária, na produção florestal e na pesca (CNAE 01 a 03). A lista só traz quem já foi julgado em processo administrativo, e começa nas ações fiscais de 2020: antes disso não há dado, o que não quer dizer zero. O município vem do endereço da fiscalização, não da sede da empresa. A lista é pública e nominal; aqui só entram as somas.`,
+    censo: () => `<b>Censo Agropecuário 2017</b> (IBGE), o retrato mais recente de quem produz: um ano só, e a linha do tempo fica nele. <b>Estabelecimento</b> não é imóvel: um imóvel pode ter vários estabelecimentos, e um estabelecimento pode juntar vários imóveis. <b>Agricultura familiar</b> é a tipologia do Censo (Lei 11.326), não a DAP nem o CAF. Onde o município tem 1 ou 2 informantes, o IBGE não publica o número (sigilo, <b>X</b>): o município fica sem valor, não com zero. As porcentagens são do total de estabelecimentos do município.`,
     imovel: () => `Cruzamento pelo <b>imóvel rural do CAR</b> (SICAR, foto de 2025-10-15, sem cancelados), feito fora da página; aqui só entram somas por município, no município do imóvel. O CAR é <b>autodeclarado</b>, tem imóveis sobrepostos e a mesma foto vale para todas as safras: um imóvel inscrito em 2024 aparece como se existisse em 2016. <b>Crédito</b> (SICOR): a operação vai para o imóvel pelo código do CAR que ela informa (de 2019 em diante) ou, antes, pela gleba financiada, e o valor se reparte entre os imóveis da operação. Sem nenhum dos dois, entra a gleba da perda comunicada ao Proagro. <b>Desmatamento durante a operação</b>: polígono do PRODES ou aviso do DETER que se sobrepõe ao imóvel (a área se reparte pela interseção), entre a emissão e o vencimento. <b>Embargo vigente</b>: termo do IBAMA não cancelado, lavrado antes da emissão e sem desembargo até ela, ou embargo do ICMBio ou da SEMA-MT (que não publicam data de desembargo: vale da lavratura em diante). <b>Perda no Proagro</b>: área com perda comprovada em operação cujo imóvel teve desmatamento durante a operação ou embargo vigente. Cada soma de crédito só aparece com ${M.min_celula} ou mais operações e ${M.min_celula} ou mais imóveis. Na <b>grade de 0,25°</b> (~28 km; o imóvel entra na célula do seu centro), o mesmo vale por célula, e uma célula também cai quando, somada às outras publicadas, deixaria calcular por diferença o que o município esconde: a grade mostra parte do total (crédito com desmatamento em 2021: R$ 5,3 de 13,1 bi), e menos onde os imóveis são grandes e poucos por célula, como no Mato Grosso. <b>Uso do solo dentro do CAR</b>: a fração de cada classe do MapBiomas (coleção 10, 30 m) em cada imóvel, ano a ano de 2016 a 2024, vezes a área declarada. TI, UC de proteção integral, floresta pública não destinada (CNFP 2025, tipo B), Lista de Desmatamento Ilegal do Pará (SEMAS-PA; só com 5 ou mais imóveis atingidos no município), SIGEF (metade ou mais do imóvel coberta por parcela certificada), assentamento, análise do CAR (na Bahia, todo imóvel aparece como aguardando análise no SICAR federal, então ela fica sem dado) e camadas declaradas (reserva legal, vegetação nativa) são o retrato atual; as áreas somam imóvel a imóvel, então o CAR sobreposto conta mais de uma vez (na floresta pública não destinada, 42,8 mi ha somados contra no máximo 36,1 mi ha de floresta tocada). Crédito a imóvel do Pará com área na <b>Lista de Desmatamento Ilegal</b> desmatada antes da safra de emissão: R$ 32,9 mi em 2021 (0,7% do crédito ligado a CAR no estado) e cerca de R$ 98 mi de 2016 a 2025. É aproximado, porque a lista dá o ano do desmatamento, não a data do embargo, e com poucos imóveis por município não vira medida no mapa.`,
     social: () => `Famílias inscritas no <b>Cadastro Único</b> por grupo (agricultores familiares, pescadores artesanais, extrativistas, assentados) e em domicílio rural, no último mês de cada ano. <b>Seguro-Defeso</b>: pescadores artesanais pagos no período em que a pesca é proibida (Portal da Transparência), contados pelo NIS; município com menos de ${M.min_celula} não aparece. População estimada pelo IBGE.`,
     clima: () => `<b>SISAM</b> (INPE): chuva e temperatura por município, de 2000 a 2019, a partir de modelo e satélite, não de pluviômetro: serve para comparar um ano com outro no mesmo lugar (a <b>anomalia</b>, contra a média de 2000–2019), menos para o valor absoluto. As <b>estações do INMET</b> são medição direta, de 2000 a 2025, desenhadas como pontos: só os anos com 90% ou mais das horas medidas. <b>S2ID</b> (Defesa Civil): situações de emergência ou calamidade reconhecidas e ainda vigentes; a fonte só guarda o retrato atual. Compare a seca de 2012–2016 no semiárido com as Perdas do Proagro e o Garantia-Safra.`,
@@ -2401,7 +2413,7 @@
     $('ano-sub').textContent = lspaAno(a) ? 'previsão (LSPA)' : { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
       clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', expo: 'ano', emis: 'ano', social: 'ano',
       imovel: ['ti', 'ucpi', 'fpnd', 'ldi', 'ldi_ha', 'sigef', 'assent', 'anl', 'rlvn', 'ncar'].includes(est.metrica) ? 'retrato atual' : ['dcar', 'dpct'].includes(est.metrica) ? 'ago→jul (PRODES)' : est.metrica.startsWith('u_') ? 'ano (MapBiomas)' : safra, cal: 'safras 2012–2025',
-      trab: est.metrica === 'cnefe' ? 'Censo 2022' : est.metrica === 'cafir' ? 'retrato atual' : 'ano', desm: ['emb', 'embha', 'autos', 'multas'].includes(est.metrica) ? 'ano' : ['deter', 'degr', 'miner'].includes(est.metrica) ? deterSub(a) : 'ago→jul (PRODES)', fogo: 'ano',
+      censo: 'o Censo é de 2017', trab: est.metrica === 'cnefe' ? 'Censo 2022' : est.metrica === 'cafir' ? 'retrato atual' : 'ano', desm: ['emb', 'embha', 'autos', 'multas'].includes(est.metrica) ? 'ano' : ['deter', 'degr', 'miner'].includes(est.metrica) ? deterSub(a) : 'ago→jul (PRODES)', fogo: 'ano',
       cred: est.metrica === 'estban' ? 'dezembro' : est.metrica === 'bndes' ? 'ano' : safra }[est.modo];
     calcula();
     if (emCelulas() || est.glebas) CEL = celulasAtuais();
@@ -2549,9 +2561,9 @@
   /* Crédito e economia na ficha: pedem os blocos da 3ª etapa ao abrir a ficha */
   /* Os blocos da 3ª etapa não são baixados só porque a ficha abriu: cada seção
      aparece se o bloco já veio (pelo modo, ou pelo botão no fim da ficha). */
-  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo', 'clima', 'calend', 'mercado', 'emis', 'gente', 'imovel'];
+  const EXTRAS = ['credrs', 'econ', 'terra', 'fogo', 'clima', 'calend', 'mercado', 'emis', 'gente', 'imovel', 'censo'];
   const NOME_EXTRA = { credrs: 'crédito', econ: 'economia', terra: 'desmatamento e terra', fogo: 'fogo', clima: 'clima',
-    mercado: 'exportação', emis: 'emissões', gente: 'trabalho e famílias', calend: 'calendário', imovel: 'imóvel (CAR)' };
+    mercado: 'exportação', emis: 'emissões', gente: 'trabalho e famílias', calend: 'calendário', imovel: 'imóvel (CAR)', censo: 'censo agropecuário' };
   /* Calendário na ficha: uma linha por cultura (as 6 com mais operações datadas),
      12 colunas de mês; a opacidade de cada célula é a parte das operações que
      planta (cor cheia) ou colhe (contorno) naquele mês. */
@@ -2585,6 +2597,37 @@
     return `<h3>Calendário de plantio e colheita</h3>${svg}<div class="legenda"><div class="cat"><div><i style="background:${COR.c[3]}"></i>plantio</div><div><i style="border:1.6px solid ${COR.c[2]}"></i>colheita</div></div></div><div class="nota">Pelas datas declaradas no custeio do SICOR, 2012–2025.</div>`;
   }
   /* séries genéricas na ficha: o valor do ano (ou o mais recente antes dele) */
+  /* Censo na ficha: a condição do produtor numa barra empilhada, e o Censo ao lado de quem
+     conta a mesma gente por outro caminho (CNEFE, CadÚnico, SICOR), se o bloco já veio. */
+  const CONDICAO = [['ce_prop', 'proprietário'], ['ce_asse', 'assentado sem título'], ['ce_arre', 'arrendatário'],
+    ['ce_parc', 'parceiro'], ['ce_como', 'comodatário'], ['ce_ocup', 'ocupante'], ['ce_sem', 'sem área']];
+  function barraCondicao(B, m) {
+    const ps = CONDICAO.map(([k, n], i) => [n, valorSerie(B, k, m, 2017), COR.f[i]]).filter(([, v]) => v > 0);
+    if (!ps.length) return '';
+    return `<div class="nota" style="margin:0 0 4px">Condição do produtor em relação à terra:</div>
+      <div style="display:flex;height:10px;border-radius:2px;overflow:hidden;margin-bottom:4px">${ps.map(([n, v, c]) =>
+        `<i title="${n}: ${fmt(v, 0)}%" style="width:${v}%;background:${c}"></i>`).join('')}</div>
+      <div class="nota" style="margin:0 0 8px">${ps.map(([n, v, c]) => `<span style="color:${c}">■</span> ${n} ${fmt(v, 0)}%`).join(' · ')}</div>`;
+  }
+  function comparaCenso(B, m) {
+    const l = [], est17 = valorSerie(B, 'ce_estab', m, 2017), fam = valorSerie(B, 'ce_efam', m, 2017), G = SOB.gente;
+    if (G && est17 > 0) {
+      const cn = valorSerie(G, 'cnefe', m, 2022);
+      if (cn > 0) l.push(`<span>Estabelecimentos: Censo 2017 × endereços do CNEFE 2022</span><span>${fmt(est17)} × ${fmt(cn)}</span>`);
+    }
+    if (G && fam > 0) {
+      const cad = valorSerie(G, 'cad_agri', m, 2017);
+      if (cad > 0) l.push(`<span>Familiares no Censo × famílias de agricultores no CadÚnico, 2017</span><span>${fmt(fam)} × ${fmt(cad)}</span>`);
+    }
+    if (SOB.credrs && est17 > 0) {
+      const R = SOB.credrs.A;
+      let ops = 0;
+      for (let r = 0; r < R.cr_m.length; r++) if (R.cr_m[r] === m && R.cr_s[r] === 17) ops += R.cr_n[r];
+      const pf = valorSerie(B, 'ce_financ', m, 2017);
+      if (ops > 0 && pf > 0) l.push(`<span>Financiados no Censo × operações no SICOR, safra 2017/18</span><span>${fmt(pf * est17 / 100)} × ${fmt(ops)}</span>`);
+    }
+    return l;
+  }
   function fichaSeries(m, a) {
     let h = '';
     for (const [id, def] of Object.entries(SERIES)) {
@@ -2610,7 +2653,8 @@
         if (lg('esmagadoras')) linhas.push(`<span>Esmagadoras de soja</span><span>${fmt(lg('esmagadoras'))} · ${curto(lg('cap_esmagadora'))} t/dia</span>`);
         if (lg('frigorificos')) linhas.push(`<span>Frigoríficos com SIF</span><span>${fmt(lg('frigorificos'))}</span>`);
       }
-      if (linhas.length) h += `<h3>${def.titulo}</h3><div class="kv">${linhas.join('')}</div>`;
+      if (id === 'censo' && linhas.length) linhas.push(...comparaCenso(B, m));
+      if (linhas.length) h += `<h3>${def.titulo}</h3>` + (id === 'censo' ? barraCondicao(B, m) : '') + `<div class="kv">${linhas.join('')}</div>`;
     }
     return h;
   }
@@ -2779,7 +2823,7 @@
     [/^(Lavoura e pasto novos|Desmatamento|Emissões|Imóvel|Cadastro Ambiental)/, 'Terra'],
     [/^(Crédito|Quem empresta|Economia|Exportação)/, 'Dinheiro'],
     [/^(Perdas|Garantia-Safra|Clima|Fogo)/, 'Clima e fogo'],
-    [/^(Trabalho|Famílias)/, 'Gente'],
+    [/^(Trabalho|Famílias|Quem produz)/, 'Gente'],
   ];
   const temaFicha = t => TEMA_FICHA.find(([re]) => re.test(t))?.[1] || 'Produção';
   function recolhiveis(f) {
