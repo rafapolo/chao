@@ -89,6 +89,19 @@ mesmos arquivos (`br_mma_cnuc`, `br_prf_infracoes`, `br_ans_operadoras`, `br_tse
 
 Hoje a LDI entra só como retrato atual (área do CAR na lista).
 
-- [ ] Medir o crédito dado a imóvel com área da lista desmatada antes da emissão, pelo
-  `ano_desmat`. É uma aproximação: a lista não tem a data do embargo (gotcha
-  `sem_data_de_embargo` em `br_semas_pa_ldi`).
+- [x] Medido em 2026-10-26 (consulta avulsa sobre `marca.parquet`; imóvel do PA com ≥ 1% na
+  LDI e `ano_desmat` menor que o ano da safra de emissão; 4.985 imóveis tocam a lista). É
+  uma aproximação: a lista não tem a data do embargo (gotcha `sem_data_de_embargo`).
+
+  | safra | crédito em CAR no PA | em imóvel da LDI desmatado antes | operações | imóveis | municípios |
+  |---|---|---|---|---|---|
+  | 2019 | R$ 2.149 mi | R$ 6,8 mi | 54 | 32 | 18 |
+  | 2020 | R$ 2.844 mi | R$ 8,9 mi | 59 | 26 | 14 |
+  | 2021 | R$ 4.630 mi | R$ 32,9 mi (0,7%) | 137 | 95 | 24 |
+  | 2022 | R$ 3.629 mi | R$ 12,7 mi | 68 | 50 | 21 |
+  | 2023 | R$ 4.425 mi | R$ 7,9 mi | 52 | 36 | 14 |
+  | 2024 | R$ 5.729 mi | R$ 19,3 mi | 100 | 61 | 24 |
+
+  Soma ~R$ 98 mi de 2016 a 2025. Com ~2–4 imóveis por município, o corte de 5 operações e
+  5 imóveis apagaria quase tudo por município: não vale uma medida na página. Cabe como
+  número no texto do modo (por UF), se quiser.
