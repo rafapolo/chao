@@ -835,7 +835,7 @@
         const A = SOB.terra?.meta.anos;
         if (!A) return [2001, 2025];
         const mt = est.metrica;
-        return mt === 'acum' ? A.acum : ['deter', 'degr'].includes(mt) ? A.deter : ['emb', 'embha', 'autos', 'multas'].includes(mt) ? A.ibama : A.prodes;
+        return mt === 'acum' ? A.acum : ['deter', 'degr', 'miner'].includes(mt) ? A.deter : ['emb', 'embha', 'autos', 'multas'].includes(mt) ? A.ibama : A.prodes;
       }
       case 'clima': {
         const C = SOB.clima?.meta;
@@ -875,7 +875,7 @@
     if (est.modo === 'cred') return CRED_MEDIDAS;
     if (est.modo === 'desm') return [['km2', 'km² desmatados no ano (PRODES)'], ['pct', '% do município desmatado no ano'],
       ['grade', 'Desmatamento na grade de 0,1° (km²)'], ['acum', 'Desmatado acumulado (km²)'], ['deter', 'Alertas DETER: desmatamento (km²)'],
-      ['degr', 'Alertas DETER: degradação (km²)'], ['emb', 'Embargos do IBAMA'], ['embha', 'Área embargada (ha)'],
+      ['degr', 'Alertas DETER: degradação (km²)'], ['miner', 'Alertas DETER: mineração e garimpo (km²)'], ['emb', 'Embargos do IBAMA'], ['embha', 'Área embargada (ha)'],
       ['autos', 'Autos de infração de flora'], ['multas', 'Multas de flora (R$)']];
     if (est.modo === 'clima') return [['chuva', 'Chuva no ano (mm, SISAM)'], ['anom', 'Anomalia da chuva (vs. 2000–2019)'],
       ['secos', 'Dias sem chuva'], ['temp', 'Temperatura média (°C)'], ['tmax', 'Temperatura da tarde (°C)'],
@@ -1157,8 +1157,8 @@
           if (v > 0) poe(T.pr_m[r], v);
         }
         if (mt === 'pct') for (let m = 0; m < NM; m++) VAL[m] = VAL[m] / M.mun.km2[m] * 100;
-      } else if (mt === 'deter' || mt === 'degr') {
-        const c = mt === 'deter' ? 0 : 1;
+      } else if (mt === 'deter' || mt === 'degr' || mt === 'miner') {
+        const c = { deter: 0, degr: 1, miner: 3 }[mt];
         for (let r = 0; r < T.dt_m.length; r++) if (T.dt_a[r] === s && T.dt_c[r] === c) poe(T.dt_m[r], LUT[T.dt_v[r]]);
       } else {
         for (let r = 0; r < T.ib_m.length; r++) {
@@ -2186,7 +2186,7 @@
     gleba: () => `Polígonos das <b>glebas de custeio agrícola</b> financiadas com recurso público (SICOR, Banco Central), somados numa grade de 0,05° (~30 km²). É uma <b>amostra de onde se planta</b>, não o total: na safra 2023/24 a soja com gleba soma ~4 milhões de ha, contra 46 milhões declarados. Células com menos de ${M.min_celula} glebas não aparecem, para não identificar propriedade.` + (produtosSicor().size ? '' : ' <span class="aviso">Nenhuma cultura escolhida tem crédito com gleba.</span>'),
     perda: () => `Área com <b>perda comprovada</b> no Proagro, o seguro do crédito rural, por safra e evento, na grade de 0,05°. A seca responde por 59% da área com perda de 2012 a 2025. Células com menos de ${M.min_celula} perdas não aparecem.`,
     cred: () => `Crédito rural contratado no <b>SICOR</b> (Banco Central), por safra. <b>Só o crédito com município</b>: o SICOR põe o município apenas nas operações de recurso controlado ou equalizado (poupança rural equalizada, BNDES/Finame, fundos constitucionais, LCA equalizada, Funcafé, Pronaf, Pronamp). A LCA livre e os recursos livres não têm município: na safra 2023/24 foram R$ 136 bi com município de R$ 422 bi no país (com uma UF no recorte, a faixa mostra o total dela). Combinação de município, safra, finalidade, atividade e programa com menos de ${M.min_celula} operações não aparece (8% do valor), e o que vem de tomador só onde há ${M.min_celula} ou mais. <b>ESTBAN</b>: saldo de financiamentos rurais nas agências, em dezembro; no espelho faltam os anos ímpares desde 2003, e a queda de 2020 não aparece no SICOR. <b>BNDES</b>: desembolso ao setor agropecuário.`,
-    desm: () => `<b>PRODES</b> (INPE): área de vegetação nativa suprimida por ano (de agosto a julho), em todos os biomas; de 2017 em diante pelo incremento municipal, antes pela diferença do acumulado. A grade soma os polígonos em células de 0,1° (~120 km²). <b>DETER</b>: alertas diários (Amazônia desde 2016, Cerrado desde 2018, Pantanal e não-floresta desde 2023), separados em desmatamento e degradação; cicatriz de queimada fica no modo Fogo. <b>IBAMA</b>: embargos e autos de infração de flora não cancelados, pelo ano da lavratura; a área embargada vem sem unidade declarada na fonte (tratada como ha). Nome de embargado ou autuado não entra.`,
+    desm: () => `<b>PRODES</b> (INPE): área de vegetação nativa suprimida por ano (de agosto a julho), em todos os biomas; de 2017 em diante pelo incremento municipal, antes pela diferença do acumulado. A grade soma os polígonos em células de 0,1° (~120 km²). <b>DETER</b>: alertas diários (Amazônia desde agosto de 2016, Cerrado desde 2018, Pantanal e não-floresta desde 2023), separados em desmatamento, degradação e mineração (garimpo e lavra); cicatriz de queimada fica no modo Fogo. Vão no mesmo ano do PRODES (agosto a julho), para as duas linhas da ficha falarem da mesma janela; o ano mais recente está incompleto e a linha do tempo diz até quando vai. O DETER diz <i>onde e quando</i>; a área desmatada oficial é a do PRODES. Num mesmo ano os alertas não se sobrepõem, mas um trecho pode voltar a ser alertado em outro ano: somar anos superestima em ~5% (Pará, 2016–2026). <b>IBAMA</b>: embargos e autos de infração de flora não cancelados, pelo ano da lavratura; a área embargada vem sem unidade declarada na fonte (tratada como ha). Nome de embargado ou autuado não entra.`,
     cal: () => `Quando se planta e se colhe: as datas de início do plantio e de fim da colheita que o produtor declara no <b>custeio agrícola</b> do SICOR, todas as safras de 2012 a 2025 juntas. O mês típico é a média circular dos meses de plantio (dezembro e janeiro ficam vizinhos), numa escala de cores que gira com o ano. O milho plantado de janeiro a abril é a <b>2ª safra</b> (safrinha), depois da soja: é o que faz a área declarada passar da área vista pelo satélite. Só o crédito com município, e só o município com ${M.min_celula} ou mais operações datadas da cultura.`,
     expo: () => `<b>Trase</b>: a exportação de soja (2004–2020, em equivalente de grão) e de carne bovina (2015–2017) ligada ao <b>município onde foi produzida</b>, com a exposição da soja ao desmatamento (área desmatada atribuída à soja exportada). <b>Comex Stat</b>: exportação de produtos do agro (capítulos 01–24 do SH, mais couro, celulose e algodão) e importação de fertilizantes e defensivos, pelo <b>domicílio fiscal da empresa</b>: a soja de Sorriso pode sair por Rondonópolis ou por São Paulo. Compare as duas.`,
     emis: () => `Emissões de gases de efeito estufa por município, em tCO₂e (GWP-AR5), estimadas pelo <b>SEEG</b> (Observatório do Clima): agropecuária (fermentação entérica do gado, solos e adubo, dejetos, arroz irrigado) e mudança de uso da terra (desmatamento e queima de vegetação), com a remoção por vegetação secundária e áreas protegidas.`,
@@ -2194,7 +2194,7 @@
     imovel: () => `Cruzamento pelo <b>imóvel rural do CAR</b> (SICAR, foto de 2025-10-15, sem cancelados), feito fora da página; aqui só entram somas por município, no município do imóvel. O CAR é <b>autodeclarado</b>, tem imóveis sobrepostos e a mesma foto vale para todas as safras: um imóvel inscrito em 2024 aparece como se existisse em 2016. <b>Crédito</b> (SICOR): a operação vai para o imóvel pelo código do CAR que ela informa (de 2019 em diante) ou, antes, pela gleba financiada, e o valor se reparte entre os imóveis da operação. Sem nenhum dos dois, entra a gleba da perda comunicada ao Proagro. <b>Desmatamento durante a operação</b>: polígono do PRODES ou aviso do DETER que se sobrepõe ao imóvel (a área se reparte pela interseção), entre a emissão e o vencimento. <b>Embargo vigente</b>: termo do IBAMA não cancelado, lavrado antes da emissão e sem desembargo até ela, ou embargo do ICMBio ou da SEMA-MT (que não publicam data de desembargo: vale da lavratura em diante). <b>Perda no Proagro</b>: área com perda comprovada em operação cujo imóvel teve desmatamento durante a operação ou embargo vigente. Cada soma de crédito só aparece com ${M.min_celula} ou mais operações e ${M.min_celula} ou mais imóveis. Na <b>grade de 0,05°</b> (o imóvel entra na célula do seu centro), o mesmo vale por célula, e uma célula também cai quando, somada às outras publicadas, deixaria calcular por diferença o que o município esconde: onde os imóveis são grandes e poucos por célula, como na Amazônia, a grade mostra só uma parte pequena do total. <b>Uso do solo dentro do CAR</b>: a fração de cada classe do MapBiomas (coleção 10, 30 m) em cada imóvel, ano a ano de 2016 a 2024, vezes a área declarada. TI, UC de proteção integral, floresta pública não destinada (CNFP 2025, tipo B), Lista de Desmatamento Ilegal do Pará (SEMAS-PA; só com 5 ou mais imóveis atingidos no município), SIGEF (metade ou mais do imóvel coberta por parcela certificada), assentamento, análise do CAR (na Bahia, todo imóvel aparece como aguardando análise no SICAR federal, então ela fica sem dado) e camadas declaradas (reserva legal, vegetação nativa) são o retrato atual; as áreas somam imóvel a imóvel, então o CAR sobreposto conta mais de uma vez (na floresta pública não destinada, 42,8 mi ha somados contra no máximo 36,1 mi ha de floresta tocada).`,
     social: () => `Famílias inscritas no <b>Cadastro Único</b> por grupo (agricultores familiares, pescadores artesanais, extrativistas, assentados) e em domicílio rural, no último mês de cada ano. <b>Seguro-Defeso</b>: pescadores artesanais pagos no período em que a pesca é proibida (Portal da Transparência), contados pelo NIS; município com menos de ${M.min_celula} não aparece. População estimada pelo IBGE.`,
     clima: () => `<b>SISAM</b> (INPE): chuva e temperatura por município, de 2000 a 2019, a partir de modelo e satélite, não de pluviômetro: serve para comparar um ano com outro no mesmo lugar (a <b>anomalia</b>, contra a média de 2000–2019), menos para o valor absoluto. As <b>estações do INMET</b> são medição direta, de 2000 a 2025, desenhadas como pontos: só os anos com 90% ou mais das horas medidas. <b>S2ID</b> (Defesa Civil): situações de emergência ou calamidade reconhecidas e ainda vigentes; a fonte só guarda o retrato atual. Compare a seca de 2012–2016 no semiárido com as Perdas do Proagro e o Garantia-Safra.`,
-    fogo: () => `Focos de calor do <b>satélite de referência</b> do INPE (AQUA, passagem da tarde), por ano: é a série comparável ao longo do tempo. Desde 2023 a fonte traz todos os satélites (30 vezes mais focos, o mesmo fogo visto várias vezes); só o de referência entra. Foco não é área queimada: a área vem da cicatriz de queimada do DETER (Amazônia, Cerrado, Pantanal).`,
+    fogo: () => `Focos de calor do <b>satélite de referência</b> do INPE (AQUA, passagem da tarde), por ano: é a série comparável ao longo do tempo. Desde 2023 a fonte traz todos os satélites (30 vezes mais focos, o mesmo fogo visto várias vezes); só o de referência entra. Foco não é área queimada: a área vem da cicatriz de queimada do DETER (Amazônia, Cerrado, Pantanal), contada como os focos, por ano civil.`,
     econ: () => `Valor adicionado bruto da <b>agropecuária</b> no PIB dos municípios (IBGE), em R$ correntes, de 1999 a 2021 (1999–2001 pela série antiga; o IBGE ainda não abriu 2022 e 2023 por setor). É o que a agropecuária gera de renda no município, não o que ela vende: a soja processada na indústria conta na indústria.`,
     gs: () => `Agricultores familiares do semiárido pagos pelo <b>Garantia-Safra</b> (Portal da Transparência) por ano do pagamento. A porcentagem compara com o número de imóveis no CAR do município — é ordem de grandeza, não cobertura exata.`,
   };
@@ -2329,7 +2329,7 @@
     $('ano-sub').textContent = { pam: 'ano', sat: 'ano', cmp: 'ano', exp: 'década', gleba: safra, perda: safra, gs: 'pagamento', econ: 'ano',
       clima: est.metrica.startsWith('des') ? 'vigentes' : 'ano', expo: 'ano', emis: 'ano', social: 'ano',
       imovel: ['ti', 'ucpi', 'fpnd', 'ldi', 'ldi_ha', 'sigef', 'assent', 'anl', 'rlvn', 'ncar'].includes(est.metrica) ? 'retrato atual' : ['dcar', 'dpct'].includes(est.metrica) ? 'ago→jul (PRODES)' : safra, cal: 'safras 2012–2025',
-      trab: est.metrica === 'cnefe' ? 'Censo 2022' : est.metrica === 'cafir' ? 'retrato atual' : 'ano', desm: ['emb', 'embha', 'autos', 'multas', 'deter', 'degr'].includes(est.metrica) ? 'ano' : 'ago→jul (PRODES)', fogo: 'ano',
+      trab: est.metrica === 'cnefe' ? 'Censo 2022' : est.metrica === 'cafir' ? 'retrato atual' : 'ano', desm: ['emb', 'embha', 'autos', 'multas'].includes(est.metrica) ? 'ano' : ['deter', 'degr', 'miner'].includes(est.metrica) ? deterSub(a) : 'ago→jul (PRODES)', fogo: 'ano',
       cred: est.metrica === 'estban' ? 'dezembro' : est.metrica === 'bndes' ? 'ano' : safra }[est.modo];
     calcula();
     if (emCelulas() || est.glebas) CEL = celulasAtuais();
@@ -2557,25 +2557,34 @@
     if (ds.length) h += `<div class="kv" style="margin-top:6px"><span>Reconhecimentos vigentes (S2ID)</span><span>${ds.join(' · ')}</span></div>`;
     return h;
   }
+  /* O DETER vai no ano PRODES (agosto a julho), como o incremento ao lado. O último ano
+     fica incompleto até julho: diz até que mês chegou o aviso mais recente. */
+  function deterSub(a) {
+    const A = SOB.terra?.meta.anos, u = A?.deter_ultimo;
+    if (!u || a !== A.deter[1]) return 'ago→jul (PRODES)';
+    const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    return `ago/${a - 1}→${meses[+u.slice(5, 7) - 1]}/${u.slice(0, 4)}, incompleto`;
+  }
   function fichaTerra(m, a) {
     let h = '';
     const T = SOB.terra?.A, F = SOB.fogo?.A;
     if (T) {
       const kv = [], s = a - 2000, a90 = a - 1990;
       let inc = 0, acum = 0, anoAcum = 0, emb = 0, embTot = 0, autos = 0, multas = 0, multasTot = 0;
-      const dt = [0, 0];
+      const dt = [0, 0, 0, 0];
       for (let r = 0; r < T.pr_m.length; r++) if (T.pr_m[r] === m) {
         if (T.pr_a[r] === s) inc = LUT[T.pr_inc[r]] || 0;
         if (T.pr_a[r] <= s && LUT[T.pr_acum[r]] > 0 && T.pr_a[r] >= anoAcum) { anoAcum = T.pr_a[r]; acum = LUT[T.pr_acum[r]]; }
       }
-      for (let r = 0; r < T.dt_m.length; r++) if (T.dt_m[r] === m && T.dt_a[r] === s && T.dt_c[r] < 2) dt[T.dt_c[r]] += LUT[T.dt_v[r]];
+      for (let r = 0; r < T.dt_m.length; r++) if (T.dt_m[r] === m && T.dt_a[r] === s) dt[T.dt_c[r]] += LUT[T.dt_v[r]];
       for (let r = 0; r < T.ib_m.length; r++) if (T.ib_m[r] === m) {
         embTot += T.ib_embargos[r]; multasTot += LUT[T.ib_multas_flora[r]] || 0;
         if (T.ib_a[r] === a90) { emb = T.ib_embargos[r]; autos = T.ib_autos_flora[r]; multas = LUT[T.ib_multas_flora[r]] || 0; }
       }
       if (inc) kv.push([`Desmatado em ${a} (PRODES)`, fmt(inc, inc < 10 ? 2 : 0) + ' km²']);
       if (acum) kv.push([`Desmatado acumulado até ${2000 + anoAcum}`, fmt(acum) + ' km² · ' + fmt(acum / M.mun.km2[m] * 100, 0) + '% do município']);
-      if (dt[0] || dt[1]) kv.push([`Alertas DETER em ${a}`, `${fmt(dt[0], 1)} km² desmatamento · ${fmt(dt[1], 1)} km² degradação`]);
+      if (dt[0] || dt[1] || dt[3]) kv.push([`Alertas DETER em ${a} (${deterSub(a).replace(' (PRODES)', '')})`,
+        `${fmt(dt[0], 1)} km² desmatamento · ${fmt(dt[1], 1)} km² degradação` + (dt[3] ? ` · ${fmt(dt[3], 1)} km² mineração` : '')]);
       if (emb || autos) kv.push([`IBAMA em ${a}`, `${fmt(emb)} embargos · ${fmt(autos)} autos de flora · R$ ${curto(multas)}`]);
       if (embTot) kv.push(['IBAMA desde 2000', `${fmt(embTot)} embargos · R$ ${curto(multasTot)} em multas de flora`]);
       const fu = k => T['fu_' + k][m], car = CAD?.A.car_area_cadastrada[m] || 0;

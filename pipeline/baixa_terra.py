@@ -5,8 +5,8 @@ assentamentos e certificação fundiária (INCRA).
 Saídas em pipeline/dados/:
   prodes_mun.parquet   — id_municipio, ano, incremento (km² desmatados no ano), acumulado (km²)
   prodes_celula.parquet — i, j (grade de 0,05°), ano, area_km2
-  deter_mun.parquet    — id_municipio, ano, classe (desmatamento, degradação, queimada,
-                         mineração), avisos, area_km2
+  deter_mun.parquet    — id_municipio, ano (PRODES, ago–jul; queimada: civil), classe (desmatamento, degradação, queimada,
+                         mineração), avisos, area_km2, ultimo (dia do aviso mais recente)
   fogo_mun.parquet     — id_municipio, ano, mes, focos
   fogo_celula.parquet  — i, j, ano, focos
   ibama_mun.parquet    — id_municipio, ano, embargos, area_embargada, autos, autos_flora,
@@ -23,7 +23,12 @@ Medido em 2026-10-22 (e nos gotchas do rodado):
     do Cerrado e fica de fora; RESERVATORIO e QUEIMADA também.
   - DETER: `class_name` só existe em Pantanal e não-floresta; nos outros a classe está
     em `CLASSNAME`. Município pelo `GEOCODIBGE`, área pela parte no município
-    (`AREAMUNKM`). Cicatriz de queimada não é desmatamento: classe à parte.
+    (`AREAMUNKM`). Cicatriz de queimada não é desmatamento: classe à parte. Desmatamento,
+    degradação e mineração vão no ano do PRODES (agosto a julho), para as duas fontes
+    falarem da mesma janela, e o ano mais recente fica incompleto até julho; queimada fica
+    no ano civil, o dos focos de calor. Dentro de um ano e de uma classe os
+    polígonos não se sobrepõem (união/soma = 1,000 em 2024); somando 2016–2026 o mesmo
+    trecho volta a ser alertado em ~5% da área (PA: 0,947) — somar anos superestima pouco.
   - queimadas: 23 M focos, todos com município; a célula usa lat/lon do foco. De 2003 a
     2022 o espelho só tem a série do satélite de referência (satelite NULL; 2020: 222.797,
     igual ao INPE); de 2023 em diante vêm todos os satélites (2024: 8,1 M focos) e a
@@ -75,17 +80,26 @@ COPY (
 
 dm = roda("deter_mun", """
 COPY (
-  SELECT GEOCODIBGE id_municipio, year(VIEW_DATE) ano,
-         CASE WHEN coalesce(CLASSNAME, class_name) IN ('DESMATAMENTO_CR', 'DESMATAMENTO_VEG')
-                OR coalesce(CLASSNAME, class_name) LIKE 'supressão%' THEN 'desmatamento'
-              WHEN coalesce(CLASSNAME, class_name) IN ('DEGRADACAO', 'CS_DESORDENADO', 'CS_GEOMETRICO', 'CORTE_SELETIVO') THEN 'degradação'
-              WHEN coalesce(CLASSNAME, class_name) IN ('CICATRIZ_DE_QUEIMADA', 'cicatriz de queimada') THEN 'queimada'
-              WHEN coalesce(CLASSNAME, class_name) IN ('MINERACAO', 'mineração') THEN 'mineração' END classe,
-         count(*) avisos, sum(coalesce(AREAMUNKM, area_km)) area_km2
-  FROM br_inpe_deter.avisos WHERE GEOCODIBGE IS NOT NULL
-  GROUP BY ALL HAVING classe IS NOT NULL ORDER BY ALL
+  WITH a AS (
+    SELECT GEOCODIBGE id_municipio, VIEW_DATE dia, coalesce(AREAMUNKM, area_km) area,
+           CASE WHEN coalesce(CLASSNAME, class_name) IN ('DESMATAMENTO_CR', 'DESMATAMENTO_VEG')
+                  OR coalesce(CLASSNAME, class_name) LIKE 'supressão%' THEN 'desmatamento'
+                WHEN coalesce(CLASSNAME, class_name) IN ('DEGRADACAO', 'CS_DESORDENADO', 'CS_GEOMETRICO', 'CORTE_SELETIVO') THEN 'degradação'
+                WHEN coalesce(CLASSNAME, class_name) IN ('CICATRIZ_DE_QUEIMADA', 'cicatriz de queimada') THEN 'queimada'
+                WHEN coalesce(CLASSNAME, class_name) IN ('MINERACAO', 'mineração') THEN 'mineração' END classe
+    FROM br_inpe_deter.avisos WHERE GEOCODIBGE IS NOT NULL)
+  -- desmatamento, degradação e mineração no ano PRODES (agosto a julho), o do incremento ao
+  -- lado: aviso de ago–dez conta no ano seguinte. Queimada fica no ano civil, o dos focos de
+  -- calor com que ela aparece no modo Fogo.
+  SELECT id_municipio,
+         year(dia) + CASE WHEN classe <> 'queimada' AND month(dia) >= 8 THEN 1 ELSE 0 END ano,
+         classe, count(*) avisos, sum(area) area_km2,
+         max(max(dia)) OVER () ultimo  -- dia do aviso mais recente: até onde vai o último ano
+  FROM a WHERE classe IS NOT NULL
+  GROUP BY ALL ORDER BY ALL
 ) TO '{saida}' (FORMAT parquet);
 """)
+
 
 fm = roda("fogo_mun", """
 COPY (

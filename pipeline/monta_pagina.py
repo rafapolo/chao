@@ -552,6 +552,8 @@ bd.meta = {"delta": delta, "passo": PASSO_TERRA, "deter": CLASSES_DETER, "fund":
                     "acum": [int(pmu.filter(pl.col("acumulado").is_not_null())["ano"].min()),
                              int(pmu.filter(pl.col("acumulado").is_not_null())["ano"].max())],
                     "deter": [int(dtm["ano"].min()), int(dtm["ano"].max())],
+                    # o último ano PRODES do DETER fica incompleto até julho: a página avisa até quando vai
+                    "deter_ultimo": str(dtm["ultimo"].max()) if "ultimo" in dtm.columns else None,
                     "ibama": [2000, int(ibm["ano"].max())]}}
 
 print("fogo")
