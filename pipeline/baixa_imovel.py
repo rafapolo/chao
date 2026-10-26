@@ -575,27 +575,28 @@ COPY (
     print("uso do solo dentro do CAR (mi ha):"); print(s)
 
 
-pedidas = sys.argv[1:] or list(ETAPAS)
-for nome in pedidas:
-    if nome == "terra-":
-        terra(incra=False)
-    elif nome.startswith("grade:"):   # grade:1 = células de 0,05°, para comparar
-        grade(int(nome.split(":")[1]))
-    else:
-        ETAPAS[nome]()
+if __name__ == "__main__":   # importar só traz as funções e constantes, sem rodar etapa
+    pedidas = sys.argv[1:] or list(ETAPAS)
+    for nome in pedidas:
+        if nome == "terra-":
+            terra(incra=False)
+        elif nome.startswith("grade:"):   # grade:1 = células de 0,05°, para comparar
+            grade(int(nome.split(":")[1]))
+        else:
+            ETAPAS[nome]()
 
-if "agrega" in pedidas:
-    # ---------- conferências ----------
-    f = lambda v: f"{v:,.0f}".replace(",", ".")
-    print(f"CAR ativo nos municípios: {f(mun['area_car'].sum() / 1e6)} mi ha em {f(mun['imoveis'].sum())} imóveis (SICAR ≈ 713 mi ha)")
-    print(f"  em TI: {f(mun['area_ti'].sum() / 1e6)} mi ha · em UC de proteção integral: {f(mun['area_ucpi'].sum() / 1e6)} mi ha"
-          f" · em floresta pública não destinada: {f(mun['area_fpnd'].sum() / 1e6)} mi ha"
-          f" · na LDI do Pará: {f(mun['area_ldi'].sum())} ha")
-    print(f"  com parcela SIGEF: {f(mun['imoveis_sigef'].sum())} imóveis · em assentamento: {f(mun['imoveis_assent'].sum())}"
-          f" · área analisada: {f(mun['area_analisada'].sum() / 1e6)} mi ha")
-    print(f"perda no Proagro em imóvel com desmatamento ou embargo: {f(ano['pp_area'].sum())} ha")
-    s = ano.group_by("ano").agg(pl.col("ccar_valor", "cd_valor", "ce_valor", "desm_km2", "desm_car_km2").sum()).sort("ano")
-    print(s.with_columns((pl.col(c) / 1e9).round(1) for c in ("ccar_valor", "cd_valor", "ce_valor")))
-    assert 600e6 < mun["area_car"].sum() < 760e6
-    c23 = s.filter(pl.col("ano") == 2023)
-    assert 100e9 < c23["ccar_valor"][0] < 400e9, "crédito 2023/24 ligado a CAR fora da ordem de grandeza"
+    if "agrega" in pedidas:
+        # ---------- conferências ----------
+        f = lambda v: f"{v:,.0f}".replace(",", ".")
+        print(f"CAR ativo nos municípios: {f(mun['area_car'].sum() / 1e6)} mi ha em {f(mun['imoveis'].sum())} imóveis (SICAR ≈ 713 mi ha)")
+        print(f"  em TI: {f(mun['area_ti'].sum() / 1e6)} mi ha · em UC de proteção integral: {f(mun['area_ucpi'].sum() / 1e6)} mi ha"
+              f" · em floresta pública não destinada: {f(mun['area_fpnd'].sum() / 1e6)} mi ha"
+              f" · na LDI do Pará: {f(mun['area_ldi'].sum())} ha")
+        print(f"  com parcela SIGEF: {f(mun['imoveis_sigef'].sum())} imóveis · em assentamento: {f(mun['imoveis_assent'].sum())}"
+              f" · área analisada: {f(mun['area_analisada'].sum() / 1e6)} mi ha")
+        print(f"perda no Proagro em imóvel com desmatamento ou embargo: {f(ano['pp_area'].sum())} ha")
+        s = ano.group_by("ano").agg(pl.col("ccar_valor", "cd_valor", "ce_valor", "desm_km2", "desm_car_km2").sum()).sort("ano")
+        print(s.with_columns((pl.col(c) / 1e9).round(1) for c in ("ccar_valor", "cd_valor", "ce_valor")))
+        assert 600e6 < mun["area_car"].sum() < 760e6
+        c23 = s.filter(pl.col("ano") == 2023)
+        assert 100e9 < c23["ccar_valor"][0] < 400e9, "crédito 2023/24 ligado a CAR fora da ordem de grandeza"

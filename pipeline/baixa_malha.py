@@ -17,6 +17,9 @@ import polars as pl
 
 from beelink import consulta, roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_malha.py é um script: rode python3 baixa_malha.py")
+
 TOL_MUN = 0.005    # ~550 m: some no zoom de estado, aparece só perto do teto
 TOL_MASC = 0.003
 

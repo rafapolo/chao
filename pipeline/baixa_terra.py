@@ -46,6 +46,9 @@ import polars as pl
 
 from beelink import roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_terra.py é um script: rode python3 baixa_terra.py")
+
 PASSO = 0.1   # ~120 km²: com 0,05° as duas grades passavam de 1,4 M células cada
 REFERENCIA = "(satelite IS NULL OR satelite = 'AQUA_M-T')"
 

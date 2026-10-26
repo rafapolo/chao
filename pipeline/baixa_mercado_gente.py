@@ -40,6 +40,9 @@ import polars as pl
 
 from beelink import roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_mercado_gente.py é um script: rode python3 baixa_mercado_gente.py")
+
 tr = roda("trase", """
 COPY (
   SELECT municipality_id_production id_municipio, year ano, 'soja' produto, sum(try_cast(soy_total_export AS DOUBLE)) t, sum(try_cast(fob_usd AS DOUBLE)) usd,

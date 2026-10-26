@@ -28,6 +28,9 @@ import polars as pl
 
 from beelink import roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_regioes.py é um script: rode python3 baixa_regioes.py")
+
 TOL = 0.01   # ~1 km: contorno de região, desenhado como traço
 
 reg = roda("regioes", f"""

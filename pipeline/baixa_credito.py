@@ -19,6 +19,9 @@ import polars as pl
 
 from beelink import roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_credito.py é um script: rode python3 baixa_credito.py")
+
 PASSO = 0.05
 EVENTO = """CASE r.id_evento
   WHEN '48' THEN 'Seca' WHEN '17' THEN 'Chuva excessiva' WHEN '135' THEN 'Chuva excessiva'

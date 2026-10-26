@@ -21,6 +21,9 @@ import polars as pl
 
 from beelink import roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_cadastros.py é um script: rode python3 baixa_cadastros.py")
+
 gs = roda("gsafra", """
 COPY (
   SELECT d.id_municipio, left(g.mes_referencia, 4)::INTEGER ano,

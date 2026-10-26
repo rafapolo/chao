@@ -21,6 +21,9 @@ import polars as pl
 
 from beelink import roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_calendario.py é um script: rode python3 baixa_calendario.py")
+
 cal = roda("calendario", """
 COPY (
   WITH c AS (SELECT DISTINCT ON (id_referencia_bacen, numero_ordem) id_referencia_bacen, numero_ordem, id_municipio

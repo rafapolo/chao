@@ -17,6 +17,9 @@ import polars as pl
 
 from beelink import roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_mapbiomas.py é um script: rode python3 baixa_mapbiomas.py")
+
 # rótulo da página <- classes do MapBiomas
 CLASSES = {
     "Soja": [39], "Cana": [20], "Arroz": [40], "Algodão": [62],

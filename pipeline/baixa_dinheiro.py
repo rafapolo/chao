@@ -38,6 +38,9 @@ import polars as pl
 
 from beelink import roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_dinheiro.py é um script: rode python3 baixa_dinheiro.py")
+
 OPS = """
   c AS (SELECT DISTINCT ON (id_referencia_bacen, numero_ordem) id_referencia_bacen, numero_ordem, id_municipio
         FROM br_bcb_sicor.recurso_publico_complemento_operacao WHERE id_municipio IS NOT NULL ORDER BY id_referencia_bacen, numero_ordem, id_municipio),   -- determinístico se houver dois municípios

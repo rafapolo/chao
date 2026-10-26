@@ -34,6 +34,9 @@ import polars as pl
 
 from beelink import roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_producao.py é um script: rode python3 baixa_producao.py")
+
 AQUI_PRINCIPAIS = ("Tilápia", "Tambaqui", "Tambacu, tambatinga", "Pacu e patinga",
                    "Carpa", "Camarão", "Ostras, vieiras e mexilhões")
 AQUI_FORA = ("Alevinos", "Larvas e pós-larvas de camarão", "Sementes de moluscos")

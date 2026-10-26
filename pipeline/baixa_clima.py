@@ -30,6 +30,9 @@ import polars as pl
 
 from beelink import roda
 
+if __name__ != "__main__":   # importar rodaria as extrações no beelink
+    raise ImportError("baixa_clima.py é um script: rode python3 baixa_clima.py")
+
 ca = roda("clima_ano", """
 COPY (
   SELECT id_municipio, ano, sum(precipitacao_dia) chuva_mm, avg(temperatura) temp_media,
