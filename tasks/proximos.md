@@ -34,40 +34,16 @@ t…)".
   é "truthy"), e o reload offline pegava `malha` e `prod` ainda sendo gravadas no cache. O
   teste agora confere cada bloco das duas etapas com `caches.match`, em laço; 6 de 6 passaram.
 
-## 4. Dados fora do `index.html`, em `.json.gz` (decidido em 2026-10-26)
+## 4. Dados fora do `index.html` (feito em 2026-10-26)
 
-O `index.html` tem 38,4 MB, contra o orçamento de 25 MB da spec, porque embute os blocos em
-base64 para abrir por `file://`. **Decisão: tirar os dados do HTML e servi-los como
-`.json.gz`**, buscados por `fetch`, na web e com servidor local. Isso derruba o requisito
-de abrir por `file://` (dois cliques) que está no CLAUDE.md.
+O `index.html` único (38,4 MB, contra o orçamento de 25 MB da spec) saiu: a página é
+`site/` com `dados/` ao lado, buscados por `fetch`, e por `file://` ela explica como abrir
+com `python3 -m http.server`. Os testes servem `site/` por HTTP. Release: só a web.
 
-Medido em 2026-10-26, decodificando os blocos de `site/dados/` e regravando em JSON (gzip -9):
-
-| | binário gz (hoje) | json | json.gz |
-|---|---|---|---|
-| total | 28,8 MB | 220 MB | 36,0 MB (1,25×) |
-| prod (1ª etapa) | 3,29 MB | 64,1 MB | 3,59 MB (1,09×) |
-| malha (1ª etapa) | 2,87 MB | 10,7 MB | 3,37 MB (1,17×) |
-| prodqv (sob demanda) | 10,12 MB | 48,6 MB | 12,82 MB (1,27×) |
-| emis | 1,46 MB | 16,0 MB | 2,07 MB (1,42×) |
-
-O JSON custa +7,2 MB (+25%) transferidos, e a 1ª etapa vai de 6,2 para ~7,0 MB. Em memória o
-navegador ainda tem de converter as listas em arrays tipados (o `prod` cru tem 64 MB de texto).
-
-- [x] Feito em 2026-10-26: `monta_pagina.py` grava `site/dados/<bloco>.<hash>.json.gz`
-  (`{"meta", "arrays": {nome: {"t", "v"}}}`, diferenças com sinal), o template lê com
-  `JSON.parse` → `TypedArray.from` e o `index.html` único saiu. Por `file://` a página
-  explica como abrir com `python3 -m http.server`; se o servidor mandar
-  `Content-Encoding: gzip`, ela lê o JSON direto.
-- [x] Testes servem `site/` por HTTP (`testes/comum.ts`); 118 passam nos 3 motores, 3
-  pulados. CLAUDE.md e README atualizados.
-- [x] Medido com 4G (`testes/_perf.ts`, 3 rodadas): primeiro mapa 3,05 → 3,34 s, tudo
-  pronto 4,24 → 5,17 s, 9,9 → 11,9 MB. Total em `site/dados/`: 28,4 → 35,4 MB.
-- [x] Release: só a web (decidido em 2026-10-26).
-- [x] Pages conferido depois do push: `.json.gz` como `application/gzip`, sem
-  Content-Encoding; o modo Imóvel abre sem erro.
-- [ ] Se o +22% no "tudo pronto" pesar, a alternativa medida é voltar ao `.bin`, só fora do
-  HTML.
+O formato foi JSON em `.json.gz` por um commit e voltou ao `.bin` com bytes em planos.
+Medido com 4G (`testes/_perf.ts`): o JSON levava o primeiro mapa de 3,05 a 3,34 s, o tudo
+pronto de 4,24 a 5,17 s e os dados de 28,4 a 35,4 MB. Com o `.bin` de volta, os hashes são
+os de antes e o cache de quem já visitou continua valendo.
 
 ## 5. Arquivos gerados do rodado
 
@@ -84,6 +60,7 @@ mesmos arquivos (`br_mma_cnuc`, `br_prf_infracoes`, `br_ans_operadoras`, `br_tse
 
 Hoje a LDI entra só como retrato atual (área do CAR na lista).
 
+- [x] Uma frase no texto do modo Imóvel com o total do Pará (2026-10-26).
 - [x] Medido em 2026-10-26 (consulta avulsa sobre `marca.parquet`; imóvel do PA com ≥ 1% na
   LDI e `ano_desmat` menor que o ano da safra de emissão; 4.985 imóveis tocam a lista). É
   uma aproximação: a lista não tem a data do embargo (gotcha `sem_data_de_embargo`).

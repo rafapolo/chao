@@ -5,13 +5,13 @@ Orientação para agentes que trabalham neste repositório.
 ## O que é
 
 "Chão" (repositório `rafapolo/chao`, antes "bragro" e "Safra a Safra") é uma página HTML,
-`site/index.html` (~230 kB) com os dados em `site/dados/` (35 MB), com o mapa do campo brasileiro em cada município: o que se
+`site/index.html` (~230 kB) com os dados em `site/dados/` (28 MB), com o mapa do campo brasileiro em cada município: o que se
 planta e se cria de 1974 a 2025, a terra, o crédito, o clima e quem vive do campo. Ela tem linha do tempo, filtros por cultura,
 medida, fonte e recorte, e uma ficha por município. A spec está em
 `docs/superpowers/specs/2026-10-21-bragro-design.md`.
 
 **Não há dependência em runtime.** O único build é o da versão web (`scripts/build.js`).
-- Os dados vão em JSON com gzip, um arquivo por bloco, buscados por `fetch` e abertos com
+- Os dados vão em gzip, um `.bin` por bloco, buscados por `fetch` e abertos com
   `DecompressionStream`.
 - A página precisa de servidor (a web, ou `python3 -m http.server` na pasta): por
   `file://` ela avisa. O arquivo único que abria por `file://` saiu em 2026-10-26: o
@@ -54,7 +54,7 @@ e em `../rodado/docs/context/gotchas/`.
 cd pipeline
 for s in malha producao mapbiomas credito cadastros regioes dinheiro terra clima mercado_gente calendario imovel; do
   python3 baixa_$s.py || break; done                          # ~3 min no total
-python3 monta_pagina.py      # parquet -> blocos -> ../site/ (index.html e dados/*.json.gz)
+python3 monta_pagina.py      # parquet -> blocos -> ../site/ (index.html e dados/*.bin)
 cd .. && bun run build       # site/ -> dist/: HTML, CSS e JS minificados + service worker (é o que o Pages publica)
 
 cd .. && bun install && bun run preparar   # uma vez: chromium, firefox, webkit
@@ -73,11 +73,12 @@ bovinos = 238 M; SICAR = 716 M ha). Se uma delas sair do esperado, investigue an
 - Os marcadores `/*__MALHA__*/`, `PROD`, `MAPB`, `CRED`, `CAD`… viram `data-src` com o
   arquivo do bloco, e `FONTE` vira a fonte embutida, em `monta_pagina.py`.
 
-Formato de cada bloco: `{"meta": {...}, "arrays": {nome: {"t": "u16", "v": [...]}}}`, em
-gzip; a página remonta cada lista no array tipado de `t`.
+Formato de cada bloco: `u32 tamanho | cabeçalho JSON | arrays`, em gzip.
+- **Bytes em planos:** inteiros de mais de um byte vão com todos os bytes 0, depois todos os
+  bytes 1, e assim por diante.
 - **Escala log:** magnitudes vão em u16, com código = round(ln(1+v)·200) + 1, passo de 0,5%.
 - **Diferenças:** município e ano da produção e do MapBiomas vão em diferença com a linha
-  anterior (`meta.delta`, gravadas com sinal); o JS faz a soma acumulada no tipo sem sinal.
+  anterior (`meta.delta`); o JS faz a soma acumulada.
 - Os valores ficam absolutos, porque em diferença o gzip piora (medido).
 
 ## A saída: `site/`
@@ -98,33 +99,31 @@ gzip; a página remonta cada lista no array tipado de `t`.
 - Testes no estilo do swissviz (`testes/site.test.ts`, sobre `dist/`): sem
   DecompressionStream, sem JavaScript, download parado, 2ª visita offline (não no WebKit, que
   não recarrega offline no Playwright). Fora do teste do SW, o contexto usa
-  `serviceWorkers: "block"`: com o SW no controle o Playwright não vê os pedidos. HTML de ~160 kB e um `.json.gz` por bloco,
+  `serviceWorkers: "block"`: com o SW no controle o Playwright não vê os pedidos. HTML de ~160 kB e um `.bin` (gzip cru) por bloco,
   com o hash do conteúdo no nome. Dado que não muda mantém o nome, e o navegador não baixa
   de novo quando só o HTML muda. A montagem apaga de `site/dados/` os blocos de hashes
-  antigos. O Pages serve o `.gz` cru; se um servidor mandar `Content-Encoding: gzip`, a
-  página vê que os bytes não começam com `1f 8b` e lê o JSON direto.
-- A página carrega em três etapas. A primeira traz malha e área da produção (6,9 MB) e
-  desenha. A segunda traz MapBiomas, crédito e cadastros (4,7 MB). Quantidade e valor
-  (`prodqv`, 12 MB) ficaram na terceira: a abertura (lavoura principal) só usa área. Medido
-  com rede 4G (`testes/_perf.ts`): primeiro mapa em 3,3 s, tudo pronto em 5,2 s com 11,9 MB
-  (com o binário de antes do JSON: 3,0 s e 4,2 s com 9,9 MB; antes das etapas: 8,5 s com
-  20,6 MB). Até ela chegar, as outras fontes e medidas ficam desligadas; um
+  antigos. O Pages serve o `.bin` cru; se um servidor mandar `Content-Encoding: gzip`, a
+  página vê que os bytes não começam com `1f 8b` e lê o bloco direto.
+- A página carrega em três etapas. A primeira traz malha e área da produção (6,2 MB) e
+  desenha. A segunda traz MapBiomas, crédito e cadastros (3,5 MB). Quantidade e valor
+  (`prodqv`, 10 MB) ficaram na terceira: a abertura (lavoura principal) só usa área. Medido
+  com rede 4G (`testes/_perf.ts`): primeiro mapa em 3,0 s, tudo pronto em 4,2 s com 9,9 MB
+  (antes das etapas: 8,5 s com 20,6 MB). Até ela chegar, as outras fontes e medidas ficam desligadas; um
   estado de URL que precise delas espera tudo antes de desenhar.
 - A terceira etapa (`data-etapa="sob-demanda"`: prodqv, contornos, credrs, econ, terra, fogo, clima,
-  calend, mercado, emis, gente, imovel; 24 MB) só é pedida quando um modo a usa (`blocos:` em
+  calend, mercado, emis, gente, imovel; 19 MB) só é pedida quando um modo a usa (`blocos:` em
   `MODOS`), por `carrega(id)` com cache de promessa e `garante([ids])`. A ficha não baixa
   bloco: mostra o que já veio e oferece o botão "Mostrar também".
 - Modo novo de série município × ano: uma entrada em `SERIES` (bloco, medidas, unidade) e,
   no pipeline, `series(bloco, df, {chave: coluna})`. Não precisa de código de cálculo.
-- O JSON custa +25% transferidos contra o binário com bytes em planos (35,4 contra 28,4 MB,
-  medido em 2026-10-26). Se pesar, a alternativa medida é voltar ao binário fora do HTML. O
-  Brotli ganharia só 7% e pediria um decodificador em wasm, porque o `DecompressionStream`
+- JSON foi testado em 2026-10-26 e voltou atrás: +25% transferidos (35,4 contra 28,4 MB) e
+  tudo pronto em 5,2 s, contra 4,2 s com o binário. O Brotli ganharia só 7% e pediria um decodificador em wasm, porque o `DecompressionStream`
   não abre Brotli em todo navegador.
 - A saída é determinística (toda ordenação desempata até o fim). Sem isso o hash muda a
   cada montagem e o cache se perde.
 
 O orçamento da spec é ≤ 25 MB. Ele valia para o arquivo único; no `site/`, o que se baixa
-para o primeiro mapa são 7,2 MB (HTML e 1ª etapa), e o resto vem por etapa.
+para o primeiro mapa são 6,6 MB (HTML e 1ª etapa), e o resto vem por etapa.
 
 ## Armadilhas dos dados (medidas em 2026-10-21)
 

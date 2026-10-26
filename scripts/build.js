@@ -40,7 +40,7 @@ let html = await minify(fonte, {
 // com o nome do commit, buscados primeiro na rede (o max-age=600 do Pages faria uma
 // visita logo depois do deploy ver a página velha) e, sem rede, no cache.
 const sha = (process.env.GITHUB_SHA || Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: RAIZ }).stdout.toString().trim() || "dev").slice(0, 8);
-const blocos = readdirSync(join(SITE, "dados")).filter(f => f.endsWith(".json.gz")).sort();
+const blocos = readdirSync(join(SITE, "dados")).filter(f => f.endsWith(".bin")).sort();
 const sw = `
 const PAGINA = 'chao-${sha}', DADOS = 'chao-dados';
 const BLOCOS = ${JSON.stringify(blocos)};

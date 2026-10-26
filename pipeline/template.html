@@ -455,10 +455,11 @@
   const $ = id => document.getElementById(id);
 
   /* ---------- leitura dos blocos ----------
-     um JSON em gzip por bloco, {meta, arrays: {nome: {t, v}}}, como monta_pagina.py
-     escreve; cada lista vira o array tipado do seu tipo. */
+     u32 tamanho do cabeçalho | cabeçalho JSON | arrays com os bytes em planos
+     (todos os bytes 0, depois todos os 1…), como monta_pagina.py escreve. */
   const PARADO = window.__parado || 20000;   // ms sem receber nada antes de dar o download por parado
-  const TIPOS = { u8: Uint8Array, i8: Int8Array, u16: Uint16Array, i16: Int16Array, u32: Uint32Array, i32: Int32Array };
+  const TIPOS = { u8: [Uint8Array, 1], i8: [Int8Array, 1], u16: [Uint16Array, 2], i16: [Int16Array, 2],
+                  u32: [Uint32Array, 4], i32: [Int32Array, 4] };
   async function bloco(id) {
     const src = $(id).dataset.src;
     let parou = null;
@@ -482,13 +483,26 @@
     }));
     // o Chromium troca o erro do vigia por um "Failed to fetch" genérico: repassa o do vigia
     const gz = new Uint8Array(await new Response(fonte).arrayBuffer().catch(e => { throw parou || e; }));
-    // um servidor que mande Content-Encoding: gzip entrega o JSON já aberto
-    const cru = gz[0] === 0x1f && gz[1] === 0x8b
-      ? await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
-      : new TextDecoder().decode(gz);
-    const { meta, arrays } = JSON.parse(cru), A = {};
-    for (const [nome, d] of Object.entries(arrays)) A[nome] = TIPOS[d.t].from(d.v);
-    // colunas gravadas em diferença (com sinal; o tipo sem sinal dá a volta): soma acumulada devolve o valor
+    // um servidor que mande Content-Encoding: gzip entrega o bloco já aberto
+    const buf = gz[0] === 0x1f && gz[1] === 0x8b
+      ? await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()
+      : gz.buffer;
+    const u8 = new Uint8Array(buf);
+    const n = new DataView(buf).getUint32(0, true);
+    const { meta, arrays } = JSON.parse(new TextDecoder().decode(u8.subarray(4, 4 + n)));
+    const base = 4 + n, A = {};
+    for (const [nome, d] of Object.entries(arrays)) {
+      const [Tipo, w] = TIPOS[d.t];
+      const src = u8.subarray(base + d.o, base + d.o + d.n * w);
+      if (w === 1) { A[nome] = new Tipo(src.buffer, src.byteOffset, d.n); continue; }
+      const out = new Uint8Array(d.n * w);
+      for (let p = 0; p < w; p++) {
+        const plano = src.subarray(p * d.n, (p + 1) * d.n);
+        for (let i = 0, j = p; i < d.n; i++, j += w) out[j] = plano[i];
+      }
+      A[nome] = new Tipo(out.buffer);
+    }
+    // colunas gravadas em diferença (módulo 2^16): soma acumulada devolve o valor
     for (const nome of (meta && meta.delta) || []) {
       const a = A[nome];
       for (let i = 1; i < a.length; i++) a[i] = a[i] + a[i - 1];
@@ -2172,7 +2186,7 @@
     expo: () => `<b>Trase</b>: a exportação de soja (2004–2020, em equivalente de grão) e de carne bovina (2015–2017) ligada ao <b>município onde foi produzida</b>, com a exposição da soja ao desmatamento (área desmatada atribuída à soja exportada). <b>Comex Stat</b>: exportação de produtos do agro (capítulos 01–24 do SH, mais couro, celulose e algodão) e importação de fertilizantes e defensivos, pelo <b>domicílio fiscal da empresa</b>: a soja de Sorriso pode sair por Rondonópolis ou por São Paulo. Compare as duas.`,
     emis: () => `Emissões de gases de efeito estufa por município, em tCO₂e (GWP-AR5), estimadas pelo <b>SEEG</b> (Observatório do Clima): agropecuária (fermentação entérica do gado, solos e adubo, dejetos, arroz irrigado) e mudança de uso da terra (desmatamento e queima de vegetação), com a remoção por vegetação secundária e áreas protegidas.`,
     trab: () => `<b>RAIS</b>: empregos formais da agropecuária (subsetor IBGE 25) em 31 de dezembro; o emprego informal, a maior parte do trabalho no campo, não aparece. <b>CAGED</b>: admissões menos desligamentos na seção A da CNAE, de 2020 em diante (vermelho: fechou vagas). <b>CNEFE</b>: endereços de estabelecimentos agropecuários no Censo 2022. <b>CAFIR</b>: imóveis rurais ativos no cadastro da Receita, na data mais recente (a área do cadastro fica de fora: não fecha em nenhuma unidade).`,
-    imovel: () => `Cruzamento pelo <b>imóvel rural do CAR</b> (SICAR, foto de 2025-10-15, sem cancelados), feito fora da página; aqui só entram somas por município, no município do imóvel. O CAR é <b>autodeclarado</b>, tem imóveis sobrepostos e a mesma foto vale para todas as safras: um imóvel inscrito em 2024 aparece como se existisse em 2016. <b>Crédito</b> (SICOR): a operação vai para o imóvel pelo código do CAR que ela informa (de 2019 em diante) ou, antes, pela gleba financiada, e o valor se reparte entre os imóveis da operação. Sem nenhum dos dois, entra a gleba da perda comunicada ao Proagro. <b>Desmatamento durante a operação</b>: polígono do PRODES ou aviso do DETER que se sobrepõe ao imóvel (a área se reparte pela interseção), entre a emissão e o vencimento. <b>Embargo vigente</b>: termo do IBAMA não cancelado, lavrado antes da emissão e sem desembargo até ela, ou embargo do ICMBio ou da SEMA-MT (que não publicam data de desembargo: vale da lavratura em diante). <b>Perda no Proagro</b>: área com perda comprovada em operação cujo imóvel teve desmatamento durante a operação ou embargo vigente. Cada soma de crédito só aparece com ${M.min_celula} ou mais operações e ${M.min_celula} ou mais imóveis. Na <b>grade de 0,25°</b> (~28 km; o imóvel entra na célula do seu centro), o mesmo vale por célula, e uma célula também cai quando, somada às outras publicadas, deixaria calcular por diferença o que o município esconde: a grade mostra parte do total (crédito com desmatamento em 2021: R$ 5,3 de 13,1 bi), e menos onde os imóveis são grandes e poucos por célula, como no Mato Grosso. <b>Uso do solo dentro do CAR</b>: a fração de cada classe do MapBiomas (coleção 10, 30 m) em cada imóvel, ano a ano de 2016 a 2024, vezes a área declarada. TI, UC de proteção integral, floresta pública não destinada (CNFP 2025, tipo B), Lista de Desmatamento Ilegal do Pará (SEMAS-PA; só com 5 ou mais imóveis atingidos no município), SIGEF (metade ou mais do imóvel coberta por parcela certificada), assentamento, análise do CAR (na Bahia, todo imóvel aparece como aguardando análise no SICAR federal, então ela fica sem dado) e camadas declaradas (reserva legal, vegetação nativa) são o retrato atual; as áreas somam imóvel a imóvel, então o CAR sobreposto conta mais de uma vez (na floresta pública não destinada, 42,8 mi ha somados contra no máximo 36,1 mi ha de floresta tocada).`,
+    imovel: () => `Cruzamento pelo <b>imóvel rural do CAR</b> (SICAR, foto de 2025-10-15, sem cancelados), feito fora da página; aqui só entram somas por município, no município do imóvel. O CAR é <b>autodeclarado</b>, tem imóveis sobrepostos e a mesma foto vale para todas as safras: um imóvel inscrito em 2024 aparece como se existisse em 2016. <b>Crédito</b> (SICOR): a operação vai para o imóvel pelo código do CAR que ela informa (de 2019 em diante) ou, antes, pela gleba financiada, e o valor se reparte entre os imóveis da operação. Sem nenhum dos dois, entra a gleba da perda comunicada ao Proagro. <b>Desmatamento durante a operação</b>: polígono do PRODES ou aviso do DETER que se sobrepõe ao imóvel (a área se reparte pela interseção), entre a emissão e o vencimento. <b>Embargo vigente</b>: termo do IBAMA não cancelado, lavrado antes da emissão e sem desembargo até ela, ou embargo do ICMBio ou da SEMA-MT (que não publicam data de desembargo: vale da lavratura em diante). <b>Perda no Proagro</b>: área com perda comprovada em operação cujo imóvel teve desmatamento durante a operação ou embargo vigente. Cada soma de crédito só aparece com ${M.min_celula} ou mais operações e ${M.min_celula} ou mais imóveis. Na <b>grade de 0,25°</b> (~28 km; o imóvel entra na célula do seu centro), o mesmo vale por célula, e uma célula também cai quando, somada às outras publicadas, deixaria calcular por diferença o que o município esconde: a grade mostra parte do total (crédito com desmatamento em 2021: R$ 5,3 de 13,1 bi), e menos onde os imóveis são grandes e poucos por célula, como no Mato Grosso. <b>Uso do solo dentro do CAR</b>: a fração de cada classe do MapBiomas (coleção 10, 30 m) em cada imóvel, ano a ano de 2016 a 2024, vezes a área declarada. TI, UC de proteção integral, floresta pública não destinada (CNFP 2025, tipo B), Lista de Desmatamento Ilegal do Pará (SEMAS-PA; só com 5 ou mais imóveis atingidos no município), SIGEF (metade ou mais do imóvel coberta por parcela certificada), assentamento, análise do CAR (na Bahia, todo imóvel aparece como aguardando análise no SICAR federal, então ela fica sem dado) e camadas declaradas (reserva legal, vegetação nativa) são o retrato atual; as áreas somam imóvel a imóvel, então o CAR sobreposto conta mais de uma vez (na floresta pública não destinada, 42,8 mi ha somados contra no máximo 36,1 mi ha de floresta tocada). Crédito a imóvel do Pará com área na <b>Lista de Desmatamento Ilegal</b> desmatada antes da safra de emissão: R$ 32,9 mi em 2021 (0,7% do crédito ligado a CAR no estado) e cerca de R$ 98 mi de 2016 a 2025. É aproximado, porque a lista dá o ano do desmatamento, não a data do embargo, e com poucos imóveis por município não vira medida no mapa.`,
     social: () => `Famílias inscritas no <b>Cadastro Único</b> por grupo (agricultores familiares, pescadores artesanais, extrativistas, assentados) e em domicílio rural, no último mês de cada ano. <b>Seguro-Defeso</b>: pescadores artesanais pagos no período em que a pesca é proibida (Portal da Transparência), contados pelo NIS; município com menos de ${M.min_celula} não aparece. População estimada pelo IBGE.`,
     clima: () => `<b>SISAM</b> (INPE): chuva e temperatura por município, de 2000 a 2019, a partir de modelo e satélite, não de pluviômetro: serve para comparar um ano com outro no mesmo lugar (a <b>anomalia</b>, contra a média de 2000–2019), menos para o valor absoluto. As <b>estações do INMET</b> são medição direta, de 2000 a 2025, desenhadas como pontos: só os anos com 90% ou mais das horas medidas. <b>S2ID</b> (Defesa Civil): situações de emergência ou calamidade reconhecidas e ainda vigentes; a fonte só guarda o retrato atual. Compare a seca de 2012–2016 no semiárido com as Perdas do Proagro e o Garantia-Safra.`,
     fogo: () => `Focos de calor do <b>satélite de referência</b> do INPE (AQUA, passagem da tarde), por ano: é a série comparável ao longo do tempo. Desde 2023 a fonte traz todos os satélites (30 vezes mais focos, o mesmo fogo visto várias vezes); só o de referência entra. Foco não é área queimada: a área vem da cicatriz de queimada do DETER (Amazônia, Cerrado, Pantanal), contada como os focos, por ano civil.`,
