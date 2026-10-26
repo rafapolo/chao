@@ -147,8 +147,17 @@ for (const motor of ESCOLHIDOS) {
       await p.goto(BASE + "?c=soja&a=2020");
       await p.waitForSelector("#carregando", { state: "detached", timeout: 60_000 });
       await p.evaluate(() => navigator.serviceWorker.ready);
-      // a página guarda cada bloco ao baixá-lo; espera as duas primeiras etapas (5 blocos)
-      await p.waitForFunction(async () => (await (await caches.open("chao-dados")).keys()).length >= 5, null, { timeout: 30_000, polling: 200 });
+      // a página guarda cada bloco ao baixá-lo; espera as duas primeiras etapas no cache.
+      // Não use waitForFunction com predicado async: a Promise é "truthy" e ele passa na
+      // hora, e o reload offline pegava a malha ainda sendo gravada (falha ~1 em 3).
+      const guardadas = () => p.evaluate(async () => {
+        const c = await caches.open("chao-dados");
+        for (const e of document.querySelectorAll<HTMLElement>("[data-src]:not([data-etapa])"))
+          if (!(await c.match(new URL(e.dataset.src!, location.href).href))) return false;
+        return true;
+      });
+      for (const fim = Date.now() + 30_000; !(await guardadas()); await p.waitForTimeout(200))
+        if (Date.now() > fim) throw new Error("as duas primeiras etapas não chegaram ao cache em 30 s");
       await ctx.setOffline(true);
       await p.reload();
       await p.waitForSelector("#carregando", { state: "detached", timeout: 60_000 });

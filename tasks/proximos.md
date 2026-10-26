@@ -28,8 +28,9 @@ por célula.
 3 rodadas. Na falha, a página offline mostra "Não foi possível abrir os dados do mapa (Failed
 t…)".
 
-- [ ] Achar a causa (provavelmente uma corrida entre o cache do SW e o reload) em vez de
-  rodar de novo até passar.
+- [x] Causa (2026-10-26): o `waitForFunction` com predicado `async` passava na hora (a Promise
+  é "truthy"), e o reload offline pegava `malha` e `prod` ainda sendo gravadas no cache. O
+  teste agora confere cada bloco das duas etapas com `caches.match`, em laço; 6 de 6 passaram.
 
 ## 4. Dados fora do `index.html`, em `.json.gz` (decidido em 2026-10-26)
 
