@@ -5,8 +5,9 @@ v2026.10.26) e que, subtraído do que se publica hoje, revelaria um grupo cortad
 1. As células da grade de 0,05°, levadas ao beelink para a etapa `grade` de
    baixa_imovel.py cortar a célula de 0,25° cuja diferença contra elas revelaria uma
    célula de 0,05° cortada.
-2. O crédito com embargo vigente (ce_valor, ce_area) de antes da SEMA-MT (versão
-   dd4d1e88d891, até 2026-10-25 19:57). Onde ele saiu e o grupo que a SEMA-MT acrescentou
+2. O crédito com embargo vigente (ce_valor, ce_area) de antes da SEMA-MT (versões
+   963e077d838e, 2eaaf6544651 e dd4d1e88d891, até 2026-10-25 19:57; tiradas do histórico
+   do git em 2026-10-26, com as chaves guardadas no beelink). Onde ele saiu e o grupo que a SEMA-MT acrescentou
    tem 1 a 4 operações ou imóveis, hoje − antes revelaria esse grupo: o município × safra
    vai para pipeline/dados/imovel_ce_corta.parquet, e monta_pagina.py anula o ce dele
    (37 em 2026-10-26). Rode de novo depois de refazer a etapa `agrega` ou `embargo`.
@@ -71,18 +72,8 @@ with tempfile.NamedTemporaryFile(suffix=".parquet") as t:
 # 2. ce de antes da SEMA-MT: as chaves publicadas, e o grupo que ela acrescentou
 IM = f"{REMOTO}/imovel"
 ANTES = "dd4d1e88d891"
-rev = git("rev-list", "--all", "-1", "--", f"../site/dados/imovel.{ANTES}.bin").decode().strip()
-blob = subprocess.run(["git", "cat-file", "blob", f"{rev}:site/dados/imovel.{ANTES}.bin"], capture_output=True)
-if blob.returncode:
-    blob = subprocess.run(["git", "cat-file", "blob", f"{rev}^:site/dados/imovel.{ANTES}.bin"], capture_output=True, check=True)
-A, _ = arrays(blob.stdout)
-_, mm = arrays(open(sorted(glob.glob("../site/dados/malha.*.bin"))[0], "rb").read())   # a malha só teve uma versão
-ids = mm["mun"]["id"]
-ant = pl.concat([pl.DataFrame({"id_municipio": [ids[i] for i in A[k + "_m"]], "ano": A[k + "_a"].astype(np.int32) + 1970})
-                 for k in ("ce_v", "ce_a")]).unique()
-with tempfile.NamedTemporaryFile(suffix=".parquet") as t:
-    ant.write_parquet(t.name)
-    subprocess.run(["scp", "-q", t.name, f"beelink:{IM}/ce_publicado_sem_sema.parquet"], check=True)
+# as versões de antes da SEMA-MT saíram do histórico do git em 2026-10-26 (git filter-repo):
+# as chaves em que o ce delas saiu ficaram só no beelink, em ce_publicado_sem_sema.parquet
 corta = roda("imovel_ce_corta", f"""
 COPY (
   WITH mm AS (SELECT * FROM '{IM}/marca.parquet' WHERE emb),
