@@ -247,8 +247,10 @@ CREATE TEMP TABLE e0 AS
 CREATE TEMP TABLE e AS SELECT * EXCLUDE (wkt), try(ST_MakeValid(ST_GeomFromText(wkt))) poligono FROM e0;
 -- ICMBio: um embargo em várias feições (numero_emb + serie); sem data de desembargo,
 -- vale da lavratura em diante. O julgamento é do auto, e o embargo quase sempre fica.
+-- Os embargos eletrônicos têm serie NULL: 'icmbio:' || numero_emb || serie dava NULL e a
+-- junção por seq_tad os perdia (13.585 embargos reais, 6.398 pela concatenação).
 INSERT INTO e
-  SELECT 'icmbio:' || numero_emb || serie, least(min(data), current_date), NULL, sum(area_calc_ha), NULL,
+  SELECT 'icmbio:' || numero_emb || ':' || coalesce(serie, ''), least(min(data), current_date), NULL, sum(area_calc_ha), NULL,
          ST_MakeValid(ST_Union_Agg(geometria))
   FROM br_icmbio_embargos.termo_embargo WHERE geometria IS NOT NULL AND data IS NOT NULL
   GROUP BY numero_emb, serie;

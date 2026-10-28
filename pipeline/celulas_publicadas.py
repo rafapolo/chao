@@ -11,6 +11,8 @@ v2026.10.26) e que, subtraído do que se publica hoje, revelaria um grupo cortad
    tem 1 a 4 operações ou imóveis, hoje − antes revelaria esse grupo: o município × safra
    vai para pipeline/dados/imovel_ce_corta.parquet, e monta_pagina.py anula o ce dele
    (37 em 2026-10-26). Rode de novo depois de refazer a etapa `agrega` ou `embargo`.
+3. O grupo que os embargos eletrônicos do ICMBio acrescentaram (2026-10-27: a chave
+   numero_emb || serie os perdia), cortado do mesmo jeito.
 
     python3 celulas_publicadas.py   # ~/bragro_tmp/imovel/grade_005_publicada.parquet e imovel_ce_corta
 
@@ -85,7 +87,21 @@ COPY (
     WHERE NOT starts_with(e.seq_tad, 'sema_mt:')),
   g AS (SELECT id_municipio::VARCHAR id_municipio, ano FROM mm ANTI JOIN velho USING (id_referencia_bacen, numero_ordem, id_imovel)
         GROUP BY ALL
-        HAVING count(DISTINCT (id_referencia_bacen, numero_ordem)) BETWEEN 1 AND 4 OR count(DISTINCT id_imovel) BETWEEN 1 AND 4)
-  SELECT * FROM g SEMI JOIN '{IM}/ce_publicado_sem_sema.parquet' USING (id_municipio, ano) ORDER BY ALL
+        HAVING count(DISTINCT (id_referencia_bacen, numero_ordem)) BETWEEN 1 AND 4 OR count(DISTINCT id_imovel) BETWEEN 1 AND 4),
+  -- 3. os embargos eletrônicos do ICMBio (serie NULL, chave 'icmbio:<numero>:'), que a versão
+  -- publicada até 2026-10-27 perdia: o grupo que eles acrescentam, com 1 a 4 operações ou
+  -- imóveis, sai também. Sem conferir contra o publicado (as chaves dele não estão no beelink):
+  -- corta a mais, nunca a menos.
+  sem_eletr AS (
+    SELECT DISTINCT mm.id_referencia_bacen, mm.numero_ordem, mm.id_imovel
+    FROM mm JOIN br_bcb_sicor.operacao o USING (id_referencia_bacen, numero_ordem)
+    JOIN '{IM}/embargo.parquet' e ON e.id_imovel = mm.id_imovel
+     AND e.dia <= o.data_emissao AND (e.desembargo IS NULL OR e.desembargo > o.data_emissao)
+    WHERE NOT (starts_with(e.seq_tad, 'icmbio:') AND ends_with(e.seq_tad, ':'))),
+  g2 AS (SELECT id_municipio::VARCHAR id_municipio, ano FROM mm ANTI JOIN sem_eletr USING (id_referencia_bacen, numero_ordem, id_imovel)
+         GROUP BY ALL
+         HAVING count(DISTINCT (id_referencia_bacen, numero_ordem)) BETWEEN 1 AND 4 OR count(DISTINCT id_imovel) BETWEEN 1 AND 4)
+  SELECT * FROM g SEMI JOIN '{IM}/ce_publicado_sem_sema.parquet' USING (id_municipio, ano)
+  UNION SELECT * FROM g2 ORDER BY ALL
 ) TO '{{saida}}' (FORMAT parquet);
 """)
