@@ -13,8 +13,9 @@ Etapas no beelink, cada uma um parquet em ~/bragro_tmp/imovel/ que NÃO volta:
               cancelado) que contém o centroide; se cai em mais de um, o de maior sobreposição
   operacao  — a ponte operação → imóvel: pelo id_car (de 2019 em diante), senão pela gleba
               do SICOR, senão pela gleba do Proagro; `fracao` reparte a operação e soma 1
-  embargo   — termos do IBAMA (sem cancelados), do ICMBio e da SEMA-MT por polígono (fração da área
-              embargada em cada imóvel, desprezada abaixo de 1%) ou, no IBAMA, pelo ponto
+  embargo   — termos do IBAMA (sem cancelados), do ICMBio e da SEMA-MT (menos a área desembargada
+              do mesmo termo) por polígono (fração da área embargada em cada imóvel,
+              desprezada abaixo de 1%) ou, no IBAMA, pelo ponto
   auto      — autos de flora, pelo polígono da área autuada ou pelo ponto
   desmat    — polígonos do PRODES (2016–) e do DETER (desmatamento e supressão) cruzados
               com o imóvel: a área do alerta se reparte pela interseção
@@ -255,10 +256,31 @@ INSERT INTO e
   FROM br_icmbio_embargos.termo_embargo WHERE geometria IS NOT NULL AND data IS NOT NULL
   GROUP BY numero_emb, serie;
 -- SEMA-MT: a lista é a das áreas embargadas hoje, sem data de desembargo; vale, como a do
--- ICMBio, da lavratura em diante
-INSERT INTO e
-  SELECT 'sema_mt:' || camada || ':' || row_number() OVER (), least(data_embargo, current_date), NULL, area_ha, NULL, geometria
+-- ICMBio, da lavratura em diante. Mas 247 áreas desembargadas têm o termo de uma área que
+-- ainda consta como embargada e tocam o polígono dela (o termo se repete em áreas que não
+-- se tocam, e 2.661 desembargos tocam área de outro termo, que segue embargada): a área
+-- desembargada sai do polígono por ST_Difference, e a área que sobra abaixo de 1% sai
+-- inteira. O desembargo não tem data, então vale para todas as safras (medido em 2026-10-28).
+CREATE TEMP TABLE sm AS
+  SELECT row_number() OVER (ORDER BY camada, termo_embargo, data_embargo, area_ha, ST_AsText(geometria)) rn,
+         camada, trim(termo_embargo) termo, least(data_embargo, current_date) dia, area_ha, ST_MakeValid(geometria) g
   FROM br_sema_mt_embargos.areas_embargadas WHERE geometria IS NOT NULL AND data_embargo IS NOT NULL;
+CREATE TEMP TABLE sl AS
+  SELECT sm.rn, ST_Union_Agg(ST_MakeValid(d.geometria)) g
+  FROM sm JOIN br_sema_mt_embargos.areas_desembargadas d
+    ON trim(coalesce(d.T_EMBARGO, d.NUMERO_TERMO_EMBARGO)) = sm.termo AND sm.termo <> '' AND ST_Intersects(d.geometria, sm.g)
+  GROUP BY sm.rn;
+CREATE TEMP TABLE sr AS
+  SELECT sm.*, sl.rn IS NOT NULL desemb,
+         CASE WHEN sl.rn IS NULL THEN sm.g ELSE coalesce(try(ST_MakeValid(ST_Difference(sm.g, sl.g))), sm.g) END r
+  FROM sm LEFT JOIN sl USING (rn);
+INSERT INTO e
+  SELECT 'sema_mt:' || camada || ':' || rn, dia, NULL, area_ha * ST_Area(r) / nullif(ST_Area(g), 0), NULL, r
+  FROM sr WHERE NOT ST_IsEmpty(r) AND ST_Area(r) >= 0.01 * ST_Area(g);
+SELECT count(*) FILTER (WHERE desemb) sema_com_desembargo,
+       count(*) FILTER (WHERE desemb AND (ST_IsEmpty(r) OR ST_Area(r) < 0.01 * ST_Area(g))) sema_desembargo_total,
+       round(sum(area_ha * (1 - ST_Area(r) / nullif(ST_Area(g), 0))) FILTER (WHERE desemb)) ha_desembargados
+FROM sr;
 COPY (
   WITH p AS (
     SELECT e.seq_tad, c.id_imovel, 'poligono' metodo,

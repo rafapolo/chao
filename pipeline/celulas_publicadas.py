@@ -13,6 +13,9 @@ v2026.10.26) e que, subtraído do que se publica hoje, revelaria um grupo cortad
    (37 em 2026-10-26). Rode de novo depois de refazer a etapa `agrega` ou `embargo`.
 3. O grupo que os embargos eletrônicos do ICMBio acrescentaram (2026-10-27: a chave
    numero_emb || serie os perdia), cortado do mesmo jeito.
+4. O grupo que muda contra a versão publicada em 299362d (2026-10-28, a área desembargada
+   da SEMA-MT saiu do polígono embargado), nos dois sentidos: a marcação de então ficou em
+   ~/bragro_tmp/imovel/marca_299362d.parquet. Na medida de 2026-10-28, nenhum par mudou.
 
     python3 celulas_publicadas.py   # ~/bragro_tmp/imovel/grade_005_publicada.parquet e imovel_ce_corta
 
@@ -100,8 +103,13 @@ COPY (
     WHERE NOT (starts_with(e.seq_tad, 'icmbio:') AND ends_with(e.seq_tad, ':'))),
   g2 AS (SELECT id_municipio::VARCHAR id_municipio, ano FROM mm ANTI JOIN sem_eletr USING (id_referencia_bacen, numero_ordem, id_imovel)
          GROUP BY ALL
+         HAVING count(DISTINCT (id_referencia_bacen, numero_ordem)) BETWEEN 1 AND 4 OR count(DISTINCT id_imovel) BETWEEN 1 AND 4),
+  -- 4. contra a versão 299362d: os pares cuja marca de embargo mudou, para mais ou para menos
+  g3 AS (SELECT a.id_municipio::VARCHAR id_municipio, a.ano
+         FROM '{IM}/marca_299362d.parquet' a JOIN '{IM}/marca.parquet' n USING (id_referencia_bacen, numero_ordem, id_imovel)
+         WHERE a.emb <> n.emb GROUP BY ALL
          HAVING count(DISTINCT (id_referencia_bacen, numero_ordem)) BETWEEN 1 AND 4 OR count(DISTINCT id_imovel) BETWEEN 1 AND 4)
   SELECT * FROM g SEMI JOIN '{IM}/ce_publicado_sem_sema.parquet' USING (id_municipio, ano)
-  UNION SELECT * FROM g2 ORDER BY ALL
+  UNION SELECT * FROM g2 UNION SELECT * FROM g3 ORDER BY ALL
 ) TO '{{saida}}' (FORMAT parquet);
 """)

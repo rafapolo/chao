@@ -165,7 +165,10 @@ para o primeiro mapa são 6,6 MB (HTML e 1ª etapa), e o resto vem por etapa.
   de antes revelaria o grupo acrescentado em 37 município × safra do MT, e eles ficam sem
   `ce` (`imovel_ce_corta.parquet`). As versões de antes saíram do histórico do git
   (`git filter-repo`, 2026-10-26). Ao mudar a definição de uma medida já publicada, meça o
-  grupo que muda antes de publicar. O teste só confere que o bloco não traz nada além das séries.
+  grupo que muda antes de publicar.
+  Da SEMA-MT sai a área que `areas_desembargadas` devolve com o mesmo termo e que toca o
+  polígono (`ST_Difference`; só o termo não basta, porque ele se repete). Sem data, o
+  desembargo vale para todas as safras. Em 2026-10-28 nenhuma operação mudou de marca. O teste só confere que o bloco não traz nada além das séries.
 - **PRODES:** começa em 2002. O incremento de 2001 sai da diferença contra a linha de base de
   2000 e infla (101 mil km², contra 73–79 mil em 2002–2004).
 - **SICOR em R$:** só o crédito de recurso controlado ou equalizado tem município (R$ 136 de
@@ -179,7 +182,7 @@ para o primeiro mapa são 6,6 MB (HTML e 1ª etapa), e o resto vem por etapa.
 - **Lista Suja** (`baixa_listasuja.py`): o MTE não publica município; o rodado o tira do texto
   do estabelecimento (344 de 345 casos do campo casam). O `empregadores_historico` soma os
   retratos de cada coleta: conte caso distinto, senão os trabalhadores dobram. Ações fiscais
-  de 2020 a 2026. **Sem o corte de 5**, por decisão (`tasks/decisoes_pendentes.md`, item 9).
+  de 2020 a 2026. **Sem o corte de 5**, por decisão (`tasks/done/decisoes_pendentes.md`, item 9).
   No mapa, círculo na sede (`emSedes`), não cor.
 - **LSPA** (`baixa_lspa.py`): só por UF, e muda a cada levantamento mensal. A PAM do espelho
   vai até 2024, então o LSPA acrescenta 2025 e 2026 ao modo Declarado, só na soma de lavouras

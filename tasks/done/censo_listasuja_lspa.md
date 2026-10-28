@@ -56,9 +56,23 @@ o Chão lê (`pipeline/baixa_*.py`, extração no beelink em `-readonly`, parque
   3.897.408 familiares (76,8%, com 80,9 M ha). A tipologia tem 8 categorias: além de
   familiar sim e não, traz Pronaf B, Pronaf V, não pronafiano e Pronamp, que valem como
   medidas também.
-- [ ] Opcional: o Censo 2006 (tem outra numeração de tabelas no SIDRA) para dar a variação
+- [x] Opcional: o Censo 2006 (tem outra numeração de tabelas no SIDRA) para dar a variação
   2006→2017. Antes disso, meça quantas medidas existem nos dois com a mesma definição: a
   agricultura familiar de 2006 seguia outro recorte.
+- [x] **Medido em 2026-10-28; não entra por ora.** O 2006 não está no espelho: o catálogo
+  `sidra_tabelas` só traz 2017. O SIDRA tem 547 tabelas do CA com 2006 por município, e os
+  metadados saem só pelo proxy BR. Entre as medidas do modo Quem produz:
+  - **Mesma definição (cerca de 15):** estabelecimentos, área, área média, condição do
+    produtor (proprietário, assentado, arrendatário, parceiro, ocupante, sem área; tabela
+    1109), sexo do dirigente, agrotóxico, irrigação e área irrigada, orientação técnica e a
+    origem dela, associação, financiamento por agente (tabela 3302: bancos, cooperativas).
+  - **Não comparáveis:** agricultura familiar (em 2006 era a Lei 11.326 com os critérios de
+    então; em 2017, o Decreto 9.064, e o IBGE não compara), pessoal ocupado (31/12 em 2006,
+    30/09 em 2017), DAP (em 2006 o recorte era "pronafiano", A a E) e comodatário (só existe
+    em 2017).
+  - **Próximo passo, se quiser:** buscar no rodado umas 8 tabelas de 2006
+    (`ibge_sidra.py recorte --periodo 2006`), com as suas gotchas, e dar ao modo a variação
+    2006→2017 só das medidas comparáveis.
 
 > Feito em 2026-10-26. `ibge_sidra.py recorte` (10 recortes, 590.526 linhas) em `sidra_municipio`; a soma bate exata com a 6753 (5.073.324 estabelecimentos, 3.897.408 familiares). A 6848 ficou de fora: a associação vem da 6846. As tabelas por linha: 6753, 6770, 6885, 6851, 6857, 6846, 6895, 6962.
 
@@ -140,9 +154,16 @@ o Chão lê (`pipeline/baixa_*.py`, extração no beelink em `-readonly`, parque
   só publicar agregado, mesmo com a fonte sendo nominal.
 - [x] O texto do modo explica que a lista só tem quem já foi julgado em processo
   administrativo, e que ela começa na ação fiscal de 2018 (antes disso, sem dado, não zero).
-- [ ] Mais tarde, no modo Imóvel: crédito rural a empregador da lista (CNPJ e CPF contra o
+- [x] Mais tarde, no modo Imóvel: crédito rural a empregador da lista (CNPJ e CPF contra o
   SICOR, no beelink, só a soma volta). É sensível; meça o tamanho do grupo antes de
   propor uma medida.
+  - **Medido em 2026-10-28 (no beelink, só somas): não vira medida.** O CPF e o CNPJ do
+    tomador estão em `br_bcb_sicor.recurso_publico_mutuario`, completos, e só cobrem o
+    crédito de recurso público. Dos 647 empregadores do `empregadores_historico`, 126 tomaram
+    crédito: R$ 315 mi em 1.244 operações de 2012 a 2025, de 10 a 54 tomadores por safra.
+    Depois da decisão de procedência foram cerca de 15 tomadores e R$ 15 mi (2023–2025; MG 5
+    tomadores, R$ 13 mi). Depois da inclusão na lista, nenhum. Por município, quase tudo
+    cairia no corte de 5, e o grupo é pequeno e nominal, então fica fora da página.
 
 ## 3. LSPA (`br_ibge_lspa`)
 

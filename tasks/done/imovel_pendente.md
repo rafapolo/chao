@@ -1,6 +1,6 @@
 # Imóvel rural: o que ficou de fora
 
-Aberto em 2026-10-25. Continua o [`tasks/done/imovel.md`](done/imovel.md), que já levou o
+Aberto em 2026-10-25. Continua o [`imovel.md`](imovel.md), que já levou o
 cruzamento para o imóvel do CAR. O que rodou: `pipeline/baixa_imovel.py`, que gera os
 intermediários em `beelink:~/bragro_tmp/imovel/` (3,7 GB) e devolve só somas por município.
 Na página, é o modo "Imóvel (CAR)". Nada daqui bloqueia o que já está no ar.
@@ -25,7 +25,7 @@ medidas, e só depois o Chão lê.
     `avisos`.
   - **Medido:** do PRODES 2016–2025 (226 mil km²), 191 mil km² caem dentro de CAR (85%).
   - A série da página para no último ano que todos os biomas têm (2025).
-- [ ] **MapBiomas Alerta** (API GraphQL): o alerta validado vem com a lista de CARs atingidos.
+- [x] **MapBiomas Alerta** (fechado: desistiu-se da fonte, `decisoes_pendentes.md` item 3) (API GraphQL): o alerta validado vem com a lista de CARs atingidos.
   - Serve para conferir o cruzamento próprio. Espera-se casamento alto na Amazônia e no Cerrado.
   - **Bloqueado:** a introspecção abre sem login, mas `alerts`, `downloadShapefile` e
     `ruralProperty` respondem "Token de acesso inválido". Precisa de conta cadastrada na

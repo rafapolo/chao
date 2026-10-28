@@ -77,3 +77,24 @@ Hoje a LDI entra só como retrato atual (área do CAR na lista).
   Soma ~R$ 98 mi de 2016 a 2025. Com ~2–4 imóveis por município, o corte de 5 operações e
   5 imóveis apagaria quase tudo por município: não vale uma medida na página. Cabe como
   número no texto do modo (por UF), se quiser.
+
+## SEMA-MT: termos embargados que já têm desembargo (aberto e fechado em 2026-10-28)
+
+- [x] **Medido:** 353 áreas desembargadas têm termo que ainda consta em `areas_embargadas`, mas
+  o termo se repete em áreas que não se tocam. Pelo termo saem 560 pares e só 247 se tocam.
+  Outros 2.661 desembargos tocam a área de outro termo, que continua embargada, e não entram.
+  A fonte não tem data de desembargo: `DATA_ENVIO`, no SIGA, é o envio do auto, e
+  `situacao` é a fase do processo.
+- [x] **Feito (`baixa_imovel.py`, etapa `embargo`):** cada área embargada perde, por
+  `ST_Difference`, a união das áreas desembargadas de mesmo termo que a tocam. Se sobra menos
+  de 1%, ela sai inteira (desembargo total), e a `area_ha` encolhe na proporção. Sem data,
+  vale para todas as safras. Das 204 áreas atingidas, 18 saem inteiras e somam 1.828 ha.
+  Imóveis com embargo da SEMA-MT: 15.923 → 15.911.
+- [x] **Antes e depois por município:** nenhuma operação de crédito mudou de marca de embargo.
+  O desembargo cai em imóvel sem crédito, ou em crédito emitido antes da lavratura. Por isso
+  `imovel_ano` sai igual coluna a coluna (54.921 linhas; `ce_valor`, `ce_area`, `pp_area`
+  com 0 diferenças) e os blocos `.bin` não mudam de hash. Só o texto do modo Imóvel mudou.
+- [x] **Corte entre versões:** `celulas_publicadas.py` ganhou o 4º corte, contra a marcação
+  publicada em `299362d` (`~/bragro_tmp/imovel/marca_299362d.parquet`, nos dois sentidos).
+  Ele dá 0 hoje, e `imovel_ce_corta` segue com as 152 linhas.
+- [x] Gotcha `desembargo_parcial_de_termo_vigente` no rodado (`e5a2f01`).

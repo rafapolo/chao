@@ -18,7 +18,7 @@ Medido em 2026-10-26:
   - 625 casos com município; dos 345 do campo, só 1 fica sem (a Terra Indígena Yanomami, sem
     município no texto). As ações fiscais vão de 2020 a 2026.
   - O CNPJ dá outro município em 88 de 216 casos: é a sede da empresa, não o local resgatado.
-Sem corte de 5 (decidido em 2026-10-26, `tasks/decisoes_pendentes.md`): a lista é pública e
+Sem corte de 5 (decidido em 2026-10-26, `tasks/done/decisoes_pendentes.md`): a lista é pública e
 nominal por lei, e o agregado não revela nada além dela. Nome, CPF e CNPJ não saem do beelink.
 """
 import polars as pl
