@@ -356,6 +356,63 @@
     .ficha summary { font-size: 12px; min-height: 40px; }
   }
   @media (prefers-reduced-motion: reduce) { .painel { transition: none; } }
+
+  /* ---------- tour: faixas de cinema 2.39:1 (até 16% da tela cada), legenda, ponteiro ----------
+     roteiro em design/tour.md. A interface some (opacidade, e inert no JS); só reaparece o
+     controle que a cena ensina (body.tour-painel, tour-legenda, tour-tempo, tour-ficha). */
+  body.touring { --lb: min(16vh, max(0px, (100vh - 100vw / 2.39) / 2)); }
+  body.touring .painel, body.touring .painel-legenda, body.touring .tempo, body.touring .ficha,
+  body.touring .rodape, body.touring .topo, body.touring .rotulo-celular, body.touring .tip {
+    opacity: 0; pointer-events: none; transition: opacity .35s; }
+  body.touring #mapa { pointer-events: none; }
+  body.tour-painel .painel, body.tour-legenda .painel-legenda, body.tour-tempo .tempo, body.tour-ficha .ficha { opacity: 1; }
+  body.touring .painel, body.touring .painel-legenda { top: calc(var(--lb) + 10px); max-height: calc(100% - 2 * var(--lb) - 20px); }
+  body.touring .ficha { top: calc(var(--lb) + 10px); bottom: calc(var(--lb) + 10px); }
+  body.touring .tempo { left: 0; right: 0; width: min(620px, calc(100% - 32px)); bottom: calc(var(--lb) + 12px); }
+  #tour { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
+  #tour[hidden] { display: none; }
+  #tour .faixa-cine { position: absolute; left: 0; right: 0; height: var(--lb); background: #000;
+    transform: scaleY(0); transition: transform .7s cubic-bezier(.2, .7, .2, 1); }
+  #tour .faixa-cine.cima { top: 0; transform-origin: top; }
+  #tour .faixa-cine.baixo { bottom: 0; transform-origin: bottom; }
+  #tour.on .faixa-cine { transform: scaleY(1); }
+  #tour-prog { position: absolute; left: 0; right: 0; bottom: var(--lb); height: 2px; transition: opacity .2s; }
+  #tour-prog i { display: block; height: 100%; background: var(--acento); transform-origin: left; transform: scaleX(0); }
+  #tour-resta { position: absolute; right: 14px; bottom: 6px; font: 11px "Mono", monospace; color: var(--ink-3); }
+  #tour-leg { position: absolute; left: 50%; bottom: calc(var(--lb) + 26px); transform: translateX(-50%); margin: 0;
+    width: min(760px, calc(100% - 32px)); text-align: center; opacity: 0; transition: opacity .4s, bottom .4s;
+    font-size: clamp(16px, 2.1vw, 22px); line-height: 1.35; font-weight: 550; text-wrap: balance;
+    text-shadow: 0 1px 3px #000, 0 0 18px #000; }
+  #tour-leg.on { opacity: 1; }
+  body.tour-tempo #tour-leg { bottom: calc(var(--lb) + 112px); }
+  #tour-kicker { display: block; width: fit-content; margin: 0 auto 6px; padding: 2px 9px; border-radius: 4px;
+    background: color-mix(in srgb, #000 62%, transparent); color: var(--acento); text-shadow: none;
+    font: 600 11px/1.6 "Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+  #tour-kicker:empty { display: none; }
+  #tour-cursor { position: absolute; left: 0; top: 0; width: 22px; height: 22px; opacity: 0;
+    transform: translate(var(--x, 50vw), var(--y, 50vh)); transition: transform .65s cubic-bezier(.3, .7, .2, 1), opacity .3s;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .9)); }
+  #tour-cursor.on { opacity: 1; }
+  #tour-cursor svg { display: block; width: 22px; height: 22px; fill: var(--ink); stroke: #000; stroke-width: 1.4; stroke-linejoin: round; }
+  #tour-cursor .anel { position: absolute; left: -13px; top: -13px; width: 26px; height: 26px; border: 2px solid var(--acento); border-radius: 50%; opacity: 0; }
+  #tour-cursor.clique .anel { animation: tour-clique .45s ease-out; }
+  @keyframes tour-clique { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+  #tour-botoes { position: absolute; top: max(8px, calc(var(--lb) / 2 - 15px)); right: 12px; display: flex; gap: 6px; pointer-events: auto; transition: opacity .2s; }
+  #tour-botoes button { height: 30px; padding: 0 11px; border-radius: 15px; border: 1px solid #3a3a37; background: #000; color: var(--ink-2);
+    font: 11px "Mono", monospace; letter-spacing: .04em; cursor: pointer; }
+  #tour-botoes button:hover { color: var(--ink); border-color: var(--ink-3); }
+  #tour-som.mudo { text-decoration: line-through; color: var(--ink-3); }
+  #tour.saindo #tour-prog, #tour.saindo #tour-botoes, #tour.saindo #tour-leg { opacity: 0; }
+  #tour-convite { position: fixed; inset: 0; z-index: 41; display: grid; place-items: center; background: color-mix(in srgb, var(--fundo) 45%, transparent); }
+  #tour-convite[hidden] { display: none; }
+  #tour-convite button { display: grid; gap: 4px; padding: 18px 30px; border-radius: 12px; border: 1px solid var(--acento);
+    background: var(--painel); color: var(--ink); cursor: pointer; font: inherit; text-align: center; box-shadow: 0 10px 40px #000a; }
+  #tour-convite b { font-size: 19px; font-weight: 650; }
+  #tour-convite b::before { content: ""; display: inline-block; margin-right: 9px; border-left: 11px solid var(--acento);
+    border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
+  #tour-convite small { color: var(--ink-3); font: 11px "Mono", monospace; }
+  #abre-tour::before { content: ""; border-left: 7px solid var(--acento); border-top: 4.5px solid transparent; border-bottom: 4.5px solid transparent; }
+  @media (max-width: 600px) { body.touring .rodape, body.touring .tempo { display: none; } }
 </style>
 
 <canvas id="mapa" aria-label="Mapa dos municípios do Brasil"></canvas>
@@ -398,6 +455,7 @@
 </aside>
 
 <div class="rodape">
+  <button class="chip" id="abre-tour" aria-label="Tour de 3 minutos">tour</button>
   <button class="chip" id="abre-tempo" aria-pressed="true" aria-controls="tempo" aria-label="Mostrar ou esconder a linha do tempo"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 12.5h11M3 12V8M5.5 12V5M8 12V7M10.5 12V3"/></svg><span id="chip-ano">2024</span></button>
   <button class="chip" id="abre-sobre" aria-haspopup="dialog">sobre</button>
 </div>
@@ -442,6 +500,17 @@
 <div class="tip" id="tip"></div>
 <div class="rotulo-celular" id="rotulo-celular" aria-hidden="true"></div>
 <div id="carregando">carregando dados…</div>
+<div id="tour" hidden>
+  <div class="faixa-cine cima"></div><div class="faixa-cine baixo"></div>
+  <div id="tour-prog" aria-hidden="true"><i></i><span id="tour-resta"></span></div>
+  <p id="tour-leg" aria-live="polite"><span id="tour-kicker"></span><span id="tour-frase"></span></p>
+  <div id="tour-cursor" aria-hidden="true"><svg viewBox="0 0 22 22"><path d="M3 2l15 9.5-6.6 1.3L8.6 19.5z"/></svg><span class="anel"></span></div>
+  <div id="tour-botoes">
+    <button id="tour-som" aria-pressed="true" aria-label="Som do tour">♪ som</button>
+    <button id="tour-parar" aria-label="Parar o tour">✕ esc</button>
+  </div>
+</div>
+<div id="tour-convite" hidden><button><b>Começar o tour</b><small>3 minutos, com som</small></button></div>
 <noscript><div id="sem-js">Este mapa precisa de JavaScript para abrir os dados. Ligue o JavaScript no navegador e recarregue a página.</div></noscript>
 
 <script id="b-malha" type="text/plain">/*__MALHA__*/</script>
@@ -467,6 +536,17 @@
 (async function () {
   'use strict';
   const $ = id => document.getElementById(id);
+  /* ?tour=1 (convite) e &t=<segundos>: lidos antes de tudo e tirados do endereço, para que
+     leUrl() veja a página sem parâmetros e um recarregar abra o mapa, não o filme */
+  const PEDE_TOUR = (() => {
+    const p = new URLSearchParams(location.search);
+    if (!p.has('tour')) return null;
+    const t = Math.max(0, +p.get('t') || 0);
+    p.delete('tour'); p.delete('t');
+    try { history.replaceState(history.state, '', location.pathname + (p.size ? '?' + p : '') + location.hash); } catch { /* file:// */ }
+    return { t };
+  })();
+  let tourAtivo = false;
 
   /* ---------- leitura dos blocos ----------
      u32 tamanho do cabeçalho | cabeçalho JSON | arrays com os bytes em planos
@@ -2441,7 +2521,7 @@
     if (tocando) { para(); $('tocar').click(); }
   });
   document.addEventListener('keydown', e => {
-    if (e.target.matches('input, select, textarea')) return;
+    if (tourAtivo || e.target.matches('input, select, textarea')) return;
     if (e.key === ' ') { e.preventDefault(); $('tocar').click(); }
     const passo = est.modo === 'exp' ? 10 : 1, [a0, a1] = anosDoModo();
     if (e.key === 'ArrowRight') defineAno(Math.min(a1, est.ano + passo));
@@ -3074,6 +3154,7 @@
 
   /* ---------- URL ---------- */
   function gravaUrl() {
+    if (tourAtivo) return;   // o tour devolve o estado de antes ao parar e grava então
     const p = new URLSearchParams();
     if (est.modo !== 'pam') p.set('f', est.modo);
     p.set('c', unidades().map(u => u.n >= 0 ? 'f:' + ARVORE[u.n].slug : ITENS[u.itens[0]].slug).join(','));
@@ -3151,6 +3232,567 @@
   inertes();
   $('carregando').remove();
   pede();
+  /* ---------- tour ----------
+     Um passeio de ~3 min com quadro de cinema, em que um ponteiro clica nos controles de
+     verdade. Roteiro em design/tour.md; a conferência de cada número em design/achados.md.
+     As cenas ficam em cenas(). Os números são contados aqui, dos blocos carregados. */
+  const tour = (() => {
+    const reduz = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const ensina = () => innerWidth > 760;   // o ponteiro só aparece em tela larga
+    const fmt = (v, d = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const EXTRA = ['prodqv', 'terra', 'fogo'];   // blocos da 3ª etapa que as cenas usam
+    class Parado extends Error {}
+    /* corrida: muda a cada começo e parada (uma cena velha termina no próximo await).
+       Tempo do filme: com &t=, as esperas avançam o relógio virtual tV sem esperar, até
+       chegar a `pular`; daí em diante o relógio é o real (t0). */
+    let voltando = false;   // o history.back() de parar() ainda não chegou
+    let corrida = 0, t0 = 0, tV = 0, pular = 0, iniCena = 0, cenaAtual = -1, TOTAL = 1, raf = 0, anim = 0, salvo = null, kBR = 1;
+    const pulando = () => tV < pular;
+    const filme = () => pulando() ? tV : performance.now() - t0;
+    const confere = c => { if (c !== corrida) throw new Parado(); };
+    async function espera(ms) {
+      const c = corrida;
+      if (ms > 0 && pulando()) {
+        const falta = pular - tV;
+        if (ms < falta) { tV += ms; ms = 0; }
+        else { tV = pular; t0 = performance.now() - tV; ms -= falta; som.entra(); }
+      }
+      if (ms > 0) await new Promise(r => setTimeout(r, ms)); else await null;
+      confere(c);
+    }
+    const em = ms => espera(iniCena + ms - filme());
+
+    /* ---------- câmera: centro e escala do canvas ---------- */
+    const faixa = () => Math.min(H * 0.16, Math.max(0, (H - W / 2.39) / 2));
+    function area() {
+      const lb = faixa(), ficha = $('ficha').classList.contains('aberta') && document.body.classList.contains('tour-ficha') && !celular();
+      return { x0: 16, y0: lb + 12, x1: W - 16 - (ficha ? 404 : 0), y1: H - lb - 12 };
+    }
+    // o enquadramento de uma caixa (coordenadas do mapa) dentro do quadro de cinema
+    function alvo(c, margem = 1.06) {
+      const u = area(), w = Math.max(c[2] - c[0], 1e-9) * margem, h = Math.max(c[3] - c[1], 1e-9) * margem;
+      return { cx: (c[0] + c[2]) / 2, cy: (c[1] + c[3]) / 2, k: Math.min((u.x1 - u.x0) / w, (u.y1 - u.y0) / h),
+        sx: (u.x0 + u.x1) / 2, sy: (u.y0 + u.y1) / 2 };
+    }
+    function caixa(pred) {
+      const g = GEO.caixa, c = [Infinity, Infinity, -Infinity, -Infinity];
+      for (let m = 0; m < NM; m++) if (pred(m)) {
+        c[0] = Math.min(c[0], g[4 * m]); c[1] = Math.min(c[1], g[4 * m + 1]);
+        c[2] = Math.max(c[2], g[4 * m + 2]); c[3] = Math.max(c[3], g[4 * m + 3]);
+      }
+      return c;
+    }
+    const caixaUF = (...ufs) => caixa(m => ufs.includes(M.mun.uf[m]));
+    // um município no meio de um quadrado r vezes maior que ele (como voaPara)
+    const caixaMun = (m, r) => {
+      const g = GEO.caixa, cx = (g[4 * m] + g[4 * m + 2]) / 2, cy = (g[4 * m + 1] + g[4 * m + 3]) / 2;
+      const d = Math.max(g[4 * m + 2] - g[4 * m], g[4 * m + 3] - g[4 * m + 1]) * r / 2;
+      return [cx - d, cy - d, cx + d, cy + d];
+    };
+    const poe = (cx, cy, k, sx, sy) => { vista.k = k; vista.x = sx - cx * k; vista.y = sy - cy * k; pede(); };
+    /* Voo de van Wijk e Nuij (o mesmo do d3.interpolateZoom): afasta, anda e aproxima.
+       plano: desliza em linha reta, com a escala em log. */
+    function interpola(p0, p1, plano) {
+      const [x0, y0, w0] = p0, [x1, y1, w1] = p1, dx = x1 - x0, dy = y1 - y0, d2 = dx * dx + dy * dy;
+      if (plano || d2 < 1e-18) return t => [x0 + t * dx, y0 + t * dy, w0 * Math.pow(w1 / w0, t)];
+      const r = Math.SQRT2, r2 = 2, r4 = 4, d1 = Math.sqrt(d2);
+      const b0 = (w1 * w1 - w0 * w0 + r4 * d2) / (2 * w0 * r2 * d1), b1 = (w1 * w1 - w0 * w0 - r4 * d2) / (2 * w1 * r2 * d1);
+      const r0 = Math.log(Math.sqrt(b0 * b0 + 1) - b0), r1 = Math.log(Math.sqrt(b1 * b1 + 1) - b1), S = (r1 - r0) / r;
+      return t => {
+        const s = t * S, u = w0 / (r2 * d1) * (Math.cosh(r0) * Math.tanh(r * s + r0) - Math.sinh(r0));
+        return [x0 + u * dx, y0 + u * dy, w0 * Math.cosh(r0) / Math.cosh(r * s + r0)];
+      };
+    }
+    function voa(a, ms, plano = false) {
+      cancelAnimationFrame(anim);
+      if (reduz || pulando() || ms <= 0) { poe(a.cx, a.cy, a.k, a.sx, a.sy); return Promise.resolve(); }
+      const S = W, f = interpola([(a.sx - vista.x) / vista.k, (a.sy - vista.y) / vista.k, S / vista.k], [a.cx, a.cy, S / a.k], plano);
+      const c = corrida, ini = performance.now();
+      return new Promise(ok => {
+        const passo = agora => {
+          if (c !== corrida) return ok();
+          const t = Math.min(1, (agora - ini) / ms), e = plano ? 0.5 - Math.cos(Math.PI * t) / 2 : t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+          const [x, y, w] = f(e);
+          poe(x, y, S / w, a.sx, a.sy);
+          if (t < 1) anim = requestAnimationFrame(passo); else ok();
+        };
+        anim = requestAnimationFrame(passo);
+      });
+    }
+    const desliza = (c, ms, margem) => voa(alvo(c, margem), ms, true);
+    // aproxima (f > 1) ou afasta devagar em volta do centro do quadro
+    const deriva = (f, ms) => {
+      const u = area(), sx = (u.x0 + u.x1) / 2, sy = (u.y0 + u.y1) / 2;
+      return voa({ cx: (sx - vista.x) / vista.k, cy: (sy - vista.y) / vista.k, k: vista.k * f, sx, sy }, ms, true);
+    };
+
+    /* ---------- interface: o que aparece, o ponteiro, a legenda do filme ---------- */
+    const PARTES = ['painel', 'legenda', 'tempo', 'ficha'];
+    // no celular painel, legenda e ficha são folhas que cobririam o mapa: o tour não as mostra
+    const mostra = (...p) => { for (const x of PARTES) document.body.classList.toggle('tour-' + x, p.includes(x) && (!celular() || x === 'tempo')); };
+    async function clica(el, aperta = true) {
+      if (!el) return;
+      if (!ensina() || pulando()) { if (aperta) el.click(); await espera(1050); return; }
+      const cur = $('tour-cursor');
+      el.scrollIntoView({ block: 'nearest' });
+      const r = el.getBoundingClientRect();
+      cur.style.setProperty('--x', `${r.left + Math.min(r.width / 2, 40)}px`);
+      cur.style.setProperty('--y', `${r.top + r.height * 0.55}px`);
+      cur.classList.add('on');
+      await espera(700);
+      cur.classList.remove('clique'); void cur.offsetWidth; cur.classList.add('clique');
+      som.tique();
+      if (aperta) el.click();
+      await espera(350);
+    }
+    const semPonteiro = () => $('tour-cursor').classList.remove('on');
+    async function digita(el, texto, ms = 900) {
+      await clica(el, false);
+      el.value = '';
+      for (const ch of texto) {
+        el.value += ch;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        await espera(ms / texto.length);
+      }
+    }
+    async function legenda(kicker, frase) {
+      $('tour-leg').classList.remove('on');
+      await espera(400);
+      $('tour-kicker').textContent = kicker;
+      $('tour-frase').textContent = frase;
+      $('tour-leg').classList.add('on');
+    }
+    async function modo(id) {
+      const md = MODOS.find(x => x.id === id);
+      mostra('painel');
+      const aba = modosEl.querySelector(`.grupo-modos[data-sec="${md.sec}"]`);
+      if (aba.getAttribute('aria-selected') !== 'true') await clica(aba);
+      await clica(modosEl.querySelector(`button[data-modo="${id}"]`));
+    }
+    // a lavoura ou criação pela busca da legenda; a escolha troca a seleção inteira
+    async function item(i, busca) {
+      mostra('legenda');
+      const b = $('busca-item');
+      await digita(b, busca);
+      await clica($('leg-arvore').querySelector(`.filhos [data-item="${i}"]`) || $('leg-arvore').querySelector(`[data-item="${i}"]`), false);
+      est.itens = [i];
+      b.value = '';
+      aoMudarSelecao();
+    }
+    async function medida(v) {
+      mostra('painel');
+      await clica($('metrica'), false);
+      $('metrica').value = v;
+      $('metrica').dispatchEvent(new Event('change'));
+    }
+    const icone = on => $('icone-tocar').setAttribute('d', on ? 'M3 2h3.5v12H3zM9.5 2H13v12H9.5z' : 'M3 1.5v13l11-6.5z');
+    // a linha do tempo corre pelo relógio do tour (para no ano pedido, nunca no LSPA)
+    async function anos(a0, a1, ms) {
+      icone(true);
+      defineAno(a0); som.ano();
+      for (let a = a0 + 1; a <= a1; a++) {
+        await espera(ms / (a1 - a0));
+        if (!pulando() || a === a1) { defineAno(a); som.ano(); }
+      }
+      icone(false);
+    }
+
+    /* ---------- números, contados dos blocos ---------- */
+    const achaMun = (nome, uf) => M.mun.nome.findIndex((n, m) => n === nome && M.mun.uf[m] === uf);
+    const achaItem = re => ITENS.find(it => re.test(it.nome))?.i ?? -1;
+    const NORTE = m => String(M.mun.id[m])[0] === '1';
+    function porMun(i, ano, campo = 'area') {
+      const s = serieItem(i)[campo], a = ano - A0, v = new Float64Array(NM);
+      for (let m = 0; m < NM; m++) { const x = s[m * NA + a]; v[m] = x > 0 ? x : 0; }
+      return v;
+    }
+    const soma = (v, f = () => true) => { let t = 0; for (let m = 0; m < NM; m++) if (f(m)) t += v[m]; return t; };
+    const maior = v => { let mm = 0; for (let m = 1; m < NM; m++) if (v[m] > v[mm]) mm = m; return mm; };
+    // PRODES (km² no ano) e focos de calor, por município, direto dos blocos
+    function prodes(ano) {
+      const T = SOB.terra.A, v = new Float64Array(NM);
+      for (let r = 0; r < T.pr_m.length; r++) if (T.pr_a[r] === ano - 2000) { const x = LUT[T.pr_inc[r]]; if (x > 0) v[T.pr_m[r]] += x; }
+      return v;
+    }
+    function focos(ano) {
+      const F = SOB.fogo.A, v = new Float64Array(NM);
+      for (let r = 0; r < F.fm_m.length; r++) if (F.fm_a[r] === ano - 2000) v[F.fm_m[r]] += F.fm_n[r];
+      return v;
+    }
+    const mi = (v, d = 1) => fmt(v / 1e6, d), mil = (v, d = 0) => fmt(v / 1e3, d);
+    const pct = (a, b) => fmt(a / b * 100);
+    const nomeMun = m => `${M.mun.nome[m]} (${M.mun.uf[m]})`;
+
+    function cenas() {
+      const BOI = achaItem(/^Bovino/), ARROZ = achaItem(/^Arroz/);
+      const SORRISO = achaMun('Sorriso', 'MT'), SFX = achaMun('São Félix do Xingu', 'PA');
+      const AMZ = caixa(m => MALHA.A.amazonia[m] === 1);
+      return [
+        // 0 · abertura: a lavoura principal de 2024, o Brasil inteiro
+        { dur: 14000, run: async () => {
+          voa(alvo(BR), 2500);
+          await legenda('Chão · 1974–2024', `O que se planta e se cria em cada um dos ${fmt(NM)} municípios do Brasil, ano a ano.`);
+          await em(2600);
+          deriva(1.08, 11000);
+          await em(7000);
+          mostra('legenda');
+          await legenda('lavoura principal · 2024', 'Cada município na cor da família de lavouras que ocupa mais área.');
+        } },
+        // 1 · a soja em 1974: era do Sul
+        { dur: 14000, run: async () => {
+          mostra('legenda');
+          voa(alvo(caixaUF('RS', 'SC', 'PR')), 3000);
+          await clica($('alterna-disputa').querySelector('[data-d="0"]'));
+          await item(SOJA, 'soja');
+          defineAno(1974);
+          const v = porMun(SOJA, 1974), t = soma(v);
+          await legenda('soja · 1974 · área colhida', `${pct(soma(v, m => M.mun.uf[m] === 'RS'), t)}% da soja do país estava no Rio Grande do Sul, e ${pct(soma(v, m => M.mun.uf[m] === 'PR'), t)}% no Paraná.`);
+          semPonteiro();
+        } },
+        // 2 · cinquenta anos de linha do tempo: a soja sobe para o Cerrado
+        { dur: 17000, run: async () => {
+          mostra('tempo');
+          await legenda('linha do tempo', '▶ toca os anos. Olhe a soja subir para o Cerrado.');
+          await clica($('tocar'), false);
+          semPonteiro();
+          desliza(caixaUF('RS', 'MT', 'GO', 'MS', 'BA', 'TO'), 13000);
+          anos(1974, 2024, 13000).catch(e => { if (!(e instanceof Parado)) console.error('tour:', e); });   // corre junto com a frase
+          await em(10500);
+          const v0 = porMun(SOJA, 1974), v1 = porMun(SOJA, 2024);
+          const lat = v => soma(v.map((x, m) => x * M.mun.slat[m])) / soma(v);
+          await legenda('soja · 1974–2024', `De ${mi(soma(v0))} para ${mi(soma(v1))} milhões de hectares. O centro da área andou ${fmt(Math.round((lat(v1) - lat(v0)) * 111.2 / 10) * 10)} km para o norte.`);
+        } },
+        // 3 · Sorriso, pela busca de município: a ficha abre
+        { dur: 13000, run: async () => {
+          mostra('painel');
+          await digita($('busca-mun'), 'Sorriso');
+          const antes = { ...vista };
+          $('busca-mun').dispatchEvent(new Event('change'));
+          Object.assign(vista, antes);
+          semPonteiro();
+          mostra('ficha');
+          voa(alvo(caixaMun(SORRISO, 5)), 3200);
+          const v = porMun(SOJA, 2024), top = maior(v);
+          await legenda('Sorriso (MT) · 2024', top === SORRISO
+            ? `${mil(v[SORRISO])} mil hectares de soja: a maior área do país.`
+            : `${mil(v[SORRISO])} mil hectares de soja. A maior área do país é ${nomeMun(top)}.`);
+        } },
+        // 4 · do satélite: a vegetação nativa de Sorriso
+        { dur: 14000, run: async () => {
+          seleciona(-1);
+          await modo('sat');
+          mostra('tempo');
+          semPonteiro();
+          voa(alvo(caixaMun(SORRISO, 5)), 600);
+          const c = M.mb.indexOf('Vegetação natural'), s = serieClasse(c), ve = a => s[SORRISO * NAMB + a - A0MB];
+          await legenda('satélite · MapBiomas · 1985–2024', `Do alto, a soja toma Sorriso, e a vegetação nativa vai de ${mil(ve(1985))} para ${mil(ve(2024))} mil hectares.`);
+          deriva(0.75, 9000);
+          await anos(1985, 2024, 7500);
+        } },
+        // 5 · o Matopiba
+        { dur: 14000, run: async () => {
+          await modo('pam');
+          mostra('tempo');
+          semPonteiro();
+          const UFS_MTP = ['MA', 'TO', 'PI', 'BA'], noMtp = m => UFS_MTP.includes(M.mun.uf[m]);
+          voa(alvo(caixaUF(...UFS_MTP)), 3000);
+          await legenda('Matopiba · 1990–2024', `Maranhão, Tocantins, Piauí e Bahia: de ${mi(soma(porMun(SOJA, 1990), noMtp))} para ${mi(soma(porMun(SOJA, 2024), noMtp))} milhões de hectares de soja.`);
+          await em(3500);
+          await anos(1990, 2024, 6500);
+        } },
+        // 6 · o gado vai para o Norte
+        { dur: 16000, run: async () => {
+          voa(alvo(BR), 3000);
+          await item(BOI, 'bovino');
+          semPonteiro();
+          mostra('tempo');
+          const v0 = porMun(BOI, 1974, 'q'), v1 = porMun(BOI, 2024, 'q');
+          await legenda('rebanho bovino · 1974–2024', `De ${fmt(soma(v0) / 1e6)} para ${fmt(soma(v1) / 1e6)} milhões de cabeças. O Norte tinha ${fmt(soma(v0, NORTE) / soma(v0) * 100, 1)}% do gado; hoje tem ${pct(soma(v1, NORTE), soma(v1))}%.`);
+          await anos(1974, 2024, 8000);
+          desliza(caixaUF('PA', 'RO', 'AC', 'TO', 'MT', 'AM'), 3500, 1.0);
+        } },
+        // 7 · São Félix do Xingu: o maior rebanho, o maior desmatamento
+        { dur: 16000, run: async () => {
+          mostra();
+          voa(alvo(caixaMun(SFX, 2.2)), 3000);
+          const b = porMun(BOI, 2024, 'q'), top = maior(b);
+          await legenda('São Félix do Xingu (PA) · 2024', top === SFX
+            ? `O maior rebanho do país: ${mi(b[SFX])} milhões de cabeças.`
+            : `${mi(b[SFX])} milhões de cabeças. O maior rebanho é o de ${nomeMun(top)}.`);
+          await em(7000);
+          await modo('desm');
+          semPonteiro();
+          const d = new Float64Array(NM);
+          for (let a = 2002; a <= 2025; a++) prodes(a).forEach((x, m) => { d[m] += x; });
+          const td = maior(d);
+          defineAno(2004);
+          await legenda('desmatamento · PRODES · 2002–2025', td === SFX
+            ? `E o município que mais desmatou desde 2002: ${mil(d[SFX], 1)} mil km².`
+            : `${mil(d[SFX], 1)} mil km² desmatados desde 2002. Quem mais desmatou foi ${nomeMun(td)}.`);
+        } },
+        // 8 · o desmatamento do país, de 2002 a 2025
+        { dur: 14000, run: async () => {
+          mostra('tempo');
+          voa(alvo(AMZ, 1.0), 3000);
+          const t = {};
+          for (let a = 2002; a <= 2025; a++) t[a] = soma(prodes(a));
+          const menor = Object.keys(t).every(a => t[a] >= t[2025]);
+          await legenda('PRODES · todos os biomas', `${mil(t[2002])} mil km² desmatados em 2002, ${mil(t[2012])} mil em 2012, nova alta em 2022 (${mil(t[2022])} mil) e ${mil(t[2025], 1)} mil em 2025${menor ? ', o menor da série' : ''}.`);
+          await anos(2002, 2025, 9000);
+        } },
+        // 9 · 2024, o ano do fogo
+        { dur: 14000, run: async () => {
+          await modo('fogo');
+          semPonteiro();
+          mostra();
+          defineAno(2024);
+          deriva(1.12, 12000);
+          const f = {};
+          for (let a = 2010; a <= 2024; a++) f[a] = focos(a);
+          const t = a => soma(f[a]), top = maior(f[2024]);
+          const desde = Object.keys(f).filter(a => a < 2024 && t(a) > t(2024)).map(Number);
+          await legenda('fogo · INPE · 2024', `${mil(t(2024))} mil focos de calor${desde.length && Math.max(...desde) === 2010 ? ', o maior número desde 2010' : ''}. ${top === SFX ? 'São Félix do Xingu de novo em primeiro' : `Em primeiro, ${nomeMun(top)}`}: ${fmt(f[2024][top])}.`);
+        } },
+        // 10 · a seca de 2022 no Rio Grande do Sul
+        { dur: 14000, run: async () => {
+          await modo('pam');
+          voa(alvo(caixaUF('RS')), 3000);
+          await item(SOJA, 'soja');
+          await medida('q');
+          semPonteiro();
+          mostra('tempo');
+          defineAno(2021);
+          const RS = m => M.mun.uf[m] === 'RS', q0 = soma(porMun(SOJA, 2021, 'q'), RS), q1 = soma(porMun(SOJA, 2022, 'q'), RS);
+          await legenda('Rio Grande do Sul · 2021 → 2022', `A seca levou ${pct(q0 - q1, q0)}% da colheita de soja: de ${mi(q0)} para ${mi(q1)} milhões de toneladas.`);
+          await em(8000);
+          defineAno(2022); som.ano();
+        } },
+        // 11 · menos arroz, e a colheita não caiu
+        { dur: 12000, run: async () => {
+          voa(alvo(BR), 2500);
+          await item(ARROZ, 'arroz');
+          await medida('pct');
+          semPonteiro();
+          mostra('tempo');
+          const a0 = soma(porMun(ARROZ, 1980)), a1 = soma(porMun(ARROZ, 2024)), q0 = soma(porMun(ARROZ, 1980, 'q')), q1 = soma(porMun(ARROZ, 2024, 'q'));
+          await legenda('arroz · 1980–2024', `A área de arroz caiu de ${mi(a0)} para ${mi(a1)} milhões de hectares, e a colheita não caiu: cada hectare rende ${fmt(q1 / a1 / (q0 / a0), 1)} vezes mais.`);
+          await anos(1980, 2024, 5500);
+        } },
+        // 12 · fecho: de volta à lavoura principal
+        { dur: 10000, run: async () => {
+          mostra('legenda');
+          await clica($('alterna-disputa').querySelector('[data-d="1"]'));
+          semPonteiro();
+          defineAno(2024);
+          await voa(alvo(BR), 2500);
+          await legenda('Chão', 'Cinquenta anos de campo, município a município. Agora é com você: escolha uma cultura, um ano, um lugar.');
+          deriva(0.94, 6500);
+        } },
+      ];
+    }
+
+    /* ---------- som: bordão e acorde por cena, feitos no navegador ---------- */
+    const som = (() => {
+      let ctx = null, mestre = null, filtro = null, bordao = [], acorde = [], acG = null, ligado = true, soando = false;
+      try { ligado = localStorage.getItem('chao-som') !== '0'; } catch { /* sem armazenamento */ }
+      const RE = 73.42;   // ré grave
+      const NOTA = [0, 3, 3, 7, 7, 7, 5, 5, -2, -2, 4, 4, 0];   // semitons acima de ré, por cena
+      const hz = s => RE * Math.pow(2, s / 12);
+      const alvoGanho = () => ligado && soando && tourAtivo ? 0.5 : 0;
+      const rampa = (p, v, s) => { const t = ctx.currentTime; p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); p.linearRampToValueAtTime(v, t + s); };
+      function inicia() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        try { ctx = new AC(); } catch { return; }
+        mestre = ctx.createGain(); mestre.gain.value = 0; mestre.connect(ctx.destination);
+        filtro = ctx.createBiquadFilter(); filtro.type = 'lowpass'; filtro.frequency.value = 300; filtro.Q.value = 2; filtro.connect(mestre);
+        bordao = [-7, 7].map(d => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sawtooth'; o.detune.value = d; o.frequency.value = RE; g.gain.value = 0.14; o.connect(g).connect(filtro); o.start(); return o; });
+        acG = ctx.createGain(); acG.gain.value = 0; acG.connect(mestre);
+        acorde = [2, 3, 5].map(r => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = RE * r; g.gain.value = 0.045; o.connect(g).connect(acG); o.start(); return o; });
+      }
+      return {
+        iniciar(silencioso) { if (!ctx) inicia(); if (!ctx) return; ctx.resume?.(); soando = !silencioso; rampa(mestre.gain, alvoGanho(), 2); },
+        entra() { if (!ctx) return; soando = true; rampa(mestre.gain, alvoGanho(), 1.5); },
+        cena(i) {
+          if (!ctx) return;
+          const f = hz(NOTA[i] ?? 0), t = ctx.currentTime;
+          bordao.forEach(o => o.frequency.setTargetAtTime(f, t, 0.35));
+          acorde.forEach((o, k) => o.frequency.setTargetAtTime(f * [2, 3, 5][k], t, 0.5));
+          acG.gain.cancelScheduledValues(t); acG.gain.setValueAtTime(acG.gain.value, t);
+          acG.gain.linearRampToValueAtTime(1, t + 1.2); acG.gain.linearRampToValueAtTime(0.35, t + 5);
+        },
+        // perto, o bordão fica mais claro
+        camera(z) { if (filtro) filtro.frequency.setTargetAtTime(Math.min(2400, Math.max(220, 320 * Math.sqrt(z))), ctx.currentTime, 0.3); },
+        ano() {
+          if (!ctx || !soando || !ligado) return;
+          const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime;
+          o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.12);
+          g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+          o.connect(g).connect(mestre); o.start(t); o.stop(t + 0.2);
+        },
+        tique() {
+          if (!ctx || !soando || !ligado) return;
+          const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime;
+          o.type = 'square'; o.frequency.value = 1800;
+          g.gain.setValueAtTime(0.03, t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.03);
+          o.connect(g).connect(mestre); o.start(t); o.stop(t + 0.04);
+        },
+        parar(fim) {
+          if (!ctx) return;
+          const c = ctx, s = fim ? 3 : 0.6;
+          rampa(mestre.gain, 0, s);
+          ctx = null; soando = false;
+          setTimeout(() => c.close().catch(() => {}), s * 1000 + 200);
+        },
+        alternar() { ligado = !ligado; try { localStorage.setItem('chao-som', ligado ? '1' : '0'); } catch { /* sem armazenamento */ } if (ctx) rampa(mestre.gain, alvoGanho(), 0.4); },
+        ligado: () => ligado,
+        temAudio: () => !!(window.AudioContext || window.webkitAudioContext),
+      };
+    })();
+
+    function progresso() {
+      const f = Math.min(1, filme() / TOTAL), resta = Math.ceil(TOTAL * (1 - f) / 1000);
+      $('tour-prog').firstElementChild.style.transform = `scaleX(${f})`;
+      $('tour-resta').textContent = resta >= 60 ? `${Math.floor(resta / 60)}:${String(resta % 60).padStart(2, '0')}` : `${resta} s`;
+      som.camera(vista.k / kBR);
+      raf = requestAnimationFrame(progresso);
+    }
+
+    /* ---------- começar e parar ---------- */
+    let inertes0 = [];
+    const interfaceDaPagina = () => [$('painel'), $('painel-legenda'), $('tempo'), $('ficha'), document.querySelector('.rodape'), document.querySelector('.topo'), cv];
+    async function iniciar(seg = 0) {
+      if (tourAtivo) return;
+      $('tour-convite').hidden = true;
+      for (let k = 0; voltando && k < 20; k++) await new Promise(r => setTimeout(r, 50));
+      if (tourAtivo) return;
+      const c = ++corrida;
+      tourAtivo = true;
+      salvo = {
+        est: structuredClone(est), disputaPam, aba, anoPedido,
+        painel: $('painel').classList.contains('recolhido'), legenda: $('painel-legenda').classList.contains('recolhida'),
+        tempo: $('tempo').hidden, busca: $('busca-item').value, legendaAuto,
+      };
+      // o tour vira uma entrada no histórico: o voltar do navegador o encerra
+      try { history.pushState({ tour: true }, '', location.href); } catch { /* file:// */ }
+      para();
+      document.body.classList.add('touring');
+      inertes0 = interfaceDaPagina().map(el => [el, el.inert]);
+      interfaceDaPagina().forEach(el => { el.inert = true; });
+      $('tour').hidden = false;
+      $('tour').classList.remove('saindo');
+      $('tour-prog').firstElementChild.style.transform = 'scaleX(0)';
+      $('tour-resta').textContent = '';
+      requestAnimationFrame(() => $('tour').classList.add('on'));
+      try {
+        // os dados do tour: a 2ª etapa e três blocos da 3ª, pedidos só agora
+        if (!pronto) {
+          $('tour-kicker').textContent = 'tour'; $('tour-frase').textContent = 'carregando os dados…';
+          $('tour-leg').classList.add('on');
+          await segunda; await null;
+        }
+        let feitos = 0;
+        await Promise.all(EXTRA.map(id => SOB[id] ? 1 : carrega(id).then(b => {
+          if (!SOB[id]) { SOB[id] = b; AO_CHEGAR[id]?.(b); }
+          if (c === corrida) { $('tour-kicker').textContent = 'tour'; $('tour-frase').textContent = `carregando os dados… ${Math.round(++feitos / EXTRA.length * 100)}%`; $('tour-leg').classList.add('on'); }
+        })));
+        confere(c);
+        // o ponto de partida: lavoura principal, 2024, Brasil inteiro, sem recorte nem ficha
+        seleciona(-1);
+        Object.assign(est, { modo: 'pam', itens: [SOJA], metrica: '', ano: 2024, uf: '', bioma: '', regiao: '', agrupa: '',
+          disputa: true, evento: -1, origem: 'natural', mascara: true, glebas: false, credFin: -1, credAtiv: -1, credProg: -1, desligadas: new Set() });
+        disputaPam = true; aba = ''; anoPedido = 2024; legendaAuto = false;
+        $('busca-item').value = ''; $('busca-mun').value = '';
+        $('painel').classList.remove('recolhido', 'aberta'); $('painel-legenda').classList.remove('aberta');
+        dobraLegenda(false);
+        $('tempo').hidden = false;
+        aoMudarSelecao();
+        mostra();
+        kBR = alvo(BR).k;
+        const roteiro = cenas();
+        TOTAL = roteiro.reduce((s, x) => s + x.dur, 0);
+        pular = Math.min(seg * 1000, TOTAL - 1000); tV = 0; t0 = performance.now();
+        som.iniciar(pulando());
+        $('tour-leg').classList.remove('on');
+        progresso();
+        let fim = 0;
+        for (const [i, cena] of roteiro.entries()) {
+          iniCena = fim; fim += cena.dur; cenaAtual = i;
+          som.cena(i);
+          await cena.run();
+          await espera(fim - filme());
+        }
+        // até o fim: a linha de progresso, a legenda e os botões saem antes das faixas
+        $('tour').classList.add('saindo');
+        await espera(700);
+        parar(true);
+      } catch (e) {
+        if (!(e instanceof Parado)) { console.error('tour:', e); parar(); }
+      }
+    }
+
+    function parar(fim = false, peloHistorico = false) {
+      if (!tourAtivo) return;
+      corrida++;
+      pular = 0; tV = 0; cenaAtual = -1;
+      cancelAnimationFrame(anim); cancelAnimationFrame(raf);
+      som.parar(fim);
+      icone(false);
+      const s = salvo;
+      // o mapa fica onde a câmera do tour estava; o resto volta como era antes
+      Object.assign(est, s.est);
+      disputaPam = s.disputaPam; aba = s.aba; anoPedido = s.anoPedido;
+      $('busca-item').value = s.busca; $('busca-mun').value = '';
+      $('painel').classList.toggle('recolhido', s.painel);
+      $('recolhe-painel').setAttribute('aria-expanded', !s.painel);
+      $('recolhe-painel').setAttribute('aria-label', s.painel ? 'Abrir os filtros' : 'Recolher os filtros');
+      dobraLegenda(s.legenda);
+      $('tempo').hidden = s.tempo; $('abre-tempo').setAttribute('aria-pressed', !s.tempo);
+      document.body.classList.remove('touring', ...PARTES.map(x => 'tour-' + x));
+      inertes0.forEach(([el, v]) => { el.inert = v; });
+      tourAtivo = false;
+      inertes();
+      $('ficha').classList.remove('aberta');
+      aoMudarSelecao();
+      seleciona(s.est.mun);
+      legendaAuto = s.legendaAuto;
+      semPonteiro();
+      $('tour-leg').classList.remove('on');
+      $('tour').classList.remove('on');
+      $('tour').classList.add('saindo');
+      setTimeout(() => { if (!tourAtivo) $('tour').hidden = true; }, 900);
+      if (!peloHistorico && history.state?.tour) { voltando = true; history.back(); }
+      gravaUrl();
+      pede();
+    }
+
+    $('abre-tour').onclick = () => iniciar();
+    $('tour-parar').onclick = () => parar();
+    const marcaSom = () => { $('tour-som').classList.toggle('mudo', !som.ligado()); $('tour-som').setAttribute('aria-pressed', som.ligado()); };
+    $('tour-som').onclick = () => { som.alternar(); marcaSom(); };
+    $('tour-som').hidden = !som.temAudio();
+    marcaSom();
+    // Esc para o tour antes de qualquer outro ouvinte (o da página fecharia a ficha)
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape' || !tourAtivo) return;
+      e.stopImmediatePropagation(); e.preventDefault();
+      parar();
+    }, true);
+    addEventListener('popstate', () => { if (voltando) { voltando = false; return; } if (tourAtivo) parar(false, true); });
+    // ?tour=1: um convite sobre o mapa; o clique começa o tour e libera o som
+    if (PEDE_TOUR) {
+      const conv = $('tour-convite');
+      conv.hidden = false;
+      const fecha = () => { conv.hidden = true; removeEventListener('keydown', tecla, true); };
+      const tecla = e => { if (e.key === 'Escape' && !conv.hidden) { e.stopImmediatePropagation(); fecha(); } };
+      addEventListener('keydown', tecla, true);
+      conv.onclick = e => { fecha(); if (e.target.closest('button')) iniciar(PEDE_TOUR.t); };
+      conv.querySelector('button').focus();
+    }
+    return { iniciar, parar, ativo: () => tourAtivo, cena: () => cenaAtual, filme: () => filme() };
+  })();
+  window.tour = tour;
+
   /* gancho para os testes: só existe na cópia que testes/comum.ts injeta; chamado
      com os dados completos */
   const gancho = () => {
